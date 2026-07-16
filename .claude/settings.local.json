@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:create.roblox.com)",
+      "WebFetch(domain:romonitorstats.com)",
+      "PowerShell(Move-Item -Destination . -Force)",
+      "PowerShell(Write-Output \"name: $\\(git config --global user.name\\)\"; Write-Output \"email: $\\(git config --global user.email\\)\")",
+      "PowerShell(git init -b main)",
+      "PowerShell(git add -A)"
+    ]
+  }
+}
