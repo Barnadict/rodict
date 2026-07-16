@@ -9,7 +9,11 @@
       "PowerShell(git init -b main)",
       "PowerShell(git add -A)",
       "PowerShell(git add .gitattributes)",
-      "PowerShell(git add --renormalize .)"
+      "PowerShell(git add --renormalize .)",
+      "PowerShell(git add PROJECT_PLAN.md)",
+      "PowerShell($conns = Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue; if \\($conns\\) { $conns.OwningProcess | Sort-Object -Unique | ForEach-Object { try { Stop-Process -Id $_ -Force -ErrorAction Stop; Write-Output \"Killed lingering PID $_\" } catch {} } } else { Write-Output \"Port 3000 clear — no lingering dev server.\" })",
+      "PowerShell(Set-Location \"D:\\\\Personal Websites\"; try { Rename-Item -Path \"Roblox Top\" -NewName \"rodict\" -ErrorAction Stop; Write-Output \"RENAMED OK\" } catch { Write-Output \"RENAME FAILED: $\\($_.Exception.Message\\)\" }; Test-Path \"D:\\\\Personal Websites\\\\rodict\"; Test-Path \"D:\\\\Personal Websites\\\\Roblox Top\")",
+      "PowerShell(git add docs)"
     ]
   }
 }
