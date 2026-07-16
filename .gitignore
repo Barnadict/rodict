@@ -47,3 +47,6 @@ next-env.d.ts
 *.db-journal
 prisma/*.db
 prisma/*.db-journal
+
+# db backups (local dumps)
+/backups/
