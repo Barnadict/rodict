@@ -3,12 +3,12 @@
 ## ▶️ SESSION START — copy/paste this at the beginning of every new session
 
 ```
-Read PROJECT_PLAN.md and continue the build. Last finished task: #29 — Phase 4 analytics complete (Task #12, local scheduled collection, was intentionally skipped — see its entry).
+Read PROJECT_PLAN.md and continue the build. Last finished task: #32 — hosted DB, Vercel deploy, and the GitHub Actions collector are all live and verified (Task #12, local scheduled collection, was intentionally skipped — see its entry).
 Follow the plan's rules: optimize as you go, label all estimates/forecasts explicitly,
 and remind me before any task that needs a prerequisite I must provide.
 ```
 
-> **Update the task number** (`Last finished task: #N`) each session so Claude knows where to pick up. Current progress: **Task #29 done → Phase 4 complete. Next is Phase 5 (Task #30, hosted DB / deployment)** or #12 (skipped). All 9 Python analytics jobs are built. The collector has run — history is now accumulating.
+> **Update the task number** (`Last finished task: #N`) each session so Claude knows where to pick up. Current progress: **Tasks #30–#32 done → hosted on Turso + Vercel, collector running on a 3h GitHub Actions cron. Next is #33 (scheduled Python analytics workflow) or #34 (failure monitoring)**, or #12 (skipped). All 9 Python analytics jobs are built. Real collection history is now accumulating on the hosted DB.
 >
 > **One-time (first session after the folder was renamed to `rodict`):** also say
 > _"restore the memory notes from docs/claude-memory"_ so Claude re-creates the per-project memory at the new path.
@@ -179,8 +179,8 @@ Model hint (right after each task number): 🟢 = Sonnet can handle it · 🟡 =
 ### Phase 5: Deployment & cloud automation (free tier)
 
 - [x] **30.** 🟢 Provision hosted DB (Neon Postgres or Turso); point Prisma at it via env vars. Keep SQLite for local dev. ✅ Done — chose **Turso** (zero code change; `schema.prisma`'s `sqlite` provider + the existing `PrismaLibSql` adapter serve it as-is). `src/lib/prisma.ts` and `prisma/seed.ts` now also read `DATABASE_AUTH_TOKEN`. Since Prisma's schema engine rejects `libsql://` for `migrate deploy` (P1013 — it only recognizes native schemes, not the driver-adapter-only libSQL protocol), migrations against Turso are applied via a new script, `scripts/deploy-migrations.ts` (`npm run db:deploy`), which runs each `migration.sql` through `@libsql/client` directly and records it in a `_prisma_migrations`-shaped table. **Verified live end-to-end**: both migrations deployed, taxonomy seeded (20 genres/14 themes), and a real capped collector run (`--max=10`) persisted 10 games with 0 errors against the hosted DB via the actual `PrismaLibSql` adapter path. Local dev still defaults to `file:./dev.db`; the Turso `DATABASE_URL`/`DATABASE_AUTH_TOKEN` are not committed anywhere — they go into GitHub Actions secrets (#32) and Vercel project env vars (#31) directly.
-- [ ] **31.** 🟢 Deploy frontend to Vercel/Netlify; configure env/secrets. No code changes needed (standard Next.js app, no `vercel.json` required). Blocked on the user connecting a Vercel account/GitHub repo and setting `DATABASE_URL`/`DATABASE_AUTH_TOKEN` as project env vars.
-- [ ] **32.** 🟢 Set up GitHub Actions scheduled workflow to run the collector on a cron against the hosted DB. ✅ Workflow written — `.github/workflows/collect.yml` (every 3h + manual `workflow_dispatch` with a `knownOnly` toggle), reads `DATABASE_URL`/`DATABASE_AUTH_TOKEN` from repo secrets. Blocked on the repo being pushed to GitHub with those secrets configured (no git remote is set locally yet).
+- [x] **31.** 🟢 Deploy frontend to Vercel/Netlify; configure env/secrets. ✅ Done — deployed on Vercel from `github.com/Barnadict/rodict`, connected to the hosted Turso DB via project env vars. Note: Vercel Deployment Protection (Vercel Authentication) is currently on, so the production URL requires a Vercel login to view — flip it off in Vercel → Settings → Deployment Protection if/when it should be public.
+- [x] **32.** 🟢 Set up GitHub Actions scheduled workflow to run the collector on a cron against the hosted DB. ✅ Done and verified green — `.github/workflows/collect.yml` (every 3h + manual `workflow_dispatch` with a `knownOnly` toggle) ran successfully against the hosted DB. First real run surfaced a genuine bug: Roblox's `/v1/games` endpoint rejects 100-id batches ("Too many universe IDs were requested", code 9) — every prior local test used `--max=10` so it never hit that boundary. Fixed by lowering `BATCH_SIZE` to 50 in `src/lib/roblox/client.ts` (commit `c8eef5e`), verified with a full 339-game run against the hosted DB (0 errors). Real collection history is now accumulating on Turso via both manual local runs and the scheduled Action.
 - [ ] **33.** 🟡 Set up a second GitHub Actions (Python) workflow to run the Phase 4 analytics on a schedule and write results to the DB.
 - [ ] **34.** 🟡 Collector/analytics failure monitoring — alert on failed runs, log run history, and surface a "last successful collection" indicator in the UI.
 
