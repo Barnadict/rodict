@@ -1,4 +1,7 @@
-name: Collect (Task #32)
+# Quoted because an unquoted `#` starts a YAML comment — without quotes this
+# name silently truncates to "Collect (Task", which breaks the workflow_run
+# trigger in analytics.yml that matches on it by name.
+name: "Collect (Task #32)"
 
 # Runs the data collector against the hosted DB on a schedule, so game/genre
 # snapshot history keeps accumulating even when nobody is running `npm run

@@ -1,4 +1,4 @@
-name: Analytics (Task #33)
+name: "Analytics (Task #33)" # quoted: an unquoted `#` would truncate the name
 
 # Runs the Phase 4 Python analytics jobs against the hosted DB and writes the
 # precomputed results into AnalyticsResult (the frontend only reads them).
