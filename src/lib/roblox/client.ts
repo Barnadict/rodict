@@ -23,7 +23,10 @@ const GAMES_API = "https://games.roblox.com";
 const THUMBNAILS_API = "https://thumbnails.roblox.com";
 const APIS = "https://apis.roblox.com";
 
-const BATCH_SIZE = 100;
+// Roblox's games API rejects batches of 100 ids with "Too many universe IDs
+// were requested" (error code 9) — discovered via a real GitHub Actions run
+// that (unlike every local test so far) exceeded 100 discovered games.
+const BATCH_SIZE = 50;
 
 function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
