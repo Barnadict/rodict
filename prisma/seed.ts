@@ -17,7 +17,10 @@ import { PrismaClient } from "../src/generated/prisma/client";
 import { GENRES } from "../src/lib/taxonomy/genres";
 import { THEMES } from "../src/lib/taxonomy/themes";
 
-const adapter = new PrismaLibSql({ url: process.env.DATABASE_URL ?? "" });
+const adapter = new PrismaLibSql({
+  url: process.env.DATABASE_URL ?? "",
+  authToken: process.env.DATABASE_AUTH_TOKEN,
+});
 const prisma = new PrismaClient({ adapter });
 
 async function main() {

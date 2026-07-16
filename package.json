@@ -14,6 +14,7 @@
     "db:studio": "prisma studio",
     "db:seed": "prisma db seed",
     "db:reset": "prisma migrate reset",
+    "db:deploy": "tsx scripts/deploy-migrations.ts",
     "db:backup": "tsx scripts/backup.ts",
     "db:retention": "tsx scripts/retention.ts",
     "collect": "tsx scripts/collect.ts",

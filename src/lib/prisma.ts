@@ -5,11 +5,17 @@ import { PrismaClient } from "@/generated/prisma/client";
 // Prisma 7 is engine-less by default, so the runtime client connects through a
 // driver adapter rather than a connection string alone. We use the libSQL
 // adapter because it serves BOTH local dev (a `file:` SQLite DB) and the hosted
-// Turso target (Task #30) — same code path, only DATABASE_URL changes.
+// Turso target (Task #30) — same code path, only DATABASE_URL/DATABASE_AUTH_TOKEN
+// change.
 //
 // DATABASE_URL is loaded by Next.js (from .env / .env.local) and by the Prisma
-// CLI (via dotenv in prisma.config.ts).
-const adapter = new PrismaLibSql({ url: process.env.DATABASE_URL ?? "" });
+// CLI (via dotenv in prisma.config.ts). DATABASE_AUTH_TOKEN is optional — local
+// SQLite doesn't need one; Turso does. (The libSQL client also accepts a token
+// embedded as a `?authToken=` query param on the URL itself, so either form works.)
+const adapter = new PrismaLibSql({
+  url: process.env.DATABASE_URL ?? "",
+  authToken: process.env.DATABASE_AUTH_TOKEN,
+});
 
 // Reuse a single PrismaClient across hot-reloads in dev (Next.js re-evaluates
 // modules on every change, which would otherwise open a new connection each

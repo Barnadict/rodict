@@ -1,0 +1,41 @@
+name: Collect (Task #32)
+
+# Runs the data collector against the hosted DB on a schedule, so game/genre
+# snapshot history keeps accumulating even when nobody is running `npm run
+# collect` locally. Local scheduling (node-cron) was intentionally skipped as
+# Task #12 in favor of this.
+
+on:
+  schedule:
+    - cron: "0 */3 * * *" # every 3 hours
+  workflow_dispatch:
+    inputs:
+      knownOnly:
+        description: "Skip keyword discovery, only re-collect known games"
+        type: boolean
+        default: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Run collector
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: |
+          if [ "${{ inputs.knownOnly }}" = "true" ]; then
+            npm run collect -- --known-only
+          else
+            npm run collect
+          fi
