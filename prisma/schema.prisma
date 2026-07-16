@@ -1,0 +1,223 @@
+// rodict — Prisma schema
+// Learn more: https://pris.ly/d/prisma-schema
+//
+// DB-agnostic on purpose: local dev uses SQLite, hosted (Task #30) will use
+// Postgres (Neon) or Turso. To keep the schema portable across both, this file
+// deliberately AVOIDS:
+//   - native `enum`s        -> use String columns + the union types in
+//                              src/lib/db-constants.ts for type-safety
+//   - the `Json` scalar     -> JSON payloads are stored as String (the app
+//                              JSON.stringify/parses them); works identically
+//                              on SQLite and Postgres
+//   - provider-specific `@db.` native type attributes
+//
+// Conventions:
+//   - ALL DateTime values are stored in UTC. The collector/analytics jobs must
+//     write UTC; the UI converts to local time only at display (Task #14+).
+//   - Roblox numeric ids and cumulative visit counts use BigInt (they exceed
+//     32-bit Int range).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ---------------------------------------------------------------------------
+// Core entities
+// ---------------------------------------------------------------------------
+
+/// A Roblox game (a "universe"). One row per tracked game — including games we
+/// discover near launch and keep following as they decline, so dead games stay
+/// in the dataset and survival/lifespan stats aren't biased (locked decision:
+/// avoid survivorship bias).
+model Game {
+  id String @id @default(cuid())
+
+  // Roblox identity
+  universeId  BigInt  @unique // canonical Roblox universe id
+  rootPlaceId BigInt? // primary place id (for building roblox.com URLs)
+  name        String
+  description String?
+
+  // Creator
+  creatorId   BigInt?
+  creatorName String?
+  creatorType String? // "User" | "Group" (see CreatorType in db-constants.ts)
+
+  // Roblox-reported lifecycle timestamps (UTC)
+  robloxCreatedAt DateTime? // when the game was created on Roblox
+  robloxUpdatedAt DateTime? // Roblox's last-updated timestamp
+
+  // Our collection lifecycle (UTC)
+  firstSeenAt     DateTime  @default(now()) // when our collector first discovered it
+  lastCollectedAt DateTime?
+
+  // All-time peak concurrent players — needed for the "dead" rule
+  // (<5% of peak for 7+ consecutive days). Updated by the collector whenever a
+  // snapshot's `playing` exceeds the stored peak.
+  allTimePeakPlayers Int       @default(0)
+  allTimePeakAt      DateTime?
+
+  // Lifecycle status — set by survival analytics (Task #21), denormalized here
+  // for fast filtering. "active" | "dead" (see GameStatus in db-constants.ts).
+  status    String    @default("active")
+  deadSince DateTime?
+
+  // Denormalized current genre for fast list/sort queries. The authoritative,
+  // time-aware record lives in GameGenreHistory.
+  currentGenreId String?
+  currentGenre   Genre?  @relation("GameCurrentGenre", fields: [currentGenreId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  snapshots    GameSnapshot[]
+  genreHistory GameGenreHistory[]
+  themes       GameTheme[]
+
+  @@index([status])
+  @@index([currentGenreId])
+  @@index([allTimePeakPlayers])
+  @@index([firstSeenAt])
+}
+
+/// Our own normalized, gameplay-based genre (NOT Roblox's deprecated thematic
+/// Genre enum). The list + the Roblox-tag mapping layer are populated in Task #5.
+model Genre {
+  id          String  @id @default(cuid())
+  slug        String  @unique // stable key, e.g. "simulator"
+  name        String // display name, e.g. "Simulator"
+  description String?
+  sortOrder   Int     @default(0)
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  gamesCurrent Game[]             @relation("GameCurrentGenre")
+  genreHistory GameGenreHistory[]
+  snapshots    GenreSnapshot[]
+}
+
+/// A cross-cutting theme (e.g. Anime, Fantasy, Sci-Fi), tracked SEPARATELY from
+/// genre (locked decision). e.g. "Anime Fighting Simulator" -> genre=Simulator,
+/// theme=Anime.
+model Theme {
+  id       String  @id @default(cuid())
+  slug     String  @unique
+  name     String
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  games GameTheme[]
+}
+
+/// Many-to-many join between Game and Theme.
+model GameTheme {
+  gameId  String
+  themeId String
+
+  game  Game  @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  theme Theme @relation(fields: [themeId], references: [id], onDelete: Cascade)
+
+  @@id([gameId, themeId])
+  @@index([themeId])
+}
+
+/// A game's genre over time — genre can change (Roblox re-tags a game, or we
+/// manually override a mislabeled one). Each row is a genre assignment period:
+/// `endedAt == null` means it's the current assignment.
+model GameGenreHistory {
+  id         String    @id @default(cuid())
+  gameId     String
+  genreId    String
+  assignedAt DateTime  @default(now()) // when this genre became effective (UTC)
+  endedAt    DateTime? // null = still current
+  source     String    @default("roblox_tag") // "roblox_tag" | "manual" | "inferred"
+  note       String?
+
+  game  Game  @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  genre Genre @relation(fields: [genreId], references: [id])
+
+  @@index([gameId, assignedAt])
+  @@index([genreId])
+}
+
+// ---------------------------------------------------------------------------
+// Time series (the irreplaceable history — Roblox APIs only return "now")
+// ---------------------------------------------------------------------------
+
+/// A timestamped snapshot of a single game's RAW collected metrics. Derived
+/// values (e.g. estimated earnings, growth rates) are NOT stored here — they
+/// live in AnalyticsResult / are computed by the derived-metrics layer (Task #9).
+model GameSnapshot {
+  id          String   @id @default(cuid())
+  gameId      String
+  collectedAt DateTime @default(now()) // UTC
+
+  playing    Int // concurrent players (CCU) at collection time
+  visits     BigInt // cumulative visits (can be billions -> BigInt)
+  favorites  Int     @default(0)
+  upVotes    Int     @default(0)
+  downVotes  Int     @default(0)
+  maxPlayers Int? // server capacity, if known
+
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@unique([gameId, collectedAt]) // guards against duplicate rows for the same run
+  @@index([gameId, collectedAt])
+  @@index([collectedAt])
+}
+
+/// A timestamped snapshot of PRECOMPUTED aggregate metrics for a genre, so genre
+/// pages read one row instead of aggregating raw snapshots on every request.
+model GenreSnapshot {
+  id          String   @id @default(cuid())
+  genreId     String
+  collectedAt DateTime @default(now()) // UTC
+
+  totalGames     Int    @default(0)
+  totalPlaying   Int    @default(0)
+  totalVisits    BigInt @default(0)
+  totalFavorites BigInt @default(0)
+  avgPlaying     Float  @default(0)
+  medianPlaying  Float?
+
+  genre Genre @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@unique([genreId, collectedAt])
+  @@index([genreId, collectedAt])
+  @@index([collectedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Analytics
+// ---------------------------------------------------------------------------
+
+/// Generic store for the precomputed outputs of the Phase 4 Python jobs
+/// (survival curves, clustering, opportunity scores, forecasts, ...). The
+/// frontend only READS these — nothing heavy runs on request. `payload` is a
+/// JSON string (kept as String for SQLite<->Postgres portability).
+model AnalyticsResult {
+  id String @id @default(cuid())
+
+  kind      String // e.g. "survival_km" | "opportunity_score" | "forecast"
+  scopeType String // "game" | "genre" | "global"
+  scopeId   String? // Game.id / Genre.id, or null for global results
+
+  periodStart DateTime?
+  periodEnd   DateTime?
+  computedAt  DateTime  @default(now())
+  version     String? // algorithm/model version, for reproducibility
+
+  payload String // JSON-encoded result
+
+  @@index([kind, scopeType, scopeId])
+  @@index([computedAt])
+}
