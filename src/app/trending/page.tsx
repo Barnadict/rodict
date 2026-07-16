@@ -1,7 +1,9 @@
 import Link from "next/link";
 
 import { getRisingGames, getRisingGenres } from "@/lib/db/trends";
+import { getRecentAnomalies } from "@/lib/db/analytics";
 import { formatCompact } from "@/lib/format";
+import { formatGrowthPct } from "@/lib/stats";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -23,12 +25,14 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
   const range = parseRangeKey(Array.isArray(sp.range) ? sp.range[0] : sp.range);
   const cutoff = rangeToCutoff(range);
 
-  const [games, genres] = await Promise.all([
+  const [games, genres, anomalies] = await Promise.all([
     getRisingGames({ cutoff, limit: 25 }),
     getRisingGenres({ cutoff, limit: 25 }),
+    getRecentAnomalies(),
   ]);
 
   const hasData = games.length > 0 || genres.length > 0;
+  const recent = anomalies?.recent ?? [];
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
@@ -129,6 +133,47 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
             </div>
           </section>
         </div>
+      )}
+
+      {recent.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <div>
+            <h2 className="font-medium">Recent notable changes</h2>
+            <p className="text-sm text-muted-foreground">
+              Auto-detected spikes and drops, large relative to each series&apos; own typical step
+              (change-point detection).
+            </p>
+          </div>
+          <div className="flex flex-col divide-y rounded-lg border">
+            {recent.slice(0, 12).map((a, i) => (
+              <div
+                key={`${a.id}-${a.at}-${i}`}
+                className="flex items-center justify-between gap-3 p-3 text-sm"
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <Badge variant="outline" className="text-[10px]">
+                    {a.scope}
+                  </Badge>
+                  {a.scope === "game" ? (
+                    <Link href={`/games/${a.id}`} className="truncate font-medium hover:underline">
+                      {a.name}
+                    </Link>
+                  ) : (
+                    <span className="truncate font-medium">{a.name}</span>
+                  )}
+                </span>
+                <span className="flex items-center gap-3 tabular-nums">
+                  <span className="text-muted-foreground">
+                    {formatCompact(a.prevValue)} → {formatCompact(a.value)}
+                  </span>
+                  <Badge variant={a.direction === "spike" ? "secondary" : "destructive"}>
+                    {a.direction === "spike" ? "▲" : "▼"} {formatGrowthPct(a.changePct)}
+                  </Badge>
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       <p className="text-sm text-muted-foreground">

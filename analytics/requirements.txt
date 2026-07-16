@@ -1,0 +1,6 @@
+# Python analytics jobs (Phase 4). Precompute heavy stats into the
+# AnalyticsResult table; the Next.js frontend only reads the results.
+pandas>=2.0
+numpy>=1.24
+scikit-learn>=1.3
+lifelines>=0.27

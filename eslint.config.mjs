@@ -17,6 +17,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Generated Prisma client (regenerated on install; not ours to lint).
     "src/generated/**",
+    // Python analytics package (venv bundles third-party JS we must not lint).
+    "analytics/**",
   ]),
 ]);
 

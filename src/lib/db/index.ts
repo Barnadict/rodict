@@ -5,3 +5,4 @@ export * from "./games";
 export * from "./genre-stats";
 export * from "./genre-snapshots";
 export * from "./trends";
+export * from "./analytics";

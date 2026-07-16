@@ -8,3 +8,6 @@ package-lock.json
 
 # generated Prisma client
 src/generated
+
+# python analytics (venv + .py files are not prettier's concern)
+analytics

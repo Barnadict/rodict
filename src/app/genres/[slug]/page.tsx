@@ -6,9 +6,21 @@ import { getGenreStatBySlug, getGenreLifecycle } from "@/lib/db/genre-stats";
 import { getGenreSnapshots } from "@/lib/db/genre-snapshots";
 import { getGamesList } from "@/lib/db/games";
 import { getGrowthForGames } from "@/lib/db/trends";
+import {
+  getSurvivalForGenre,
+  getClusteringForGenre,
+  getOpportunityForGenre,
+  getMomentumForGenre,
+  getCohortsForGenre,
+  getSeasonalityForGenre,
+  getForecastForGenre,
+  getAnalyticsComputedAt,
+} from "@/lib/db/analytics";
 import { estimateDailyEarningsFromCcu } from "@/lib/earnings/estimate";
 import { formatCompact, formatUsdRange } from "@/lib/format";
+import { formatGrowthPct } from "@/lib/stats";
 
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -39,12 +51,34 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
   const genre = await getGenreBySlug(slug);
   if (!genre) notFound();
 
-  const [stat, series, lifecycle, topGames] = await Promise.all([
+  const [
+    stat,
+    series,
+    lifecycle,
+    topGames,
+    survival,
+    clustering,
+    opportunity,
+    momentum,
+    cohorts,
+    seasonality,
+    forecast,
+    analyticsAt,
+  ] = await Promise.all([
     getGenreStatBySlug(slug),
     getGenreSnapshots(genre.id, { from: cutoff }),
     getGenreLifecycle(genre.id),
     getGamesList({ genreSlug: slug, sort: "currentPlaying", order: "desc", limit: 10 }),
+    getSurvivalForGenre(genre.id),
+    getClusteringForGenre(genre.id),
+    getOpportunityForGenre(genre.id),
+    getMomentumForGenre(genre.id),
+    getCohortsForGenre(genre.id),
+    getSeasonalityForGenre(genre.id),
+    getForecastForGenre(genre.id),
+    getAnalyticsComputedAt(),
   ]);
+  const hasAnalytics = !!(survival || clustering || opportunity || momentum);
 
   // A range narrower than "all" adds a Δ column to top games, scoped to just
   // these 10 rows (Task #19) — same pattern as the games list.
@@ -83,6 +117,63 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
         />
       </div>
 
+      {hasAnalytics && (
+        <section className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="font-medium">Insights</h2>
+            <span className="text-xs text-muted-foreground">
+              Precomputed
+              {analyticsAt &&
+                ` · updated ${analyticsAt.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}`}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatTile
+              label="Opportunity score"
+              value={opportunity ? `${opportunity.score.toFixed(1)}` : "—"}
+              badge={opportunity ? `#${opportunity.rank}` : undefined}
+            />
+            <StatTile
+              label="Median lifespan"
+              value={
+                survival?.status === "ok" && survival.medianLifespanWeeks !== null
+                  ? `${survival.medianLifespanWeeks} wk`
+                  : "—"
+              }
+            />
+            <StatTile
+              label="Deaths observed"
+              value={survival ? formatCompact(survival.nDeaths) : "—"}
+            />
+            <StatTile
+              label="Avg 7d growth"
+              value={
+                momentum?.avgGrowth7d !== null && momentum?.avgGrowth7d !== undefined
+                  ? formatGrowthPct(momentum.avgGrowth7d)
+                  : "—"
+              }
+            />
+          </div>
+          {clustering && Object.keys(clustering.archetypeCounts).length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3">
+              <span className="text-sm text-muted-foreground">Trajectory shapes:</span>
+              {Object.entries(clustering.archetypeCounts).map(([label, count]) => (
+                <Badge key={label} variant="secondary">
+                  {label} · {count}
+                </Badge>
+              ))}
+            </div>
+          )}
+          {survival?.status === "insufficient_deaths" && (
+            <p className="text-xs text-muted-foreground">
+              Survival (median lifespan) needs games followed until they die by the
+              &ldquo;dead&rdquo; rule (&lt;5% of peak for 7+ days). None observed yet — expected
+              during cold start.
+            </p>
+          )}
+        </section>
+      )}
+
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <h2 className="font-medium">Players over time</h2>
@@ -114,6 +205,105 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
           <LifecycleChart data={lifecycle} />
         </div>
       </section>
+
+      {cohorts && cohorts.cohorts.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <div>
+            <h2 className="font-medium">Launch cohorts</h2>
+            <p className="text-sm text-muted-foreground">
+              This genre&apos;s games grouped by launch quarter. Older cohorts with fewer current
+              players is a cross-sectional decline signal.
+            </p>
+          </div>
+          <div className="overflow-x-auto rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Launched</TableHead>
+                  <TableHead className="text-right">Games</TableHead>
+                  <TableHead className="text-right">Avg players</TableHead>
+                  <TableHead className="text-right">Avg age</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {cohorts.cohorts.map((c) => (
+                  <TableRow key={c.cohort}>
+                    <TableCell className="font-medium">{c.cohort}</TableCell>
+                    <TableCell className="text-right tabular-nums">{c.nGames}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatCompact(Math.round(c.avgPlaying))}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {Math.round(c.avgAgeWeeks)} wk
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </section>
+      )}
+
+      {(forecast || seasonality) && (
+        <section className="flex flex-col gap-3">
+          <h2 className="font-medium">Projection &amp; seasonality</h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border p-4">
+              <div className="text-sm font-medium">Near-term projection</div>
+              {forecast?.status === "ok" ? (
+                <div className="mt-2 flex flex-col gap-1 text-sm">
+                  <span>
+                    Trend:{" "}
+                    <Badge
+                      variant={
+                        forecast.trend === "up"
+                          ? "secondary"
+                          : forecast.trend === "down"
+                            ? "destructive"
+                            : "outline"
+                      }
+                    >
+                      {forecast.trend}
+                    </Badge>
+                  </span>
+                  {forecast.points[forecast.points.length - 1] && (
+                    <span className="text-muted-foreground tabular-nums">
+                      ~{formatCompact(forecast.points[forecast.points.length - 1].forecast)} players
+                      in {forecast.horizon} steps (band{" "}
+                      {formatCompact(forecast.points[forecast.points.length - 1].lower)}–
+                      {formatCompact(forecast.points[forecast.points.length - 1].upper)})
+                    </span>
+                  )}
+                  <span className="text-xs text-muted-foreground">{forecast.note}</span>
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Not enough genre snapshots yet to project — expected during cold start.
+                </p>
+              )}
+            </div>
+            <div className="rounded-lg border p-4">
+              <div className="text-sm font-medium">Weekly seasonality</div>
+              {seasonality?.status === "ok" ? (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {seasonality.byWeekday.map((d) => (
+                    <Badge key={d.label} variant="outline" className="tabular-nums">
+                      {d.label} {d.index.toFixed(2)}×
+                    </Badge>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Needs ≥7 days of history to detect day-of-week effects
+                  {seasonality?.distinctDays !== undefined
+                    ? ` (have ${seasonality.distinctDays}).`
+                    : "."}
+                </p>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">Top games</h2>

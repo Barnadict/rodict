@@ -2,9 +2,11 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 
 import { getGameByUniverseId, getGameSnapshots } from "@/lib/db/games";
+import { getAnomaliesForGame } from "@/lib/db/analytics";
 import { getGameIcons } from "@/lib/roblox/client";
 import { deriveSnapshotMetrics } from "@/lib/earnings/estimate";
 import { formatCompact, formatExact, formatUsdRange } from "@/lib/format";
+import { formatGrowthPct } from "@/lib/stats";
 
 import { Badge } from "@/components/ui/badge";
 import { PresetLinks } from "@/components/filters/preset-links";
@@ -28,9 +30,10 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
   if (!game) notFound();
   const from = rangeToCutoff(range);
 
-  const [snapshots, icons] = await Promise.all([
+  const [snapshots, icons, anomalies] = await Promise.all([
     getGameSnapshots(game.id, { from }),
     getGameIcons([universeId]),
+    getAnomaliesForGame(game.id),
   ]);
 
   const iconUrl = icons[0]?.imageUrl ?? null;
@@ -147,6 +150,36 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
           </details>
         )}
       </div>
+
+      {anomalies && anomalies.nAnomalies > 0 && (
+        <section className="flex flex-col gap-2">
+          <h2 className="font-medium">Notable changes</h2>
+          <p className="text-sm text-muted-foreground">
+            Automatically flagged spikes and drops (large relative to this game&apos;s typical
+            step-to-step change).
+          </p>
+          <div className="flex flex-col divide-y rounded-lg border">
+            {[...anomalies.anomalies].reverse().map((a) => (
+              <div key={a.at} className="flex items-center justify-between gap-3 p-3 text-sm">
+                <span className="text-muted-foreground">
+                  {new Date(a.at).toLocaleString(undefined, {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  })}
+                </span>
+                <span className="flex items-center gap-3 tabular-nums">
+                  <span className="text-muted-foreground">
+                    {formatCompact(a.prevValue)} → {formatCompact(a.value)}
+                  </span>
+                  <Badge variant={a.direction === "spike" ? "secondary" : "destructive"}>
+                    {a.direction === "spike" ? "▲" : "▼"} {formatGrowthPct(a.changePct)}
+                  </Badge>
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

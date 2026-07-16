@@ -50,3 +50,8 @@ prisma/*.db-journal
 
 # db backups (local dumps)
 /backups/
+
+# python analytics
+/analytics/.venv/
+__pycache__/
+*.pyc

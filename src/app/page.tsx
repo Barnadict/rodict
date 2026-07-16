@@ -4,6 +4,7 @@ import { TrendingUp, ArrowRight } from "lucide-react";
 import { getGenreStats } from "@/lib/db/genre-stats";
 import { getRisingGames, getRisingGenres } from "@/lib/db/trends";
 import { getLastCollectedAt, countGames } from "@/lib/db/games";
+import { getCorrelation } from "@/lib/db/analytics";
 import { rangeToCutoff } from "@/lib/date-range";
 import { estimateDailyEarningsFromCcu } from "@/lib/earnings/estimate";
 import { formatCompact, formatUsdRange } from "@/lib/format";
@@ -18,13 +19,15 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   const cutoff = rangeToCutoff("7d");
 
-  const [genreStats, risingGames, risingGenres, totalGames, lastCollectedAt] = await Promise.all([
-    getGenreStats({ sort: "totalPlaying", order: "desc" }),
-    getRisingGames({ cutoff, limit: 5 }),
-    getRisingGenres({ cutoff, limit: 3 }),
-    countGames(),
-    getLastCollectedAt(),
-  ]);
+  const [genreStats, risingGames, risingGenres, totalGames, lastCollectedAt, correlation] =
+    await Promise.all([
+      getGenreStats({ sort: "totalPlaying", order: "desc" }),
+      getRisingGames({ cutoff, limit: 5 }),
+      getRisingGenres({ cutoff, limit: 3 }),
+      countGames(),
+      getLastCollectedAt(),
+      getCorrelation(),
+    ]);
 
   const classifiedGenres = genreStats.filter((g) => g.genreId && g.gameCount > 0);
   const topGenres = classifiedGenres.slice(0, 5);
@@ -154,6 +157,42 @@ export default async function Home() {
               </div>
             </section>
           </div>
+
+          {correlation && correlation.status === "ok" && (
+            <section className="flex flex-col gap-3">
+              <div>
+                <h2 className="font-medium">What&apos;s associated with more players</h2>
+                <p className="text-sm text-muted-foreground">
+                  Rank correlation of each stat with a game&apos;s current player count.
+                  Associational, not causal · n={correlation.n}.
+                </p>
+              </div>
+              <div className="flex flex-col divide-y rounded-lg border">
+                {correlation.correlations.map((c) => {
+                  const pct = Math.min(100, Math.abs(c.spearman) * 100);
+                  const positive = c.spearman >= 0;
+                  return (
+                    <div key={c.feature} className="flex items-center gap-3 p-3">
+                      <span className="w-32 shrink-0 text-sm font-medium">{c.label}</span>
+                      <div className="flex h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className={positive ? "bg-emerald-500" : "bg-red-500"}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <span className="w-14 shrink-0 text-right text-sm tabular-nums text-muted-foreground">
+                        {c.spearman >= 0 ? "+" : "−"}
+                        {Math.abs(c.spearman).toFixed(2)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              {correlation.note && (
+                <p className="text-xs text-muted-foreground">{correlation.note}</p>
+              )}
+            </section>
+          )}
         </>
       )}
     </div>
