@@ -1,12 +1,5 @@
 import Link from "next/link";
-import {
-  LayoutDashboard,
-  Gamepad2,
-  Shapes,
-  TrendingUp,
-  Bookmark,
-  Info,
-} from "lucide-react";
+import { LayoutDashboard, Gamepad2, Shapes, TrendingUp, Scale, Bookmark, Info } from "lucide-react";
 
 import {
   Sidebar,
@@ -25,6 +18,7 @@ const browseItems = [
   { title: "Games", href: "/games", icon: Gamepad2 },
   { title: "Genres", href: "/genres", icon: Shapes },
   { title: "Trending", href: "/trending", icon: TrendingUp },
+  { title: "Saturation", href: "/saturation", icon: Scale },
 ];
 
 const otherItems = [
@@ -36,10 +30,7 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <Link
-          href="/"
-          className="flex items-center gap-2 px-2 py-1.5 text-sm font-semibold"
-        >
+        <Link href="/" className="flex items-center gap-2 px-2 py-1.5 text-sm font-semibold">
           <span className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground">
             r
           </span>
@@ -53,10 +44,7 @@ export function AppSidebar() {
             <SidebarMenu>
               {browseItems.map((item) => (
                 <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton
-                    render={<Link href={item.href} />}
-                    tooltip={item.title}
-                  >
+                  <SidebarMenuButton render={<Link href={item.href} />} tooltip={item.title}>
                     <item.icon />
                     <span>{item.title}</span>
                   </SidebarMenuButton>
@@ -71,10 +59,7 @@ export function AppSidebar() {
             <SidebarMenu>
               {otherItems.map((item) => (
                 <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton
-                    render={<Link href={item.href} />}
-                    tooltip={item.title}
-                  >
+                  <SidebarMenuButton render={<Link href={item.href} />} tooltip={item.title}>
                     <item.icon />
                     <span>{item.title}</span>
                   </SidebarMenuButton>

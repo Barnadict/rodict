@@ -19,14 +19,12 @@ export function ThemeToggle() {
   const mounted = React.useSyncExternalStore(
     noopSubscribe,
     () => true,
-    () => false
+    () => false,
   );
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        render={<Button variant="ghost" size="icon" />}
-      >
+      <DropdownMenuTrigger render={<Button variant="ghost" size="icon" />}>
         {mounted ? (
           <>
             <Sun className="scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90" />
@@ -38,15 +36,9 @@ export function ThemeToggle() {
         <span className="sr-only">Toggle theme</span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => setTheme("light")}>
-          Light
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("dark")}>
-          Dark
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("system")}>
-          System
-        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setTheme("light")}>Light</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setTheme("dark")}>Dark</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setTheme("system")}>System</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
