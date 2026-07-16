@@ -1,0 +1,70 @@
+name: Alert on failure
+
+# Reusable alerting for the collector/analytics pipelines (Task #34).
+#
+# A red run in the Actions tab is only a signal if somebody is looking, and
+# these run unattended on a cron. This opens a GitHub issue instead — it needs
+# no external service or extra secret (unlike a Slack/Discord webhook), and
+# GitHub already notifies the repo owner about issues.
+#
+# Repeated failures COMMENT on the existing open issue rather than opening a new
+# one, so a pipeline broken for a day leaves one issue with a history, not eight
+# duplicates. Fix the cause and close the issue; the next failure reopens it.
+
+on:
+  workflow_call:
+    inputs:
+      pipeline:
+        description: 'Which pipeline failed ("collect" | "analytics")'
+        type: string
+        required: true
+      run-url:
+        description: "Link back to the failed run"
+        type: string
+        required: true
+
+jobs:
+  alert:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PIPELINE: ${{ inputs.pipeline }}
+          RUN_URL: ${{ inputs.run-url }}
+        run: |
+          set -euo pipefail
+
+          TITLE="Pipeline failure: ${PIPELINE}"
+          BODY="The \`${PIPELINE}\` pipeline failed.
+
+          Run: ${RUN_URL}
+
+          This issue is opened automatically and reused for repeat failures. Close it once the cause is fixed."
+
+          # Idempotent: --force updates the label if it already exists.
+          gh label create pipeline-failure \
+            --color B60205 \
+            --description "Automated alert: a scheduled pipeline run failed" \
+            --force
+
+          EXISTING=$(gh issue list \
+            --state open \
+            --label pipeline-failure \
+            --search "\"${TITLE}\" in:title" \
+            --json number,title \
+            --jq "[.[] | select(.title == \"${TITLE}\")] | first | .number // empty")
+
+          if [ -n "${EXISTING}" ]; then
+            echo "Commenting on existing issue #${EXISTING}"
+            gh issue comment "${EXISTING}" --body "Failed again — ${RUN_URL}"
+          else
+            echo "Opening a new failure issue"
+            gh issue create \
+              --title "${TITLE}" \
+              --label pipeline-failure \
+              --body "${BODY}"
+          fi

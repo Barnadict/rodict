@@ -20,9 +20,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "24"
           cache: "npm"
@@ -39,3 +39,15 @@ jobs:
           else
             npm run collect
           fi
+
+  # Alert on failed runs (Task #34) — these run unattended on a cron, so a red
+  # tab nobody checks isn't a signal.
+  alert:
+    needs: collect
+    if: failure()
+    uses: ./.github/workflows/alert-on-failure.yml
+    with:
+      pipeline: collect
+      run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    permissions:
+      issues: write

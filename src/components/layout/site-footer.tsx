@@ -1,4 +1,7 @@
+import { Suspense } from "react";
 import Link from "next/link";
+
+import { DataFreshness } from "./data-freshness";
 
 export function SiteFooter() {
   return (
@@ -12,7 +15,13 @@ export function SiteFooter() {
           </Link>
           .
         </p>
-        <p>&copy; {new Date().getFullYear()} rodict</p>
+        <div className="flex items-center gap-4">
+          {/* Suspense keeps a slow/unreachable DB from blocking the whole footer. */}
+          <Suspense fallback={null}>
+            <DataFreshness />
+          </Suspense>
+          <p className="shrink-0">&copy; {new Date().getFullYear()} rodict</p>
+        </div>
       </div>
     </footer>
   );

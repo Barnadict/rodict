@@ -1,0 +1,50 @@
+name: Analytics (Task #33)
+
+# Runs the Phase 4 Python analytics jobs against the hosted DB and writes the
+# precomputed results into AnalyticsResult (the frontend only reads them).
+#
+# Triggered by a SUCCESSFUL collect run rather than its own cron: analytics are
+# a pure function of collected data, so running them right after new snapshots
+# land keeps results fresh, avoids racing the collector, and skips pointless
+# recomputation when nothing new arrived (a failed collect writes no new data).
+
+on:
+  workflow_run:
+    workflows: ["Collect (Task #32)"]
+    types: [completed]
+  workflow_dispatch:
+
+jobs:
+  analytics:
+    # Skip when the triggering collect run failed — there'd be no new data, and
+    # the previous results are still the correct ones to serve.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - run: pip install -r analytics/requirements.txt
+
+      - name: Run analytics jobs
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+          PYTHONIOENCODING: utf-8 # game names contain emoji; CI stdout must not choke
+        run: python analytics/run.py
+
+  # Alert on failed runs (Task #34) — see the note in collect.yml.
+  alert:
+    needs: analytics
+    if: failure()
+    uses: ./.github/workflows/alert-on-failure.yml
+    with:
+      pipeline: analytics
+      run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    permissions:
+      issues: write

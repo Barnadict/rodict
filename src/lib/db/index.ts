@@ -6,3 +6,4 @@ export * from "./genre-stats";
 export * from "./genre-snapshots";
 export * from "./trends";
 export * from "./analytics";
+export * from "./job-runs";

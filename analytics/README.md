@@ -37,11 +37,25 @@ npm run analytics          # runs all jobs against DATABASE_URL (defaults to fil
 
 or a single job: `analytics/.venv/Scripts/python analytics/survival.py`.
 
+`run.py` exits non-zero if any job fails (so CI reports it) and records the run
+— success, partial, or failure — to the `JobRun` table, which drives the
+freshness indicator in the site footer.
+
+## Targets
+
+`db.py` picks its driver from `DATABASE_URL`, so the same jobs serve both:
+
+| `DATABASE_URL`  | Driver          | Needs                 |
+| --------------- | --------------- | --------------------- |
+| `file:./dev.db` | stdlib sqlite3  | —                     |
+| `libsql://...`  | `libsql`        | `DATABASE_AUTH_TOKEN` |
+
 ## Cold start
 
 Survival, momentum, and clustering need weeks/months of accumulated snapshots to
 be meaningful; until then they return `status: "insufficient…"` (correct, not a
 failure). The opportunity score works immediately (it reads current aggregates).
 
-Cloud scheduling of these jobs is **Task #33**; hosted-DB connection (Turso /
-Postgres) is wired in **Task #30/#33** (the local jobs use SQLite via stdlib).
+Cloud scheduling is **Task #33** — `.github/workflows/analytics.yml` runs these
+after every successful collect run, so results always reflect the newest
+snapshots.

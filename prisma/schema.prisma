@@ -234,3 +234,33 @@ model AnalyticsResult {
   @@index([kind, scopeType, scopeId])
   @@index([computedAt])
 }
+
+// ---------------------------------------------------------------------------
+// Operational monitoring (Task #34)
+// ---------------------------------------------------------------------------
+
+/// One row per collector/analytics run — the audit log behind the freshness
+/// indicator in the UI and the "is the pipeline healthy?" question.
+///
+/// Why this exists separately from `Game.lastCollectedAt`: that field only says
+/// when data last LANDED, which silently conflates "no run happened" with "the
+/// run ran and failed". A run is recorded here even when it fails, so a stale
+/// site can be explained rather than just looking empty.
+model JobRun {
+  id String @id @default(cuid())
+
+  job    String // "collect" | "analytics"
+  status String // "success" | "partial" | "failure"
+
+  startedAt  DateTime
+  finishedAt DateTime
+  durationMs Int
+
+  summary String? // JSON-encoded per-job counts (games persisted, results written, ...)
+  error   String? // failure message; also set for "partial" (per-item errors)
+
+  createdAt DateTime @default(now())
+
+  @@index([job, startedAt])
+  @@index([job, status, startedAt])
+}
