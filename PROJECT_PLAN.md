@@ -1,5 +1,20 @@
 # rodict — Roblox Game Trends & Statistics Website — Project Plan
 
+## ▶️ SESSION START — copy/paste this at the beginning of every new session
+
+```
+Read PROJECT_PLAN.md and continue the build. Last finished task: #1.
+Follow the plan's rules: optimize as you go, label all estimates/forecasts explicitly,
+and remind me before any task that needs a prerequisite I must provide.
+```
+
+> **Update the task number** (`Last finished task: #N`) each session so Claude knows where to pick up. Current progress: **Task #1 done → next is Task #2**.
+>
+> **One-time (first session after the folder was renamed to `rodict`):** also say
+> _"restore the memory notes from docs/claude-memory"_ so Claude re-creates the per-project memory at the new path.
+
+---
+
 **Site name:** rodict
 **Reference sites:** [romonitorstats.com](https://romonitorstats.com/), [rolimons.com/games](https://www.rolimons.com/games)
 **UI style:** [devforum.roblox.com](https://devforum.roblox.com/) — dark + light mode
