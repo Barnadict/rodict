@@ -62,6 +62,17 @@ model Game {
   allTimePeakPlayers Int       @default(0)
   allTimePeakAt      DateTime?
 
+  // Denormalized latest metrics, mirrored from the most recent GameSnapshot on
+  // every collection. Lets the games-list page sort/filter (players, visits,
+  // favorites, est. earnings) without joining each game to its latest snapshot.
+  // The authoritative time series still lives in GameSnapshot.
+  currentPlaying   Int       @default(0)
+  currentVisits    BigInt    @default(0)
+  currentFavorites Int       @default(0)
+  currentUpVotes   Int       @default(0)
+  currentDownVotes Int       @default(0)
+  lastSnapshotAt   DateTime?
+
   // Lifecycle status — set by survival analytics (Task #21), denormalized here
   // for fast filtering. "active" | "dead" (see GameStatus in db-constants.ts).
   status    String    @default("active")
@@ -83,6 +94,8 @@ model Game {
   @@index([currentGenreId])
   @@index([allTimePeakPlayers])
   @@index([firstSeenAt])
+  @@index([currentPlaying])
+  @@index([currentVisits])
 }
 
 /// Our own normalized, gameplay-based genre (NOT Roblox's deprecated thematic
