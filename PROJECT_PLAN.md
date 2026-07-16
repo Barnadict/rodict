@@ -116,7 +116,7 @@ Legend: `[ ]` todo · `[x]` done
 
 ### Phase 0: Foundation
 
-- [ ] **1.** Scaffold Next.js + TypeScript project; set up Tailwind, ESLint/Prettier, folder structure. Confirm dev server runs. **Initialize a git repo, add `.gitignore` + `.env.example`, and create a GitHub remote** (required later for GitHub Actions automation in Phase 5).
+- [x] **1.** Scaffold Next.js + TypeScript project; set up Tailwind, ESLint/Prettier, folder structure. Confirm dev server runs. **Initialize a git repo, add `.gitignore` + `.env.example`, and create a GitHub remote** (required later for GitHub Actions automation in Phase 5). ✅ Done — Next.js 16 + React 19 + Tailwind v4 (App Router, `src/`, `@/*` alias); Prettier wired into ESLint; `.env.example` + `.gitattributes`; local git repo initialized (2 commits). **GitHub remote deferred** — not needed until Task #32; will remind.
 - [ ] **2.** Install & configure shadcn/ui. Build base layout: top nav bar, sidebar, content area, footer — laid out like devforum.roblox.com.
 - [ ] **3.** Implement dark/light mode toggle (next-themes) with persisted preference. Define a devforum-inspired color theme for both modes.
 
@@ -204,3 +204,4 @@ _(Claude appends a one-line note here each time a task is completed.)_
 - _2026-07-16: Final review — folded in git/GitHub setup (Task #1), DB export/backup for irreplaceable history (Task #11 + Risks), and .env.example/accessibility notes. Task count unchanged (folded into existing tasks, no renumbering)._
 - _2026-07-16: Added "Prerequisites you must provide" section with a reminder protocol; locked site name = rodict, hosting = Vercel, collection frequency = default hourly, custom domain skipped. Earnings assumptions (#6) + genre list (#7) researched via web — pending user confirmation before adding to Tasks #9/#5._
 - _2026-07-16: User approved both — normalized genre list written into Task #5, earnings-estimation approach + DevEx-rate constant written into Task #9, and both reflected in Definitions._
+- _2026-07-16: **Task #1 complete.** Scaffolded Next.js 16 + React 19 + Tailwind v4 (App Router, src/, @/* alias) as package "rodict"; added Prettier (+ eslint-config-prettier), .env.example, .gitattributes; created src/components & src/lib; production build verified clean; git repo initialized with 2 commits. GitHub remote intentionally deferred to Task #32. **Next: Task #2** (shadcn/ui + devforum-style base layout)._
