@@ -7,3 +7,5 @@ lifelines>=0.27
 # Connects the jobs to the hosted Turso DB (Task #33). Local runs against a
 # `file:` DATABASE_URL use stdlib sqlite3 and never import this.
 libsql>=0.1.11
+# Unit tests for the pure statistical helpers (Task #37) — `npm run test:py`.
+pytest>=8.0

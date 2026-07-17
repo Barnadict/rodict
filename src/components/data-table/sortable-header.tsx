@@ -36,7 +36,15 @@ export function SortableHeader<F extends string>({
       scroll={false}
     >
       {label}
-      <Icon className={`size-3.5 ${isActive ? "text-foreground" : "text-muted-foreground/50"}`} />
+      <Icon
+        aria-hidden="true"
+        className={`size-3.5 ${isActive ? "text-foreground" : "text-muted-foreground/50"}`}
+      />
+      {isActive && (
+        <span className="sr-only">
+          , sorted {currentOrder === "desc" ? "descending" : "ascending"}
+        </span>
+      )}
     </Link>
   );
 }

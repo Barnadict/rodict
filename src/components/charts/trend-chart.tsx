@@ -29,6 +29,10 @@ interface TrendChartProps {
   movingAverageWindow?: number;
   emptyMessage?: string;
   height?: number;
+  /** Accessible name for screen readers — the chart's own SVG carries no
+   * useful text otherwise. The "view as table" fallback next to the chart
+   * covers precise values; this covers what the chart IS. */
+  ariaLabel?: string;
 }
 
 function makeTooltip(unit: string, hasMa: boolean) {
@@ -66,6 +70,7 @@ export function TrendChart({
   movingAverageWindow,
   emptyMessage = "No data in this range yet.",
   height = 288,
+  ariaLabel = "Line chart",
 }: TrendChartProps) {
   if (data.length === 0) {
     return (
@@ -99,7 +104,7 @@ export function TrendChart({
           </span>
         </div>
       )}
-      <ResponsiveContainer width="100%" height={height}>
+      <ResponsiveContainer width="100%" height={height} role="img" aria-label={ariaLabel}>
         <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
           <CartesianGrid stroke="var(--border)" vertical={false} />
           <XAxis

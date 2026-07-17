@@ -1,0 +1,44 @@
+name: "Tests (Task #37)" # quoted: an unquoted `#` would truncate the name
+
+# Runs both unit suites on every push/PR. They're pure functions — no DB, no
+# network, no secrets — so this needs none of the collector's configuration and
+# stays fast enough to gate every commit.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  typescript:
+    name: Vitest + typecheck + lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: "npm"
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run lint
+      - run: npm test
+
+  python:
+    name: pytest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - run: pip install -r analytics/requirements.txt
+      # Not `npm run test:py` — that script points at the local Windows venv
+      # (analytics\.venv\Scripts\python), which doesn't exist on the runner.
+      - run: python -m pytest analytics
+        env:
+          PYTHONIOENCODING: utf-8 # game names contain emoji; CI stdout must not choke

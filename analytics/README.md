@@ -50,6 +50,29 @@ freshness indicator in the site footer.
 | `file:./dev.db` | stdlib sqlite3  | —                     |
 | `libsql://...`  | `libsql`        | `DATABASE_AUTH_TOKEN` |
 
+## Tests
+
+```
+npm run test:py            # pytest, from analytics/tests/
+```
+
+Covers the pure statistical helpers (Task #37) — no DB, no network:
+
+| Test | Covers |
+| --- | --- |
+| `test_deadrule.py` | the locked "dead" rule: threshold, 7-day span, recovery resets |
+| `test_anomaly.py` | robust z-score + materiality bar; false-positive regressions |
+| `test_momentum.py` | window growth + least-squares slope, and their `None` guards |
+| `test_opportunity.py` | min-max normalization, weight signs, per-genre growth |
+| `test_survival.py` | censoring + left truncation of lifetime rows |
+| `test_seasonality.py` | weekday indices and the cold-start guard |
+
+The `_anomalies` tests pin a **real bug they caught**: with only a z-score, a
+step just had to be unusual *for its series* — so on a very regular curve (tiny
+MAD) an ordinary 2% wiggle scored z=36 and was published as a "notable change".
+Against the collected data, 11 of 15 flags were noise (a −3.4% drop, a +7.9%
+move at z=149). Anomalies now also have to clear `MIN_ABS_CHANGE`.
+
 ## Cold start
 
 Survival, momentum, and clustering need weeks/months of accumulated snapshots to

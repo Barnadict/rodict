@@ -9,6 +9,15 @@ game's natural volatility rather than a global threshold.
 Robust (median/MAD) rather than mean/std so a single big jump doesn't hide the
 next one. Cold-start: needs a handful of points and non-zero typical variation;
 until then most series flag nothing, which is correct.
+
+A flagged step must clear TWO independent bars: statistically unusual for this
+series (z-score) AND materially large in absolute terms (MIN_ABS_CHANGE). The
+z-score alone is not enough, because it only measures "unusual for this series"
+and says nothing about "worth telling a developer about" — on a very regular
+curve the typical step is tiny, so MAD shrinks and an ordinary 2% wiggle scores
+z=36. Two real failure modes this closes (both found by the Task #37 tests):
+low-noise oscillation reported as +/-5% "notable changes", and the tail of a
+smooth decline reported as a series of drops when nothing actually happened.
 """
 from __future__ import annotations
 
@@ -21,10 +30,15 @@ KIND = "change_point"
 MIN_POINTS = 4
 Z_THRESHOLD = 3.5
 MAD_TO_STD = 1.4826
+# Minimum |percent change| for a step to count as notable, regardless of how
+# unusual it is for the series. Real update/viral effects move a curve tens of
+# percent (a verified spike in testing was +165%); this floor is what keeps
+# statistical outliers that nobody would call an event out of the UI.
+MIN_ABS_CHANGE = 0.25
 
 
 def _anomalies(times: list, values: np.ndarray) -> list[dict]:
-    """Flag steps whose robust z-score of pct-change exceeds the threshold."""
+    """Flag steps that are both unusual for this series and materially large."""
     if len(values) < MIN_POINTS:
         return []
     prev = values[:-1]
@@ -38,7 +52,7 @@ def _anomalies(times: list, values: np.ndarray) -> list[dict]:
 
     out = []
     for i, zi in enumerate(z):
-        if abs(zi) >= Z_THRESHOLD:
+        if abs(zi) >= Z_THRESHOLD and abs(pct[i]) >= MIN_ABS_CHANGE:
             out.append(
                 {
                     "at": times[i + 1].isoformat(timespec="milliseconds"),

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cacheLife } from "next/cache";
 
 import { getGamesList, type GameSortField } from "@/lib/db/games";
 import { getAllGenres } from "@/lib/db/genres";
@@ -18,8 +19,15 @@ import {
 
 import { SortableHeader } from "@/components/data-table/sortable-header";
 import { GrowthBadge } from "@/components/data-table/growth-badge";
+import { WatchlistButton } from "@/components/watchlist/watchlist-button";
 import { PresetLinks } from "@/components/filters/preset-links";
-import { RANGE_OPTIONS, RANGE_CLEAR_VALUE, parseRangeKey, rangeToCutoff } from "@/lib/date-range";
+import {
+  RANGE_OPTIONS,
+  RANGE_CLEAR_VALUE,
+  parseRangeKey,
+  rangeToCutoff,
+  type RangeKey,
+} from "@/lib/date-range";
 import { GamesFilters } from "./_components/games-filters";
 import { GamesPagination } from "./_components/games-pagination";
 
@@ -39,6 +47,56 @@ function isSortField(value: string | undefined): value is GameSortField {
 
 const PAGE_SIZE = 25;
 
+interface GamesQuery {
+  page: number;
+  sort: GameSortField;
+  order: "asc" | "desc";
+  genreSlug?: string;
+  search?: string;
+  range: RangeKey;
+}
+
+/**
+ * The growth lookup is folded in here rather than left in the page body so a
+ * cache hit serves the whole table in one shot instead of re-running the Δ
+ * query every request.
+ *
+ * Note the cache key includes the free-text `search`, which is unbounded user
+ * input — so search views effectively don't share cache entries. That's
+ * acceptable (entries expire within a day, and the default unsearched view is
+ * what actually repeats), but it's the reason this stays on in-memory
+ * `use cache` rather than paying for a remote cache that search traffic would
+ * mostly miss anyway.
+ */
+async function getGamesPageData(q: GamesQuery) {
+  "use cache";
+  cacheLife("hours");
+
+  const [{ games, total }, genres] = await Promise.all([
+    getGamesList({
+      genreSlug: q.genreSlug,
+      search: q.search,
+      sort: q.sort,
+      order: q.order,
+      limit: PAGE_SIZE,
+      offset: (q.page - 1) * PAGE_SIZE,
+    }),
+    getAllGenres(),
+  ]);
+
+  // A range narrower than "all" adds a Δ column, scoped to just this page's
+  // rows (Task #19) — no need to rebuild the whole list historically.
+  const cutoff = rangeToCutoff(q.range);
+  const growthByGame = cutoff
+    ? await getGrowthForGames(
+        games.map((g) => g.id),
+        cutoff,
+      )
+    : null;
+
+  return { games, total, genres, growthByGame };
+}
+
 export default async function GamesPage(props: PageProps<"/games">) {
   const sp = await props.searchParams;
   const get = (key: string) => {
@@ -53,28 +111,15 @@ export default async function GamesPage(props: PageProps<"/games">) {
   const genreSlug = get("genre");
   const search = get("q");
   const range = parseRangeKey(get("range"));
-  const cutoff = rangeToCutoff(range);
 
-  const [{ games, total }, genres] = await Promise.all([
-    getGamesList({
-      genreSlug,
-      search,
-      sort,
-      order,
-      limit: PAGE_SIZE,
-      offset: (page - 1) * PAGE_SIZE,
-    }),
-    getAllGenres(),
-  ]);
-
-  // A range narrower than "all" adds a Δ column, scoped to just this page's
-  // rows (Task #19) — no need to rebuild the whole list historically.
-  const growthByGame = cutoff
-    ? await getGrowthForGames(
-        games.map((g) => g.id),
-        cutoff,
-      )
-    : null;
+  const { games, total, genres, growthByGame } = await getGamesPageData({
+    page,
+    sort,
+    order,
+    genreSlug,
+    search,
+    range,
+  });
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const baseParams = {
@@ -110,6 +155,9 @@ export default async function GamesPage(props: PageProps<"/games">) {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-8">
+                <span className="sr-only">Watch</span>
+              </TableHead>
               <TableHead className="w-10">#</TableHead>
               <TableHead>Game</TableHead>
               <TableHead>Genre</TableHead>
@@ -148,7 +196,7 @@ export default async function GamesPage(props: PageProps<"/games">) {
             {games.length === 0 && (
               <TableRow>
                 <TableCell
-                  colSpan={growthByGame ? 8 : 7}
+                  colSpan={growthByGame ? 9 : 8}
                   className="h-24 text-center text-muted-foreground"
                 >
                   No games match these filters.
@@ -160,6 +208,14 @@ export default async function GamesPage(props: PageProps<"/games">) {
               const growth = growthByGame?.get(game.id) ?? null;
               return (
                 <TableRow key={game.id}>
+                  <TableCell>
+                    <WatchlistButton
+                      kind="game"
+                      id={game.universeId.toString()}
+                      name={game.name}
+                      size="icon"
+                    />
+                  </TableCell>
                   <TableCell className="text-muted-foreground tabular-nums">
                     {(page - 1) * PAGE_SIZE + i + 1}
                   </TableCell>

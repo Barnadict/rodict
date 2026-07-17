@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { notFound } from "next/navigation";
+import { cacheLife } from "next/cache";
 
 import { getGameByUniverseId, getGameSnapshots } from "@/lib/db/games";
 import { getAnomaliesForGame } from "@/lib/db/analytics";
@@ -12,31 +13,56 @@ import { Badge } from "@/components/ui/badge";
 import { PresetLinks } from "@/components/filters/preset-links";
 import { TrendChart, type TrendPoint } from "@/components/charts/trend-chart";
 import { StatTile } from "@/components/data-table/stat-tile";
-import { RANGE_OPTIONS, RANGE_CLEAR_VALUE, parseRangeKey, rangeToCutoff } from "@/lib/date-range";
+import { WatchlistButton } from "@/components/watchlist/watchlist-button";
+import {
+  RANGE_OPTIONS,
+  RANGE_CLEAR_VALUE,
+  parseRangeKey,
+  rangeToCutoff,
+  type RangeKey,
+} from "@/lib/date-range";
+
+/**
+ * Caching this also puts the game's icon behind a cache. That request goes to
+ * Roblox's live API on render, so uncached it meant one third-party call per
+ * page view of a page whose data only changes every 3h — exactly the kind of
+ * traffic that earns a rate limit from a semi-official API.
+ *
+ * Returns null instead of calling notFound() so the caller decides: throwing a
+ * navigation signal from inside a cached function would cache the throw.
+ */
+async function getGameDetail(universeIdParam: string, range: RangeKey) {
+  "use cache";
+  cacheLife("hours");
+
+  let universeId: bigint;
+  try {
+    universeId = BigInt(universeIdParam);
+  } catch {
+    return null;
+  }
+
+  const game = await getGameByUniverseId(universeId);
+  if (!game) return null;
+
+  const [snapshots, icons, anomalies] = await Promise.all([
+    getGameSnapshots(game.id, { from: rangeToCutoff(range) }),
+    getGameIcons([universeId]),
+    getAnomaliesForGame(game.id),
+  ]);
+
+  return { game, snapshots, anomalies, iconUrl: icons[0]?.imageUrl ?? null };
+}
 
 export default async function GameDetailPage(props: PageProps<"/games/[universeId]">) {
   const { universeId: universeIdParam } = await props.params;
   const sp = await props.searchParams;
   const range = parseRangeKey(Array.isArray(sp.range) ? sp.range[0] : sp.range);
 
-  let universeId: bigint;
-  try {
-    universeId = BigInt(universeIdParam);
-  } catch {
-    notFound();
-  }
+  const data = await getGameDetail(universeIdParam, range);
+  if (!data) notFound();
 
-  const game = await getGameByUniverseId(universeId);
-  if (!game) notFound();
-  const from = rangeToCutoff(range);
-
-  const [snapshots, icons, anomalies] = await Promise.all([
-    getGameSnapshots(game.id, { from }),
-    getGameIcons([universeId]),
-    getAnomaliesForGame(game.id),
-  ]);
-
-  const iconUrl = icons[0]?.imageUrl ?? null;
+  const { game, snapshots, anomalies, iconUrl } = data;
   const latest = snapshots[snapshots.length - 1];
   const previous = snapshots.length > 1 ? snapshots[snapshots.length - 2] : undefined;
   const derived = latest ? deriveSnapshotMetrics(latest, previous) : null;
@@ -48,34 +74,37 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
-      <div className="flex items-start gap-4">
-        {iconUrl ? (
-          <Image
-            src={iconUrl}
-            alt=""
-            width={64}
-            height={64}
-            className="rounded-lg border"
-            unoptimized
-          />
-        ) : (
-          <div className="size-16 rounded-lg border bg-muted" />
-        )}
-        <div className="flex flex-col gap-1.5">
-          <h1 className="text-2xl font-semibold tracking-tight">{game.name}</h1>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {game.currentGenre && <Badge variant="secondary">{game.currentGenre.name}</Badge>}
-            {game.themes.map((t) => (
-              <Badge key={t.themeId} variant="outline">
-                {t.theme.name}
-              </Badge>
-            ))}
-            {game.status === "dead" && <Badge variant="destructive">Dead</Badge>}
-          </div>
-          {game.creatorName && (
-            <p className="text-sm text-muted-foreground">by {game.creatorName}</p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex min-w-0 items-start gap-4">
+          {iconUrl ? (
+            <Image
+              src={iconUrl}
+              alt=""
+              width={64}
+              height={64}
+              className="rounded-lg border"
+              unoptimized
+            />
+          ) : (
+            <div className="size-16 rounded-lg border bg-muted" />
           )}
+          <div className="flex flex-col gap-1.5">
+            <h1 className="text-2xl font-semibold tracking-tight">{game.name}</h1>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {game.currentGenre && <Badge variant="secondary">{game.currentGenre.name}</Badge>}
+              {game.themes.map((t) => (
+                <Badge key={t.themeId} variant="outline">
+                  {t.theme.name}
+                </Badge>
+              ))}
+              {game.status === "dead" && <Badge variant="destructive">Dead</Badge>}
+            </div>
+            {game.creatorName && (
+              <p className="text-sm text-muted-foreground">by {game.creatorName}</p>
+            )}
+          </div>
         </div>
+        <WatchlistButton kind="game" id={game.universeId.toString()} name={game.name} />
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -120,6 +149,7 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
             data={chartData}
             unit="players"
             emptyMessage="No snapshots in this range yet."
+            ariaLabel={`Line chart of ${game.name}'s concurrent players over time`}
           />
         </div>
         {snapshots.length > 0 && (
@@ -155,8 +185,8 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
         <section className="flex flex-col gap-2">
           <h2 className="font-medium">Notable changes</h2>
           <p className="text-sm text-muted-foreground">
-            Automatically flagged spikes and drops (large relative to this game&apos;s typical
-            step-to-step change).
+            Automatically flagged spikes and drops — moves that are both large relative to this
+            game&apos;s typical step-to-step change and substantial in their own right.
           </p>
           <div className="flex flex-col divide-y rounded-lg border">
             {[...anomalies.anomalies].reverse().map((a) => (

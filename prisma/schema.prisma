@@ -90,12 +90,17 @@ model Game {
   genreHistory GameGenreHistory[]
   themes       GameTheme[]
 
+  // One index per user-sortable column on the games list (GameSortField in
+  // src/lib/db/games.ts). Without one, SQLite falls back to a full scan plus a
+  // temp B-tree sort — verified with EXPLAIN QUERY PLAN, which is how the
+  // missing currentFavorites index was found in Task #39.
   @@index([status])
   @@index([currentGenreId])
   @@index([allTimePeakPlayers])
   @@index([firstSeenAt])
   @@index([currentPlaying])
   @@index([currentVisits])
+  @@index([currentFavorites])
 }
 
 /// Our own normalized, gameplay-based genre (NOT Roblox's deprecated thematic

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cacheLife } from "next/cache";
 
 import { getRisingGames, getRisingGenres } from "@/lib/db/trends";
 import { getRecentAnomalies } from "@/lib/db/analytics";
@@ -16,20 +17,41 @@ import {
 } from "@/components/ui/table";
 import { PresetLinks } from "@/components/filters/preset-links";
 import { GrowthBadge } from "@/components/data-table/growth-badge";
-import { RANGE_OPTIONS, RANGE_CLEAR_VALUE, parseRangeKey, rangeToCutoff } from "@/lib/date-range";
+import {
+  RANGE_OPTIONS,
+  RANGE_CLEAR_VALUE,
+  parseRangeKey,
+  rangeToCutoff,
+  type RangeKey,
+} from "@/lib/date-range";
 
 export const metadata = { title: "Trending — rodict" };
 
-export default async function TrendingPage(props: PageProps<"/trending">) {
-  const sp = await props.searchParams;
-  const range = parseRangeKey(Array.isArray(sp.range) ? sp.range[0] : sp.range);
-  const cutoff = rangeToCutoff(range);
+/**
+ * Keyed on the range KEY, not the cutoff Date — deriving the cutoff inside is
+ * what makes this cacheable at all. A `Date` computed from `now` and passed in
+ * as an argument would be a new cache key on every request, so the cache would
+ * never hit and the work would be repeated behind a cache that only ever grew.
+ */
+async function getTrendingData(range: RangeKey) {
+  "use cache";
+  cacheLife("hours");
 
+  const cutoff = rangeToCutoff(range);
   const [games, genres, anomalies] = await Promise.all([
     getRisingGames({ cutoff, limit: 25 }),
     getRisingGenres({ cutoff, limit: 25 }),
     getRecentAnomalies(),
   ]);
+
+  return { games, genres, anomalies };
+}
+
+export default async function TrendingPage(props: PageProps<"/trending">) {
+  const sp = await props.searchParams;
+  const range = parseRangeKey(Array.isArray(sp.range) ? sp.range[0] : sp.range);
+
+  const { games, genres, anomalies } = await getTrendingData(range);
 
   const hasData = games.length > 0 || genres.length > 0;
   const recent = anomalies?.recent ?? [];
@@ -140,8 +162,9 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
           <div>
             <h2 className="font-medium">Recent notable changes</h2>
             <p className="text-sm text-muted-foreground">
-              Auto-detected spikes and drops, large relative to each series&apos; own typical step
-              (change-point detection).
+              Auto-detected spikes and drops — moves that are both large relative to each
+              series&apos; own typical step and substantial in their own right (change-point
+              detection).
             </p>
           </div>
           <div className="flex flex-col divide-y rounded-lg border">

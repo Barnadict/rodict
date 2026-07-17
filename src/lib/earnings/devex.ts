@@ -14,13 +14,17 @@
 
 export type DevExTier = "standard" | "us18Plus";
 
-interface RateChange {
+export interface RateChange {
   /** Effective from this UTC date (inclusive). */
   from: Date;
   usdPerRobux: number;
 }
 
-const SCHEDULES: Record<DevExTier, RateChange[]> = {
+/**
+ * Exported so the /about page can publish the real schedule instead of prose
+ * that silently drifts from it when a rate changes.
+ */
+export const DEVEX_SCHEDULES: Record<DevExTier, readonly RateChange[]> = {
   standard: [
     { from: new Date("2000-01-01T00:00:00Z"), usdPerRobux: 0.0035 },
     { from: new Date("2025-09-05T00:00:00Z"), usdPerRobux: 0.0038 },
@@ -33,7 +37,7 @@ const SCHEDULES: Record<DevExTier, RateChange[]> = {
  * today's rate). Falls back to the earliest rate if `date` predates the tier.
  */
 export function getDevExRate(date: Date = new Date(), tier: DevExTier = "standard"): number {
-  const schedule = SCHEDULES[tier];
+  const schedule = DEVEX_SCHEDULES[tier];
   let rate = schedule[0].usdPerRobux;
   for (const change of schedule) {
     if (date.getTime() >= change.from.getTime()) rate = change.usdPerRobux;

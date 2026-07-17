@@ -50,17 +50,21 @@ export function GamesFilters({ genres }: { genres: GenreOption[] }) {
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
       <div className="relative w-full sm:max-w-xs">
-        <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Search
+          aria-hidden="true"
+          className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+        />
         <Input
           type="search"
           placeholder="Search games..."
+          aria-label="Search games"
           className="pl-8"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
       </div>
       <Select value={searchParams.get("genre") ?? "all"} onValueChange={onGenreChange}>
-        <SelectTrigger className="w-full sm:w-48">
+        <SelectTrigger className="w-full sm:w-48" aria-label="Filter by genre">
           <SelectValue placeholder="All genres" />
         </SelectTrigger>
         <SelectContent>

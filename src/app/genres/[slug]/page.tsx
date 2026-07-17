@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { cacheLife } from "next/cache";
 
 import { getGenreBySlug } from "@/lib/db/genres";
 import { getGenreStatBySlug, getGenreLifecycle } from "@/lib/db/genre-stats";
@@ -33,8 +34,15 @@ import { TrendChart, type TrendPoint } from "@/components/charts/trend-chart";
 import { LifecycleChart } from "@/components/charts/lifecycle-chart";
 import { GrowthBadge } from "@/components/data-table/growth-badge";
 import { StatTile } from "@/components/data-table/stat-tile";
+import { WatchlistButton } from "@/components/watchlist/watchlist-button";
 import { PresetLinks } from "@/components/filters/preset-links";
-import { RANGE_OPTIONS, RANGE_CLEAR_VALUE, parseRangeKey, rangeToCutoff } from "@/lib/date-range";
+import {
+  RANGE_OPTIONS,
+  RANGE_CLEAR_VALUE,
+  parseRangeKey,
+  rangeToCutoff,
+  type RangeKey,
+} from "@/lib/date-range";
 
 export async function generateMetadata(props: PageProps<"/genres/[slug]">) {
   const { slug } = await props.params;
@@ -42,14 +50,20 @@ export async function generateMetadata(props: PageProps<"/genres/[slug]">) {
   return { title: genre ? `${genre.name} — rodict` : "Genre — rodict" };
 }
 
-export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">) {
-  const { slug } = await props.params;
-  const sp = await props.searchParams;
-  const range = parseRangeKey(Array.isArray(sp.range) ? sp.range[0] : sp.range);
-  const cutoff = rangeToCutoff(range);
+/**
+ * The heaviest read on the site — 13 queries for one page. Uncached, every view
+ * paid all of them to render numbers the analytics jobs only refresh after a
+ * collection. Returns null rather than calling notFound() so the navigation
+ * signal isn't thrown (and cached) from inside the cache.
+ */
+async function getGenreDetail(slug: string, range: RangeKey) {
+  "use cache";
+  cacheLife("hours");
 
   const genre = await getGenreBySlug(slug);
-  if (!genre) notFound();
+  if (!genre) return null;
+
+  const cutoff = rangeToCutoff(range);
 
   const [
     stat,
@@ -78,7 +92,6 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
     getForecastForGenre(genre.id),
     getAnalyticsComputedAt(),
   ]);
-  const hasAnalytics = !!(survival || clustering || opportunity || momentum);
 
   // A range narrower than "all" adds a Δ column to top games, scoped to just
   // these 10 rows (Task #19) — same pattern as the games list.
@@ -89,21 +102,71 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
       )
     : null;
 
+  return {
+    genre,
+    stat,
+    series,
+    lifecycle,
+    topGames,
+    survival,
+    clustering,
+    opportunity,
+    momentum,
+    cohorts,
+    seasonality,
+    forecast,
+    analyticsAt,
+    growthByGame,
+    // Priced at the as-of date rather than "now" so the cached entry doesn't
+    // depend on when it happens to be read.
+    earnings: stat ? estimateDailyEarningsFromCcu(stat.totalPlaying, cutoff ?? new Date()) : null,
+  };
+}
+
+export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">) {
+  const { slug } = await props.params;
+  const sp = await props.searchParams;
+  const range = parseRangeKey(Array.isArray(sp.range) ? sp.range[0] : sp.range);
+
+  const data = await getGenreDetail(slug, range);
+  if (!data) notFound();
+
+  const {
+    genre,
+    stat,
+    series,
+    lifecycle,
+    topGames,
+    survival,
+    clustering,
+    opportunity,
+    momentum,
+    cohorts,
+    seasonality,
+    forecast,
+    analyticsAt,
+    growthByGame,
+    earnings,
+  } = data;
+
+  const hasAnalytics = !!(survival || clustering || opportunity || momentum);
+
   const trendData: TrendPoint[] = series.map((s) => ({
     date: s.collectedAt.toISOString(),
     value: s.totalPlaying,
   }));
 
-  const earnings = stat ? estimateDailyEarningsFromCcu(stat.totalPlaying) : null;
-
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
-      <div className="flex flex-col gap-1.5">
-        <Link href="/genres" className="text-sm text-muted-foreground hover:text-foreground">
-          ← All genres
-        </Link>
-        <h1 className="text-2xl font-semibold tracking-tight">{genre.name}</h1>
-        {genre.description && <p className="text-muted-foreground">{genre.description}</p>}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <Link href="/genres" className="text-sm text-muted-foreground hover:text-foreground">
+            ← All genres
+          </Link>
+          <h1 className="text-2xl font-semibold tracking-tight">{genre.name}</h1>
+          {genre.description && <p className="text-muted-foreground">{genre.description}</p>}
+        </div>
+        <WatchlistButton kind="genre" id={genre.slug} name={genre.name} />
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -190,6 +253,7 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
             unit="players"
             movingAverageWindow={5}
             emptyMessage="No genre snapshots yet — the collector has only just started."
+            ariaLabel={`Line chart of total concurrent players over time for ${genre.name}`}
           />
         </div>
       </section>
@@ -202,7 +266,10 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
           </p>
         </div>
         <div className="rounded-lg border p-4">
-          <LifecycleChart data={lifecycle} />
+          <LifecycleChart
+            data={lifecycle}
+            ariaLabel={`Lifecycle chart: average players by weeks since launch for ${genre.name} games`}
+          />
         </div>
       </section>
 

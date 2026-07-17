@@ -1,7 +1,20 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { cacheLife } from "next/cache";
 
 import { DataFreshness } from "./data-freshness";
+
+/**
+ * The copyright year reads the clock, which would otherwise force this footer —
+ * and therefore every page's shell — to render per request. Caching it keeps the
+ * shell static; the only cost is that the year can lag into January by up to the
+ * revalidate window, which is immaterial for a copyright notice.
+ */
+async function CopyrightYear() {
+  "use cache";
+  cacheLife("max");
+  return <>{new Date().getFullYear()}</>;
+}
 
 export function SiteFooter() {
   return (
@@ -20,7 +33,9 @@ export function SiteFooter() {
           <Suspense fallback={null}>
             <DataFreshness />
           </Suspense>
-          <p className="shrink-0">&copy; {new Date().getFullYear()} rodict</p>
+          <p className="shrink-0">
+            &copy; <CopyrightYear /> rodict
+          </p>
         </div>
       </div>
     </footer>

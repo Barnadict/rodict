@@ -18,7 +18,10 @@
     "db:backup": "tsx scripts/backup.ts",
     "db:retention": "tsx scripts/retention.ts",
     "collect": "tsx scripts/collect.ts",
-    "analytics": "analytics/.venv/Scripts/python analytics/run.py",
+    "analytics": "analytics\\.venv\\Scripts\\python analytics/run.py",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:py": "analytics\\.venv\\Scripts\\python -m pytest analytics",
     "postinstall": "prisma generate"
   },
   "dependencies": {
@@ -52,6 +55,7 @@
     "prisma": "^7.8.0",
     "tailwindcss": "^4",
     "tsx": "^4.23.1",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   }
 }

@@ -40,7 +40,13 @@ function SaturationTooltip({ active, payload }: TooltipContentProps<ValueType, N
   );
 }
 
-export function SaturationScatter({ data }: { data: SaturationPoint[] }) {
+export function SaturationScatter({
+  data,
+  ariaLabel = "Scatter chart: games vs. players per game by genre",
+}: {
+  data: SaturationPoint[];
+  ariaLabel?: string;
+}) {
   if (data.length === 0) {
     return (
       <div className="flex h-80 items-center justify-center rounded-lg border border-dashed text-muted-foreground">
@@ -49,7 +55,7 @@ export function SaturationScatter({ data }: { data: SaturationPoint[] }) {
     );
   }
   return (
-    <ResponsiveContainer width="100%" height={360}>
+    <ResponsiveContainer width="100%" height={360} role="img" aria-label={ariaLabel}>
       <ScatterChart margin={{ top: 16, right: 24, bottom: 24, left: 8 }}>
         <CartesianGrid stroke="var(--border)" />
         <XAxis

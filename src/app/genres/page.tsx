@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cacheLife } from "next/cache";
 
 import { getGenreStats, type GenreStatsSort } from "@/lib/db/genre-stats";
 import { estimateDailyEarningsFromCcu } from "@/lib/earnings/estimate";
@@ -14,8 +15,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { SortableHeader } from "@/components/data-table/sortable-header";
+import { WatchlistButton } from "@/components/watchlist/watchlist-button";
 import { PresetLinks } from "@/components/filters/preset-links";
-import { RANGE_OPTIONS, RANGE_CLEAR_VALUE, parseRangeKey, rangeToCutoff } from "@/lib/date-range";
+import {
+  RANGE_OPTIONS,
+  RANGE_CLEAR_VALUE,
+  parseRangeKey,
+  rangeToCutoff,
+  type RangeKey,
+} from "@/lib/date-range";
 
 export const metadata = { title: "Genres — rodict" };
 
@@ -30,6 +38,17 @@ function isSortField(value: string | undefined): value is GenreStatsSort {
   return SORT_FIELDS.includes(value as GenreStatsSort);
 }
 
+// Cutoff derived inside from the range key — see the note in /trending. `asOf`
+// is returned so the page can price earnings at the as-of date and tell the two
+// empty states apart without recomputing it (and re-reading the clock).
+async function getGenreRows(range: RangeKey, sort: GenreStatsSort, order: "asc" | "desc") {
+  "use cache";
+  cacheLife("hours");
+
+  const asOf = rangeToCutoff(range);
+  return { rows: await getGenreStats({ asOf, sort, order }), asOf };
+}
+
 export default async function GenresPage(props: PageProps<"/genres">) {
   const sp = await props.searchParams;
   const get = (key: string) => {
@@ -41,9 +60,8 @@ export default async function GenresPage(props: PageProps<"/genres">) {
   const sort: GenreStatsSort = isSortField(sortParam) ? sortParam : "totalPlaying";
   const order = get("order") === "asc" ? "asc" : "desc";
   const range = parseRangeKey(get("range"));
-  const asOf = rangeToCutoff(range);
 
-  const rows = await getGenreStats({ asOf, sort, order });
+  const { rows, asOf } = await getGenreRows(range, sort, order);
   const baseParams = { sort, order, range: range === RANGE_CLEAR_VALUE ? undefined : range };
   const totalGames = rows.reduce((sum, r) => sum + r.gameCount, 0);
 
@@ -75,6 +93,9 @@ export default async function GenresPage(props: PageProps<"/genres">) {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-8">
+                  <span className="sr-only">Watch</span>
+                </TableHead>
                 <TableHead className="w-10">#</TableHead>
                 <TableHead>Genre</TableHead>
                 <TableHead className="text-right">
@@ -121,6 +142,11 @@ export default async function GenresPage(props: PageProps<"/genres">) {
                 const earnings = estimateDailyEarningsFromCcu(row.totalPlaying, asOf);
                 return (
                   <TableRow key={row.genreId ?? "unclassified"}>
+                    <TableCell>
+                      {row.genreId && (
+                        <WatchlistButton kind="genre" id={row.slug} name={row.name} size="icon" />
+                      )}
+                    </TableCell>
                     <TableCell className="text-muted-foreground tabular-nums">{i + 1}</TableCell>
                     <TableCell className="font-medium">
                       {row.genreId ? (

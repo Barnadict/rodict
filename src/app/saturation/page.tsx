@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cacheLife } from "next/cache";
 
 import { getGenreStats } from "@/lib/db/genre-stats";
 import { getOpportunityRanking, getAnalyticsComputedAt } from "@/lib/db/analytics";
@@ -14,24 +15,37 @@ import {
 } from "@/components/ui/table";
 import { SaturationScatter, type SaturationPoint } from "@/components/charts/saturation-scatter";
 import { PresetLinks } from "@/components/filters/preset-links";
-import { RANGE_OPTIONS, RANGE_CLEAR_VALUE, parseRangeKey, rangeToCutoff } from "@/lib/date-range";
+import {
+  RANGE_OPTIONS,
+  RANGE_CLEAR_VALUE,
+  parseRangeKey,
+  rangeToCutoff,
+  type RangeKey,
+} from "@/lib/date-range";
 
 export const metadata = { title: "Saturation — rodict" };
 
-// Reads live DB aggregates; render per request rather than snapshotting at build.
-// (Caching/revalidation is tuned in Task #39.)
-export const dynamic = "force-dynamic";
+// Keyed on the range key so the cutoff is derived inside the cache — see the
+// note in /trending for why passing a `now`-derived Date in would defeat it.
+async function getSaturationData(range: RangeKey) {
+  "use cache";
+  cacheLife("hours");
 
-export default async function SaturationPage(props: PageProps<"/saturation">) {
-  const sp = await props.searchParams;
-  const range = parseRangeKey(Array.isArray(sp.range) ? sp.range[0] : sp.range);
   const asOf = rangeToCutoff(range);
-
   const [stats, opportunity, analyticsAt] = await Promise.all([
     getGenreStats({ asOf }),
     getOpportunityRanking(),
     getAnalyticsComputedAt(),
   ]);
+
+  return { stats, opportunity, analyticsAt, asOf };
+}
+
+export default async function SaturationPage(props: PageProps<"/saturation">) {
+  const sp = await props.searchParams;
+  const range = parseRangeKey(Array.isArray(sp.range) ? sp.range[0] : sp.range);
+
+  const { stats, opportunity, analyticsAt, asOf } = await getSaturationData(range);
 
   // Precomputed opportunity score (Task #24), keyed by genre slug. It reflects
   // current data regardless of the range toggle (which scopes the scatter).

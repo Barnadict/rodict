@@ -36,7 +36,13 @@ function LifecycleTooltip({ active, payload }: TooltipContentProps<ValueType, Na
   );
 }
 
-export function LifecycleChart({ data }: { data: LifecyclePoint[] }) {
+export function LifecycleChart({
+  data,
+  ariaLabel = "Lifecycle chart: average players by weeks since launch",
+}: {
+  data: LifecyclePoint[];
+  ariaLabel?: string;
+}) {
   if (data.length < 2) {
     return (
       <div className="flex h-56 flex-col items-center justify-center gap-1 rounded-lg border border-dashed text-center text-muted-foreground">
@@ -48,7 +54,7 @@ export function LifecycleChart({ data }: { data: LifecyclePoint[] }) {
     );
   }
   return (
-    <ResponsiveContainer width="100%" height={224}>
+    <ResponsiveContainer width="100%" height={224} role="img" aria-label={ariaLabel}>
       <LineChart data={data} margin={{ top: 8, right: 8, bottom: 4, left: 0 }}>
         <CartesianGrid stroke="var(--border)" vertical={false} />
         <XAxis

@@ -1,0 +1,41 @@
+# Quoted because an unquoted `#` starts a YAML comment — see collect.yml.
+name: "Deploy migrations (Task #30)"
+
+# Applies pending Prisma migrations to the hosted Turso DB.
+#
+# Why this exists: the Turso credentials deliberately live ONLY in this repo's
+# secrets and Vercel's env vars — never in a local .env — so `npm run db:deploy`
+# cannot run from a dev machine (it exits with "DATABASE_URL must point at the
+# hosted Turso DB"). This workflow is the supported way to apply a migration to
+# production without a credential ever leaving GitHub.
+#
+# Manual trigger only, deliberately. Migrations are the one operation that can
+# damage irreplaceable history, so they shouldn't fire off a push as a side
+# effect of merging. Run this yourself after `npm run db:migrate` lands a new
+# migration locally.
+#
+# The script is idempotent: already-applied migrations are skipped by name, so
+# re-running is safe.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Apply pending migrations to Turso
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: npm run db:deploy

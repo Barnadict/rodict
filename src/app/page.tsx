@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cacheLife } from "next/cache";
 import { TrendingUp, ArrowRight } from "lucide-react";
 
 import { getGenreStats } from "@/lib/db/genre-stats";
@@ -13,10 +14,17 @@ import { Badge } from "@/components/ui/badge";
 import { GrowthBadge } from "@/components/data-table/growth-badge";
 import { StatTile } from "@/components/data-table/stat-tile";
 
-// Reads live DB aggregates; no dynamic params to key a static render off.
-export const dynamic = "force-dynamic";
+/**
+ * Cached: the collector only writes every 3h, so re-querying on every request
+ * bought nothing but latency and DB reads. `lastCollectedAt` is cached with the
+ * rest on purpose — it describes the snapshot being displayed, so it stays
+ * truthful about this payload. (The footer's indicator is separate and live: it
+ * answers "is the pipeline healthy?", not "how old is this table?".)
+ */
+async function getDashboardData() {
+  "use cache";
+  cacheLife("hours");
 
-export default async function Home() {
   const cutoff = rangeToCutoff("7d");
 
   const [genreStats, risingGames, risingGenres, totalGames, lastCollectedAt, correlation] =
@@ -30,9 +38,33 @@ export default async function Home() {
     ]);
 
   const classifiedGenres = genreStats.filter((g) => g.genreId && g.gameCount > 0);
-  const topGenres = classifiedGenres.slice(0, 5);
   const totalPlaying = classifiedGenres.reduce((sum, g) => sum + g.totalPlaying, 0);
-  const totalEarnings = estimateDailyEarningsFromCcu(totalPlaying);
+
+  return {
+    topGenres: classifiedGenres.slice(0, 5),
+    risingGames,
+    risingGenres,
+    totalGames,
+    lastCollectedAt,
+    correlation,
+    classifiedGenreCount: classifiedGenres.length,
+    // Priced at the collection date's DevEx rate rather than "now" — the rate
+    // that applied when these players were counted is the right one.
+    totalEarnings: estimateDailyEarningsFromCcu(totalPlaying, lastCollectedAt ?? new Date()),
+  };
+}
+
+export default async function Home() {
+  const {
+    topGenres,
+    risingGames,
+    risingGenres,
+    totalGames,
+    lastCollectedAt,
+    correlation,
+    classifiedGenreCount,
+    totalEarnings,
+  } = await getDashboardData();
 
   const hasAnyData = totalGames > 0;
 
@@ -53,7 +85,7 @@ export default async function Home() {
         <>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatTile label="Games tracked" value={formatCompact(totalGames)} />
-            <StatTile label="Genres active" value={formatCompact(classifiedGenres.length)} />
+            <StatTile label="Genres active" value={formatCompact(classifiedGenreCount)} />
             <StatTile
               label="Est. earnings/day"
               value={formatUsdRange(totalEarnings.low, totalEarnings.high)}
