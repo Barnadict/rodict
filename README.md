@@ -74,22 +74,29 @@ sync. Every page is an async Server Component, which Next's own testing guide
 says to cover with E2E rather than unit tests, so the suites target the logic
 those pages call instead.
 
+Typecheck with `npm run typecheck`, **not** bare `tsc --noEmit`: `PageProps` and
+`LayoutProps` are globals Next generates into the gitignored `.next/types`, so
+bare `tsc` passes locally (where a build has run) and fails on a clean checkout.
+The script runs `next typegen` first, which writes those types without a full
+build — and so without needing `DATABASE_URL`.
+
 ## Scripts
 
 | Script                 | What it does                                               |
 | ---------------------- | ---------------------------------------------------------- |
-| `npm run dev`          | Start the dev server                                        |
-| `npm run build`        | Production build                                            |
-| `npm run lint`         | ESLint                                                      |
-| `npm test`             | Run the Vitest suite (`npm run test:watch` to watch)        |
-| `npm run test:py`      | Run the Python analytics tests (pytest)                     |
-| `npm run collect`      | Run the data collector once (`-- --max=N`, `--known-only`)  |
-| `npm run analytics`    | Run all 9 Python analytics jobs                             |
-| `npm run db:migrate`   | Create/apply a local migration                              |
-| `npm run db:deploy`    | Apply pending migrations to the hosted Turso DB             |
-| `npm run db:seed`      | Seed the genre/theme taxonomy                               |
-| `npm run db:backup`    | Back up the local SQLite file                               |
-| `npm run db:retention` | Downsample/prune old snapshots                              |
+| `npm run dev`          | Start the dev server                                       |
+| `npm run build`        | Production build                                           |
+| `npm run lint`         | ESLint                                                     |
+| `npm run typecheck`    | `next typegen && tsc --noEmit` — use this, not bare `tsc`  |
+| `npm test`             | Run the Vitest suite (`npm run test:watch` to watch)       |
+| `npm run test:py`      | Run the Python analytics tests (pytest)                    |
+| `npm run collect`      | Run the data collector once (`-- --max=N`, `--known-only`) |
+| `npm run analytics`    | Run all 9 Python analytics jobs                            |
+| `npm run db:migrate`   | Create/apply a local migration                             |
+| `npm run db:deploy`    | Apply pending migrations to the hosted Turso DB            |
+| `npm run db:seed`      | Seed the genre/theme taxonomy                              |
+| `npm run db:backup`    | Back up the local SQLite file                              |
+| `npm run db:retention` | Downsample/prune old snapshots                             |
 
 ## Deployment
 

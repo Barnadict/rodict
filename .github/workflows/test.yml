@@ -22,7 +22,12 @@ jobs:
           node-version: "24"
           cache: "npm"
       - run: npm ci
-      - run: npx tsc --noEmit
+      # `npm run typecheck` is `next typegen && tsc --noEmit`, NOT bare tsc.
+      # PageProps/LayoutProps are globals Next generates into .next/types, which
+      # is gitignored — so on a clean checkout bare tsc fails with "Cannot find
+      # name 'PageProps'" on every page. typegen writes them without needing a
+      # full build (and therefore without needing DATABASE_URL).
+      - run: npm run typecheck
       - run: npm run lint
       - run: npm test
 
