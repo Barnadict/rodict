@@ -12,7 +12,7 @@ Reference sites: [romonitorstats.com](https://romonitorstats.com/), [rolimons.co
 - **Next.js** (App Router, Turbopack, **Cache Components**) + TypeScript + Tailwind + shadcn/ui (Base UI primitives)
 - **Prisma** (engine-less, driver adapters) — SQLite locally, [Turso](https://turso.tech/) (libSQL) hosted
 - **Recharts** for charts
-- A **Node collector** (`scripts/collect.ts`) that pulls game data from Roblox's public APIs on a schedule
+- A **Node collector** (`scripts/collect.ts`) that pulls game data from Roblox's public APIs on a schedule. Discovery walks keyword search several pages deep _and_ the explore-api charts (Top Playing Now, Up-and-Coming, …) to reach a few thousand games; the write path is bulk (one pre-read, chunked `createMany`s, batched updates) so a run of that size still lands in seconds of DB time
 - A **Python analytics package** (`analytics/`) — lifelines, scikit-learn, pandas — that precomputes survival curves, momentum, clustering, opportunity scores, anomalies, correlation/feature importance, cohorts, seasonality, and short-term forecasts into an `AnalyticsResult` table. The frontend only reads these; nothing statistical runs per-request.
 
 ## Rendering & caching

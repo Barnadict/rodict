@@ -15,7 +15,7 @@ import { sanitizeGameDetails, sanitizeGameVotes, mergeGameData } from "@/lib/val
 import { resolveGameGenre, resolveGameThemes } from "@/lib/taxonomy/genre-mapping";
 import { getGenreIdMap } from "@/lib/db/genres";
 import { getThemeIdMap } from "@/lib/db/themes";
-import { persistCollectedGame } from "@/lib/db/games";
+import { persistCollectedGames, type PersistInput } from "@/lib/db/games";
 import { persistGenreSnapshots } from "@/lib/db/genre-snapshots";
 
 import { discoverUniverseIds, type DiscoverOptions } from "./discover";
@@ -25,6 +25,8 @@ export interface CollectionSummary {
   finishedAt: Date;
   durationMs: number;
   discovered: number;
+  /** How many of the newly discovered ids came from the explore-api charts. */
+  chartsDiscovered: number;
   knownReCollected: number;
   detailsFetched: number;
   rejectedDetails: number;
@@ -54,61 +56,67 @@ export async function runCollection(opts: CollectOptions = {}): Promise<Collecti
     ? discovery.universeIds.slice(0, opts.maxGames)
     : discovery.universeIds;
 
-  // Fetch raw data (the client batches + rate-limits internally).
-  const [rawDetails, rawVotes] = await Promise.all([
-    getGameDetails(universeIds),
-    getGameVotes(universeIds),
-  ]);
+  // Fetch raw data (the client batches + rate-limits internally). Details and
+  // votes hit the SAME host (games.roblox.com), so they run sequentially rather
+  // than in parallel — at thousands of games, doubling the concurrent load on
+  // that one host is what tips it into 429s. Each call tolerates per-batch
+  // failures and reports how many batches it had to skip.
+  const detailsFetch = await getGameDetails(universeIds);
+  const votesFetch = await getGameVotes(universeIds);
+  const failedBatches = detailsFetch.failedBatches + votesFetch.failedBatches;
+  if (failedBatches > 0) {
+    errors.push(
+      `${failedBatches} API batch(es) skipped after exhausting retries (rate limits); ` +
+        `those games were not collected this run and will be retried next run.`,
+    );
+  }
 
-  const details = sanitizeGameDetails(rawDetails);
-  const votes = sanitizeGameVotes(rawVotes);
+  const details = sanitizeGameDetails(detailsFetch.data);
+  const votes = sanitizeGameVotes(votesFetch.data);
   const { games, warnings } = mergeGameData(details.valid, votes.valid);
 
   const [genreMap, themeMap] = await Promise.all([getGenreIdMap(), getThemeIdMap()]);
+
+  // Genre/theme resolution is pure and cheap (no IO), so do it for every game in
+  // memory first, then hand the whole run to one bulk writer. This is what lets
+  // a multi-thousand-game corpus persist within the collector's time budget —
+  // the previous per-game transaction loop did not scale (see persistCollectedGames).
+  let unresolvedGenre = 0;
+  const toPersist: PersistInput[] = [];
+  for (const game of games) {
+    const resolution = resolveGameGenre({
+      universeId: game.universeId,
+      name: game.name,
+      robloxGenres: game.genreSignals,
+    });
+    const themeSlugs = resolveGameThemes({
+      universeId: game.universeId,
+      name: game.name,
+      robloxGenres: game.genreSignals,
+    });
+
+    const genreId = resolution.genre ? (genreMap.get(resolution.genre) ?? null) : null;
+    if (genreId === null) unresolvedGenre++;
+
+    const themeIds = themeSlugs
+      .map((slug) => themeMap.get(slug))
+      .filter((id): id is string => Boolean(id));
+
+    toPersist.push({ game, collectedAt, genreId, genreSource: resolution.source, themeIds });
+  }
 
   let persisted = 0;
   let newGames = 0;
   let peaksUpdated = 0;
   let genreChanges = 0;
-  let unresolvedGenre = 0;
-
-  for (const game of games) {
-    try {
-      const resolution = resolveGameGenre({
-        universeId: game.universeId,
-        name: game.name,
-        robloxGenres: game.genreSignals,
-      });
-      const themeSlugs = resolveGameThemes({
-        universeId: game.universeId,
-        name: game.name,
-        robloxGenres: game.genreSignals,
-      });
-
-      const genreId = resolution.genre ? (genreMap.get(resolution.genre) ?? null) : null;
-      if (genreId === null) unresolvedGenre++;
-
-      const themeIds = themeSlugs
-        .map((slug) => themeMap.get(slug))
-        .filter((id): id is string => Boolean(id));
-
-      const result = await persistCollectedGame({
-        game,
-        collectedAt,
-        genreId,
-        genreSource: resolution.source,
-        themeIds,
-      });
-
-      persisted++;
-      if (result.isNew) newGames++;
-      if (result.peakUpdated) peaksUpdated++;
-      if (result.genreChanged) genreChanges++;
-    } catch (err) {
-      errors.push(
-        `universe ${game.universeId}: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
+  try {
+    const result = await persistCollectedGames(toPersist);
+    persisted = result.persisted;
+    newGames = result.newGames;
+    peaksUpdated = result.peaksUpdated;
+    genreChanges = result.genreChanges;
+  } catch (err) {
+    errors.push(`bulk persist: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   // Precompute per-genre aggregate snapshots for this run (genre time series).
@@ -125,8 +133,9 @@ export async function runCollection(opts: CollectOptions = {}): Promise<Collecti
     finishedAt,
     durationMs: finishedAt.getTime() - startedAt.getTime(),
     discovered: discovery.discoveredCount,
+    chartsDiscovered: discovery.chartCount,
     knownReCollected: discovery.knownCount,
-    detailsFetched: rawDetails.length,
+    detailsFetched: detailsFetch.data.length,
     rejectedDetails: details.rejected.length,
     rejectedVotes: votes.rejected.length,
     mergeWarnings: warnings.length,

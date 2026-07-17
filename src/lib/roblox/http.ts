@@ -13,8 +13,14 @@ const DEFAULT_USER_AGENT = "rodict/0.1 (personal Roblox stats project; respects 
 
 // Conservative global limits — Roblox rate-limits per IP, more aggressively for
 // datacenter IPs (a known risk for the GitHub Actions collector, Task #32).
-const MAX_CONCURRENT = 4;
-const MIN_INTERVAL_MS = 60;
+//
+// Tightened when the corpus grew to thousands: one collection run now fans out
+// ~200 batch requests to games.roblox.com, and that host returns 429 well
+// before the old 4-concurrent/60ms pacing finished. ~2-at-a-time, 200ms apart
+// (~10 req/s peak) sustains the larger run without tripping the limit; the 3h
+// cron gap leaves ample time for the slower pace.
+const MAX_CONCURRENT = 2;
+const MIN_INTERVAL_MS = 200;
 
 export interface RobloxGetOptions {
   /** Cache TTL in ms. 0 disables caching for this call. Default 60_000. */
@@ -95,7 +101,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function backoffMs(attempt: number): number {
   const base = 300 * 2 ** (attempt - 1); // 300, 600, 1200, ...
-  return Math.min(8000, base) + Math.floor(Math.random() * 250);
+  return Math.min(20_000, base) + Math.floor(Math.random() * 250);
 }
 
 function parseRetryAfterMs(header: string | null): number | null {
@@ -136,7 +142,9 @@ async function doFetch(
 
 async function fetchWithRetry<T>(url: string, opts: RobloxGetOptions): Promise<T> {
   const timeoutMs = opts.timeoutMs ?? 15_000;
-  const maxAttempts = opts.maxAttempts ?? 4;
+  // 6 attempts (was 4): a thousands-of-games run leans on retries to ride out
+  // sustained 429s from games.roblox.com without dropping whole batches.
+  const maxAttempts = opts.maxAttempts ?? 6;
 
   let attempt = 0;
   while (true) {

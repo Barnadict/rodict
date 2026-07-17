@@ -88,3 +88,29 @@ export interface RobloxOmniSearchResponse {
   }[];
   nextPageToken: string;
 }
+
+/** One sort ("Top Trending", "Up-and-Coming", ...) from the explore-api charts. */
+export interface RobloxExploreSort {
+  sortId: string;
+  sortDisplayName: string;
+}
+
+/** GET apis.roblox.com/explore-api/v1/get-sorts */
+export interface RobloxExploreSortsResponse {
+  sorts: RobloxExploreSort[];
+  nextSortsPageToken?: string;
+}
+
+/** One game entry inside a sort's content. The explore endpoint returns a
+ * richer object than we consume; only `universeId` is load-bearing here. */
+export interface RobloxExploreGame {
+  universeId: number;
+  rootPlaceId?: number;
+  name?: string;
+}
+
+/** GET apis.roblox.com/explore-api/v1/get-sort-content */
+export interface RobloxExploreSortContentResponse {
+  games?: RobloxExploreGame[];
+  nextPageToken?: string;
+}

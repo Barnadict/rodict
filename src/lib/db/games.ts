@@ -18,30 +18,109 @@ export interface PersistInput {
   themeIds: string[];
 }
 
-export interface PersistResult {
-  gameId: string;
+export interface BulkPersistSummary {
+  persisted: number;
+  newGames: number;
+  peaksUpdated: number;
+  genreChanges: number;
+}
+
+/** The subset of an existing Game row the write planner needs to decide what
+ * changed. Pre-read in bulk so no per-game SELECT is needed. */
+export interface ExistingGameRef {
+  id: string;
+  allTimePeakPlayers: number;
+  currentGenreId: string | null;
+}
+
+export interface GameWriteDecision {
   isNew: boolean;
   peakUpdated: boolean;
+  /** True when the resolved genre differs from what's currently stored. For a
+   * new game with a resolved genre this is true (it opens the first history). */
   genreChanged: boolean;
 }
 
 /**
- * Upsert a game, append its raw snapshot, roll the all-time peak, mirror the
- * denormalized current metrics, and record genre/theme assignments — all in one
- * transaction so a game is never left half-updated.
+ * Pure decision logic for one game: is it new, did its all-time peak roll, did
+ * its genre change? Extracted so it can be unit-tested without a database — the
+ * bulk writer below is otherwise just mechanical row-building around this.
  */
-export async function persistCollectedGame(input: PersistInput): Promise<PersistResult> {
-  const { game, collectedAt, genreId, genreSource, themeIds } = input;
+export function planGameWrite(
+  input: Pick<PersistInput, "game" | "genreId">,
+  existing: ExistingGameRef | undefined,
+): GameWriteDecision {
+  const { game, genreId } = input;
+  return {
+    isNew: existing === undefined,
+    peakUpdated: game.playing > (existing?.allTimePeakPlayers ?? 0),
+    genreChanged: genreId !== null && genreId !== (existing?.currentGenreId ?? null),
+  };
+}
 
-  return prisma.$transaction(async (tx) => {
-    const existing = await tx.game.findUnique({
-      where: { universeId: game.universeId },
-      select: { id: true, allTimePeakPlayers: true, currentGenreId: true },
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+// SQLite/libSQL bind a parameter per column-value, so multi-row writes must be
+// chunked below the variable limit. These are conservative — comfortably under
+// even the old 999-variable builds, and the round-trip count stays tiny.
+const CREATE_CHUNK = 200; // rows per createMany statement
+const IN_CHUNK = 400; // ids per `IN (...)` read
+const TX_BATCH = 100; // ops per batched $transaction (per-row updates)
+
+/**
+ * Persist a whole collection run in bulk.
+ *
+ * The old path ran one interactive transaction per game — ~6 round trips each,
+ * which is fine at a few hundred games but blows the collector's 15-minute
+ * budget once the corpus is thousands (Task: scale-up). This version does the
+ * same work as set operations: one pre-read, chunked `createMany`s, and batched
+ * `$transaction([...])` updates (the libSQL adapter sends a batch as a handful
+ * of round trips, not one per statement). It is NOT wrapped in a single global
+ * transaction: at thousands of rows that would hold a long write lock on Turso.
+ * A re-run is safe because every run stamps a fresh `collectedAt` (so its
+ * snapshots are new rows, never collisions) and the game/genre/theme syncs
+ * converge to the same state.
+ */
+export async function persistCollectedGames(inputs: PersistInput[]): Promise<BulkPersistSummary> {
+  if (inputs.length === 0) {
+    return { persisted: 0, newGames: 0, peaksUpdated: 0, genreChanges: 0 };
+  }
+
+  // --- Phase 0: one pre-read of every game we're about to touch ---------------
+  const universeIds = inputs.map((i) => i.game.universeId);
+  const existingByUniverse = new Map<bigint, ExistingGameRef>();
+  for (const ids of chunk(universeIds, IN_CHUNK)) {
+    const rows = await prisma.game.findMany({
+      where: { universeId: { in: ids } },
+      select: { id: true, universeId: true, allTimePeakPlayers: true, currentGenreId: true },
     });
+    for (const r of rows) {
+      existingByUniverse.set(r.universeId, {
+        id: r.id,
+        allTimePeakPlayers: r.allTimePeakPlayers,
+        currentGenreId: r.currentGenreId,
+      });
+    }
+  }
 
-    const isNew = existing === null;
-    const peakUpdated = game.playing > (existing?.allTimePeakPlayers ?? 0);
-    const genreChanged = genreId !== null && genreId !== (existing?.currentGenreId ?? null);
+  // --- Phase 1: partition into creates vs updates, in memory ------------------
+  const creates: Prisma.GameCreateManyInput[] = [];
+  const updates: { id: string; data: Prisma.GameUncheckedUpdateInput }[] = [];
+  let newGames = 0;
+  let peaksUpdated = 0;
+  let genreChanges = 0;
+
+  for (const input of inputs) {
+    const { game, collectedAt, genreId } = input;
+    const existing = existingByUniverse.get(game.universeId);
+    const decision = planGameWrite(input, existing);
+    if (decision.isNew) newGames++;
+    if (decision.peakUpdated) peaksUpdated++;
+    if (decision.genreChanged) genreChanges++;
 
     const commonData = {
       rootPlaceId: game.rootPlaceId,
@@ -59,72 +138,132 @@ export async function persistCollectedGame(input: PersistInput): Promise<Persist
       currentFavorites: game.favorites,
       currentUpVotes: game.upVotes,
       currentDownVotes: game.downVotes,
-      ...(peakUpdated ? { allTimePeakPlayers: game.playing, allTimePeakAt: collectedAt } : {}),
+      ...(decision.peakUpdated
+        ? { allTimePeakPlayers: game.playing, allTimePeakAt: collectedAt }
+        : {}),
       ...(genreId !== null ? { currentGenreId: genreId } : {}),
     } satisfies Prisma.GameUncheckedUpdateInput;
 
-    const record = await tx.game.upsert({
-      where: { universeId: game.universeId },
-      create: {
-        universeId: game.universeId,
-        firstSeenAt: collectedAt,
-        ...commonData,
-      },
-      update: commonData,
-      select: { id: true },
-    });
+    if (existing) {
+      updates.push({ id: existing.id, data: commonData });
+    } else {
+      creates.push({ universeId: game.universeId, firstSeenAt: collectedAt, ...commonData });
+    }
+  }
 
-    await tx.gameSnapshot.create({
-      data: {
-        gameId: record.id,
-        collectedAt,
-        playing: game.playing,
-        visits: game.visits,
-        favorites: game.favorites,
-        upVotes: game.upVotes,
-        downVotes: game.downVotes,
-        maxPlayers: game.maxPlayers,
-      },
-    });
+  // --- Phase 2: write the games (createMany for new, batched updates for old) --
+  for (const group of chunk(creates, CREATE_CHUNK)) {
+    await prisma.game.createMany({ data: group });
+  }
+  for (const batch of chunk(updates, TX_BATCH)) {
+    await prisma.$transaction(
+      batch.map((u) =>
+        prisma.game.update({ where: { id: u.id }, data: u.data, select: { id: true } }),
+      ),
+    );
+  }
 
-    if (genreChanged) {
-      // Close the previous open assignment, then open a new one.
-      await tx.gameGenreHistory.updateMany({
-        where: { gameId: record.id, endedAt: null },
-        data: { endedAt: collectedAt },
-      });
-      await tx.gameGenreHistory.create({
-        data: {
-          gameId: record.id,
-          genreId: genreId!,
-          assignedAt: collectedAt,
-          source: genreSource,
-        },
+  // --- Phase 3: resolve every game's id (new rows only need re-reading) -------
+  const idByUniverse = new Map<bigint, string>();
+  for (const [universeId, ref] of existingByUniverse) idByUniverse.set(universeId, ref.id);
+  const newUniverseIds = creates.map((c) => c.universeId as bigint);
+  for (const ids of chunk(newUniverseIds, IN_CHUNK)) {
+    const rows = await prisma.game.findMany({
+      where: { universeId: { in: ids } },
+      select: { id: true, universeId: true },
+    });
+    for (const r of rows) idByUniverse.set(r.universeId, r.id);
+  }
+
+  // --- Phase 4: append this run's snapshots -----------------------------------
+  const snapshots: Prisma.GameSnapshotCreateManyInput[] = inputs.map((input) => ({
+    gameId: idByUniverse.get(input.game.universeId)!,
+    collectedAt: input.collectedAt,
+    playing: input.game.playing,
+    visits: input.game.visits,
+    favorites: input.game.favorites,
+    upVotes: input.game.upVotes,
+    downVotes: input.game.downVotes,
+    maxPlayers: input.game.maxPlayers,
+  }));
+  for (const group of chunk(snapshots, CREATE_CHUNK)) {
+    // No skipDuplicates: SQLite's Prisma createMany doesn't support it. It isn't
+    // needed — every run stamps a fresh `collectedAt`, and universe ids are
+    // deduped upstream, so the @@unique([gameId, collectedAt]) guard is never
+    // actually hit within or across runs.
+    await prisma.gameSnapshot.createMany({ data: group });
+  }
+
+  // --- Phase 5: genre history (close-then-open on change; open for new) -------
+  const genreCloses: string[] = []; // gameIds whose open assignment must be closed
+  const genreOpens: Prisma.GameGenreHistoryCreateManyInput[] = [];
+  for (const input of inputs) {
+    const existing = existingByUniverse.get(input.game.universeId);
+    const decision = planGameWrite(input, existing);
+    if (!decision.genreChanged || input.genreId === null) continue;
+    const gameId = idByUniverse.get(input.game.universeId)!;
+    // Only existing games can have a prior open assignment to close.
+    if (existing && existing.currentGenreId !== null) genreCloses.push(gameId);
+    genreOpens.push({
+      gameId,
+      genreId: input.genreId,
+      assignedAt: input.collectedAt,
+      source: input.genreSource,
+    });
+  }
+  if (genreCloses.length) {
+    const closedAt = inputs[0].collectedAt; // one timestamp per run
+    for (const ids of chunk(genreCloses, IN_CHUNK)) {
+      await prisma.gameGenreHistory.updateMany({
+        where: { gameId: { in: ids }, endedAt: null },
+        data: { endedAt: closedAt },
       });
     }
+  }
+  for (const group of chunk(genreOpens, CREATE_CHUNK)) {
+    await prisma.gameGenreHistory.createMany({ data: group });
+  }
 
-    // Sync the current theme set (add missing, remove gone).
-    const currentThemes = await tx.gameTheme.findMany({
-      where: { gameId: record.id },
-      select: { themeId: true },
+  // --- Phase 6: sync the theme set per game (adds + removes) ------------------
+  const allGameIds = inputs.map((i) => idByUniverse.get(i.game.universeId)!);
+  const existingThemes = new Map<string, Set<string>>();
+  for (const ids of chunk(allGameIds, IN_CHUNK)) {
+    const rows = await prisma.gameTheme.findMany({
+      where: { gameId: { in: ids } },
+      select: { gameId: true, themeId: true },
     });
-    const currentIds = new Set(currentThemes.map((t) => t.themeId));
-    const wanted = new Set(themeIds);
-    const toAdd = themeIds.filter((id) => !currentIds.has(id));
-    const toRemove = [...currentIds].filter((id) => !wanted.has(id));
-    if (toAdd.length) {
-      await tx.gameTheme.createMany({
-        data: toAdd.map((themeId) => ({ gameId: record.id, themeId })),
-      });
+    for (const r of rows) {
+      const set = existingThemes.get(r.gameId) ?? new Set<string>();
+      set.add(r.themeId);
+      existingThemes.set(r.gameId, set);
     }
-    if (toRemove.length) {
-      await tx.gameTheme.deleteMany({
-        where: { gameId: record.id, themeId: { in: toRemove } },
-      });
-    }
+  }
+  const themeAdds: Prisma.GameThemeCreateManyInput[] = [];
+  const themeRemovals: { gameId: string; themeIds: string[] }[] = [];
+  for (const input of inputs) {
+    const gameId = idByUniverse.get(input.game.universeId)!;
+    const current = existingThemes.get(gameId) ?? new Set<string>();
+    const wanted = new Set(input.themeIds);
+    for (const themeId of input.themeIds)
+      if (!current.has(themeId)) themeAdds.push({ gameId, themeId });
+    const remove = [...current].filter((id) => !wanted.has(id));
+    if (remove.length) themeRemovals.push({ gameId, themeIds: remove });
+  }
+  for (const group of chunk(themeAdds, CREATE_CHUNK)) {
+    // Adds are already diffed against the current set above, so no row here
+    // duplicates an existing (gameId, themeId) — no skipDuplicates needed
+    // (SQLite's createMany wouldn't accept it anyway).
+    await prisma.gameTheme.createMany({ data: group });
+  }
+  for (const batch of chunk(themeRemovals, TX_BATCH)) {
+    await prisma.$transaction(
+      batch.map((r) =>
+        prisma.gameTheme.deleteMany({ where: { gameId: r.gameId, themeId: { in: r.themeIds } } }),
+      ),
+    );
+  }
 
-    return { gameId: record.id, isNew, peakUpdated, genreChanged };
-  });
+  return { persisted: inputs.length, newGames, peaksUpdated, genreChanges };
 }
 
 /** Universe ids of every game we already track — so the collector keeps

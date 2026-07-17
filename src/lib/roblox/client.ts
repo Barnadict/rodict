@@ -10,6 +10,8 @@
 import { robloxGet, type RobloxGetOptions } from "./http";
 import type {
   RobloxDataList,
+  RobloxExploreSortContentResponse,
+  RobloxExploreSortsResponse,
   RobloxGameDetail,
   RobloxGameThumbnails,
   RobloxGameVotes,
@@ -34,6 +36,33 @@ function chunk<T>(items: T[], size: number): T[][] {
   return out;
 }
 
+/**
+ * Fetch a list of id-batches, tolerating per-batch failures.
+ *
+ * At a few hundred games one failed batch aborting the whole call is a
+ * non-event — you just re-run. At thousands it means a single stubborn 429 (on
+ * batch 3 of 100, say) throws away 97 good batches of irreplaceable snapshot
+ * data. So a batch that exhausts its retries is skipped and counted, not
+ * rethrown: the run persists everything it did get, and the survivorship guard
+ * re-collects the missed games next run. `failedBatches > 0` surfaces as a
+ * partial run in the collector summary.
+ */
+async function fetchInBatches<T>(
+  ids: number[],
+  fetchBatch: (group: number[]) => Promise<T[]>,
+): Promise<{ results: T[]; failedBatches: number }> {
+  const results: T[] = [];
+  let failedBatches = 0;
+  for (const group of chunk(ids, BATCH_SIZE)) {
+    try {
+      results.push(...(await fetchBatch(group)));
+    } catch {
+      failedBatches++;
+    }
+  }
+  return { results, failedBatches };
+}
+
 function dedupe(ids: (number | bigint)[]): number[] {
   return [...new Set(ids.map((id) => Number(id)))];
 }
@@ -50,38 +79,47 @@ export async function getUniverseIdFromPlaceId(
   return data.universeId ?? null;
 }
 
-/** Fetch full game details for any number of universe ids (chunked). */
+export interface BatchFetchResult<T> {
+  data: T[];
+  /** Batches whose retries were exhausted and were skipped (partial run). */
+  failedBatches: number;
+}
+
+// games.roblox.com is the strictest host we hit and the one whose data is
+// irreplaceable (a missed batch is a permanent gap in that run's history), so
+// its batch calls retry harder than the default before giving up on a batch.
+const GAMES_HOST_ATTEMPTS = 8;
+
+/** Fetch full game details for any number of universe ids (chunked, fault-tolerant). */
 export async function getGameDetails(
   universeIds: (number | bigint)[],
   opts?: RobloxGetOptions,
-): Promise<RobloxGameDetail[]> {
+): Promise<BatchFetchResult<RobloxGameDetail>> {
   const ids = dedupe(universeIds);
-  const results: RobloxGameDetail[] = [];
-  for (const group of chunk(ids, BATCH_SIZE)) {
+  const { results, failedBatches } = await fetchInBatches(ids, async (group) => {
     const data = await robloxGet<RobloxDataList<RobloxGameDetail>>(
       `${GAMES_API}/v1/games?universeIds=${group.join(",")}`,
-      opts,
+      { maxAttempts: GAMES_HOST_ATTEMPTS, ...opts },
     );
-    results.push(...data.data);
-  }
-  return results;
+    return data.data;
+  });
+  return { data: results, failedBatches };
 }
 
-/** Fetch up/down votes for any number of universe ids (chunked). */
+/** Fetch up/down votes for any number of universe ids (chunked, fault-tolerant). */
 export async function getGameVotes(
   universeIds: (number | bigint)[],
   opts?: RobloxGetOptions,
-): Promise<RobloxGameVotes[]> {
+): Promise<BatchFetchResult<RobloxGameVotes>> {
   const ids = dedupe(universeIds);
-  const results: RobloxGameVotes[] = [];
-  for (const group of chunk(ids, BATCH_SIZE)) {
+  const { results, failedBatches } = await fetchInBatches(ids, async (group) => {
     const data = await robloxGet<RobloxDataList<RobloxGameVotes>>(
       `${GAMES_API}/v1/games/votes?universeIds=${group.join(",")}`,
-      opts,
+      { maxAttempts: GAMES_HOST_ATTEMPTS, ...opts },
     );
-    results.push(...data.data);
-  }
-  return results;
+    return data.data;
+  });
+  return { data: results, failedBatches };
 }
 
 export interface GameIcon {
@@ -135,19 +173,99 @@ export async function getGameThumbnails(
   return results;
 }
 
-/** Keyword game discovery via the omni-search endpoint. */
-export async function searchGames(
-  query: string,
-  opts?: RobloxGetOptions & { limit?: number },
-): Promise<RobloxSearchGame[]> {
-  const sessionId = globalThis.crypto.randomUUID();
-  const data = await robloxGet<RobloxOmniSearchResponse>(
-    `${APIS}/search-api/omni-search?searchQuery=${encodeURIComponent(query)}` +
-      `&sessionId=${sessionId}&pageType=all`,
-    opts,
-  );
-  const games = data.searchResults
+function gamesFromOmni(data: RobloxOmniSearchResponse): RobloxSearchGame[] {
+  return data.searchResults
     .filter((group) => group.contentGroupType === "Game")
     .flatMap((group) => group.contents);
+}
+
+/**
+ * Keyword game discovery via the omni-search endpoint.
+ *
+ * One page returns ~40 games; the deep tail of a query only appears if you
+ * follow `nextPageToken`. `maxPages` bounds how far to walk (default 1 — one
+ * page, the old behaviour). A query typically dries up after 4–9 pages, at
+ * which point a page comes back empty and we stop early regardless of maxPages.
+ *
+ * `limit`, if given, caps the flattened result AFTER pagination — so
+ * `{ maxPages: 10 }` with no limit returns everything the query reaches.
+ */
+export async function searchGames(
+  query: string,
+  opts?: RobloxGetOptions & { limit?: number; maxPages?: number },
+): Promise<RobloxSearchGame[]> {
+  const maxPages = Math.max(1, opts?.maxPages ?? 1);
+  // One session id for the whole walk: the page tokens are issued within a
+  // search session, so reusing it keeps the pagination cursor coherent.
+  const sessionId = globalThis.crypto.randomUUID();
+  const seen = new Set<number>();
+  const games: RobloxSearchGame[] = [];
+  let pageToken: string | undefined;
+
+  for (let page = 0; page < maxPages; page++) {
+    let url =
+      `${APIS}/search-api/omni-search?searchQuery=${encodeURIComponent(query)}` +
+      `&sessionId=${sessionId}&pageType=all`;
+    if (pageToken) url += `&pageToken=${encodeURIComponent(pageToken)}`;
+
+    const data = await robloxGet<RobloxOmniSearchResponse>(url, opts);
+    const pageGames = gamesFromOmni(data);
+    if (pageGames.length === 0) break; // query exhausted
+
+    for (const g of pageGames) {
+      if (!seen.has(g.universeId)) {
+        seen.add(g.universeId);
+        games.push(g);
+      }
+    }
+
+    if (!data.nextPageToken) break;
+    pageToken = data.nextPageToken;
+  }
+
   return typeof opts?.limit === "number" ? games.slice(0, opts.limit) : games;
+}
+
+/** List the available explore-api charts (Top Trending, Up-and-Coming, ...). */
+export async function getExploreSorts(
+  opts?: RobloxGetOptions,
+): Promise<RobloxExploreSortsResponse> {
+  const sessionId = globalThis.crypto.randomUUID();
+  return robloxGet<RobloxExploreSortsResponse>(
+    `${APIS}/explore-api/v1/get-sorts?sessionId=${sessionId}`,
+    opts,
+  );
+}
+
+/**
+ * Universe ids from one explore-api chart, following pagination up to
+ * `maxPages`. These are the real "charts" (Top Playing Now, Up-and-Coming,
+ * ...) — Up-and-Coming in particular surfaces games near launch, which keyword
+ * search misses and which the survivorship-bias guard wants.
+ */
+export async function getExploreSortUniverseIds(
+  sortId: string,
+  opts?: RobloxGetOptions & { maxPages?: number },
+): Promise<number[]> {
+  const maxPages = Math.max(1, opts?.maxPages ?? 1);
+  const sessionId = globalThis.crypto.randomUUID();
+  const ids = new Set<number>();
+  let pageToken: string | undefined;
+
+  for (let page = 0; page < maxPages; page++) {
+    let url =
+      `${APIS}/explore-api/v1/get-sort-content?sessionId=${sessionId}` +
+      `&sortId=${encodeURIComponent(sortId)}`;
+    if (pageToken) url += `&pageToken=${encodeURIComponent(pageToken)}`;
+
+    const data = await robloxGet<RobloxExploreSortContentResponse>(url, opts);
+    const games = data.games ?? [];
+    if (games.length === 0) break;
+    for (const g of games) if (typeof g.universeId === "number") ids.add(g.universeId);
+
+    if (!data.nextPageToken) break;
+    pageToken = data.nextPageToken;
+  }
+
+  return [...ids];
 }
