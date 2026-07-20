@@ -4,6 +4,7 @@ import { cacheLife } from "next/cache";
 import { getGamesList, type GameSortField } from "@/lib/db/games";
 import { getAllGenres } from "@/lib/db/genres";
 import { getGrowthForGames } from "@/lib/db/trends";
+import { getGameIcons } from "@/lib/roblox/client";
 import { estimateDailyEarningsFromCcu } from "@/lib/earnings/estimate";
 import { formatCompact, formatUsdRange } from "@/lib/format";
 
@@ -29,9 +30,17 @@ import {
   type RangeKey,
 } from "@/lib/date-range";
 import { GamesFilters } from "./_components/games-filters";
+import { GamesGrid } from "./_components/games-grid";
 import { GamesPagination } from "./_components/games-pagination";
 
 export const metadata = { title: "Games — rodict" };
+
+type ViewMode = "table" | "grid";
+
+const VIEW_OPTIONS = [
+  { value: "grid", label: "Grid" },
+  { value: "table", label: "Table" },
+] as const;
 
 const SORT_FIELDS: GameSortField[] = [
   "currentPlaying",
@@ -54,6 +63,7 @@ interface GamesQuery {
   genreSlug?: string;
   search?: string;
   range: RangeKey;
+  view: ViewMode;
 }
 
 /**
@@ -94,7 +104,17 @@ async function getGamesPageData(q: GamesQuery) {
       )
     : null;
 
-  return { games, total, genres, growthByGame };
+  // Icons are a live Roblox API call, so only fetch them for the grid view —
+  // the table view stays icon-free and doesn't pay for it. Being inside
+  // "use cache" keeps this to one call per page per cache window rather than
+  // one per page view.
+  let icons: Map<string, string | null> | null = null;
+  if (q.view === "grid" && games.length > 0) {
+    const fetched = await getGameIcons(games.map((g) => g.universeId));
+    icons = new Map(fetched.map((icon) => [String(icon.universeId), icon.imageUrl]));
+  }
+
+  return { games, total, genres, growthByGame, icons };
 }
 
 export default async function GamesPage(props: PageProps<"/games">) {
@@ -111,14 +131,18 @@ export default async function GamesPage(props: PageProps<"/games">) {
   const genreSlug = get("genre");
   const search = get("q");
   const range = parseRangeKey(get("range"));
+  // Grid is the default landing view (no `view` param) — thumbnail-first
+  // browsing is the primary experience; the table is opt-in.
+  const view: ViewMode = get("view") === "table" ? "table" : "grid";
 
-  const { games, total, genres, growthByGame } = await getGamesPageData({
+  const { games, total, genres, growthByGame, icons } = await getGamesPageData({
     page,
     sort,
     order,
     genreSlug,
     search,
     range,
+    view,
   });
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -128,6 +152,7 @@ export default async function GamesPage(props: PageProps<"/games">) {
     genre: genreSlug,
     q: search,
     range: range === RANGE_CLEAR_VALUE ? undefined : range,
+    view: view === "grid" ? undefined : view,
   };
 
   return (
@@ -142,123 +167,136 @@ export default async function GamesPage(props: PageProps<"/games">) {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <GamesFilters genres={genres} />
-        <PresetLinks
-          param="range"
-          options={RANGE_OPTIONS}
-          current={range}
-          clearValue={RANGE_CLEAR_VALUE}
-          baseParams={{ genre: genreSlug, q: search, sort, order }}
-        />
+        <div className="flex flex-wrap items-center gap-3">
+          <PresetLinks
+            param="view"
+            options={VIEW_OPTIONS}
+            current={view}
+            clearValue="grid"
+            baseParams={{ genre: genreSlug, q: search, sort, order, range: get("range") }}
+          />
+          <PresetLinks
+            param="range"
+            options={RANGE_OPTIONS}
+            current={range}
+            clearValue={RANGE_CLEAR_VALUE}
+            baseParams={{ genre: genreSlug, q: search, sort, order, view: get("view") }}
+          />
+        </div>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-8">
-                <span className="sr-only">Watch</span>
-              </TableHead>
-              <TableHead className="w-10">#</TableHead>
-              <TableHead>Game</TableHead>
-              <TableHead>Genre</TableHead>
-              <TableHead className="text-right">
-                <SortableHeader
-                  field="currentPlaying"
-                  label="Players"
-                  currentSort={sort}
-                  currentOrder={order}
-                  baseParams={{ genre: genreSlug, q: search }}
-                />
-              </TableHead>
-              <TableHead className="text-right">
-                <SortableHeader
-                  field="currentVisits"
-                  label="Visits"
-                  currentSort={sort}
-                  currentOrder={order}
-                  baseParams={{ genre: genreSlug, q: search }}
-                />
-              </TableHead>
-              <TableHead className="text-right">
-                <SortableHeader
-                  field="currentFavorites"
-                  label="Favorites"
-                  currentSort={sort}
-                  currentOrder={order}
-                  baseParams={{ genre: genreSlug, q: search }}
-                />
-              </TableHead>
-              <TableHead className="text-right">Est. earnings/day</TableHead>
-              {growthByGame && <TableHead className="text-right">Δ</TableHead>}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {games.length === 0 && (
+      {view === "grid" ? (
+        <GamesGrid games={games} icons={icons} />
+      ) : (
+        <div className="overflow-x-auto rounded-lg border">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell
-                  colSpan={growthByGame ? 9 : 8}
-                  className="h-24 text-center text-muted-foreground"
-                >
-                  No games match these filters.
-                </TableCell>
+                <TableHead className="w-8">
+                  <span className="sr-only">Watch</span>
+                </TableHead>
+                <TableHead className="w-10">#</TableHead>
+                <TableHead>Game</TableHead>
+                <TableHead>Genre</TableHead>
+                <TableHead className="text-right">
+                  <SortableHeader
+                    field="currentPlaying"
+                    label="Players"
+                    currentSort={sort}
+                    currentOrder={order}
+                    baseParams={{ genre: genreSlug, q: search, view: get("view") }}
+                  />
+                </TableHead>
+                <TableHead className="text-right">
+                  <SortableHeader
+                    field="currentVisits"
+                    label="Visits"
+                    currentSort={sort}
+                    currentOrder={order}
+                    baseParams={{ genre: genreSlug, q: search, view: get("view") }}
+                  />
+                </TableHead>
+                <TableHead className="text-right">
+                  <SortableHeader
+                    field="currentFavorites"
+                    label="Favorites"
+                    currentSort={sort}
+                    currentOrder={order}
+                    baseParams={{ genre: genreSlug, q: search, view: get("view") }}
+                  />
+                </TableHead>
+                <TableHead className="text-right">Est. earnings/day</TableHead>
+                {growthByGame && <TableHead className="text-right">Δ</TableHead>}
               </TableRow>
-            )}
-            {games.map((game, i) => {
-              const earnings = estimateDailyEarningsFromCcu(game.currentPlaying);
-              const growth = growthByGame?.get(game.id) ?? null;
-              return (
-                <TableRow key={game.id}>
-                  <TableCell>
-                    <WatchlistButton
-                      kind="game"
-                      id={game.universeId.toString()}
-                      name={game.name}
-                      size="icon"
-                    />
+            </TableHeader>
+            <TableBody>
+              {games.length === 0 && (
+                <TableRow>
+                  <TableCell
+                    colSpan={growthByGame ? 9 : 8}
+                    className="h-24 text-center text-muted-foreground"
+                  >
+                    No games match these filters.
                   </TableCell>
-                  <TableCell className="text-muted-foreground tabular-nums">
-                    {(page - 1) * PAGE_SIZE + i + 1}
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    <Link href={`/games/${game.universeId}`} className="hover:underline">
-                      {game.name}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    {game.currentGenre ? (
-                      <Badge variant="secondary">{game.currentGenre.name}</Badge>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {formatCompact(game.currentPlaying)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {formatCompact(game.currentVisits)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {formatCompact(game.currentFavorites)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    <span className="inline-flex items-center gap-1.5">
-                      {formatUsdRange(earnings.low, earnings.high)}
-                      <Badge variant="outline" className="text-[10px]">
-                        Est.
-                      </Badge>
-                    </span>
-                  </TableCell>
-                  {growthByGame && (
-                    <TableCell className="text-right tabular-nums">
-                      <GrowthBadge growth={growth?.growthPct ?? null} />
-                    </TableCell>
-                  )}
                 </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </div>
+              )}
+              {games.map((game, i) => {
+                const earnings = estimateDailyEarningsFromCcu(game.currentPlaying);
+                const growth = growthByGame?.get(game.id) ?? null;
+                return (
+                  <TableRow key={game.id}>
+                    <TableCell>
+                      <WatchlistButton
+                        kind="game"
+                        id={game.universeId.toString()}
+                        name={game.name}
+                        size="icon"
+                      />
+                    </TableCell>
+                    <TableCell className="text-muted-foreground tabular-nums">
+                      {(page - 1) * PAGE_SIZE + i + 1}
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      <Link href={`/games/${game.universeId}`} className="hover:underline">
+                        {game.name}
+                      </Link>
+                    </TableCell>
+                    <TableCell>
+                      {game.currentGenre ? (
+                        <Badge variant="secondary">{game.currentGenre.name}</Badge>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatCompact(game.currentPlaying)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatCompact(game.currentVisits)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatCompact(game.currentFavorites)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      <span className="inline-flex items-center gap-1.5">
+                        {formatUsdRange(earnings.low, earnings.high)}
+                        <Badge variant="outline" className="text-[10px]">
+                          Est.
+                        </Badge>
+                      </span>
+                    </TableCell>
+                    {growthByGame && (
+                      <TableCell className="text-right tabular-nums">
+                        <GrowthBadge growth={growth?.growthPct ?? null} />
+                      </TableCell>
+                    )}
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      )}
 
       <GamesPagination page={page} totalPages={totalPages} baseParams={baseParams} />
     </div>

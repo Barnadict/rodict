@@ -42,7 +42,7 @@ export function WatchlistButton({
         e.stopPropagation();
         toggle(kind, id, name);
       }}
-      className={cn("gap-1.5", className)}
+      className={cn("gap-1.5", watched && "glow-primary", className)}
     >
       <Bookmark aria-hidden="true" className={cn("size-3.5", watched && "fill-current")} />
       {size === "default" && <span>{watched ? "Watching" : "Watch"}</span>}

@@ -82,7 +82,7 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
               alt=""
               width={64}
               height={64}
-              className="rounded-lg border"
+              className="glow-primary rounded-lg border"
               unoptimized
             />
           ) : (

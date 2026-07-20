@@ -68,8 +68,10 @@ function getSnapshot(): WatchlistEntry[] {
   return cachedEntries;
 }
 
+const EMPTY_ENTRIES: WatchlistEntry[] = [];
+
 function getServerSnapshot(): WatchlistEntry[] {
-  return [];
+  return EMPTY_ENTRIES;
 }
 
 function subscribe(callback: () => void) {

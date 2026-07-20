@@ -9,9 +9,9 @@ export function GrowthBadge({ growth }: { growth: number | null }) {
     <span
       className={
         positive
-          ? "text-emerald-600 dark:text-emerald-400"
+          ? "text-emerald-600 drop-shadow-[0_0_6px_currentColor] dark:text-emerald-400"
           : negative
-            ? "text-red-600 dark:text-red-400"
+            ? "text-red-600 drop-shadow-[0_0_6px_currentColor] dark:text-red-400"
             : "text-muted-foreground"
       }
     >
