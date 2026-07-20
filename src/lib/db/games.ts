@@ -69,7 +69,10 @@ function chunk<T>(items: T[], size: number): T[][] {
 // even the old 999-variable builds, and the round-trip count stays tiny.
 const CREATE_CHUNK = 200; // rows per createMany statement
 const IN_CHUNK = 400; // ids per `IN (...)` read
-const TX_BATCH = 100; // ops per batched $transaction (per-row updates)
+// Ops per batched $transaction. Kept modest so each transaction stays well
+// under the client's interactive-transaction timeout over the network to Turso
+// (see prisma.ts) and holds its write lock only briefly.
+const TX_BATCH = 50;
 
 /**
  * Persist a whole collection run in bulk.

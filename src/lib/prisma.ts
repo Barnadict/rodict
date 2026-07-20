@@ -24,7 +24,18 @@ const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
 };
 
-export const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter });
+// Interactive transactions ($transaction([...])) default to a 5s timeout. That
+// is ample against a local file DB but too tight against a remote Turso target,
+// where each statement is a network round trip — a batched write of ~100 row
+// updates can exceed 5s and abort the whole run (observed: a full-corpus collect
+// tipped over at 5111ms). Raise it so batched writes have real headroom; batches
+// are still kept small (TX_BATCH) so no single transaction holds a long lock.
+export const prisma =
+  globalForPrisma.prisma ??
+  new PrismaClient({
+    adapter,
+    transactionOptions: { timeout: 30_000, maxWait: 15_000 },
+  });
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
