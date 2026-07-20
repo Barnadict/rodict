@@ -270,9 +270,21 @@ export async function persistCollectedGames(inputs: PersistInput[]): Promise<Bul
 }
 
 /** Universe ids of every game we already track — so the collector keeps
- * following them as they decline (survivorship-bias guard). */
+ * following them as they decline (survivorship-bias guard).
+ *
+ * Ordered oldest-collected-first (STALEST games first; never-collected NULLs
+ * sort first in SQLite). This is a fairness mechanism for rate-limited runs:
+ * fetchInBatches is sequential and in-order, and throttling worsens the deeper
+ * a run gets, so the TAIL of this list is what gets skipped. Putting the stalest
+ * games at the front means a partial run spends its budget on the games that
+ * need it most, and the freshest games (which can afford to wait) are the ones
+ * deferred — so coverage equalizes across runs instead of the same tail being
+ * perpetually starved. */
 export async function getKnownUniverseIds(): Promise<bigint[]> {
-  const rows = await prisma.game.findMany({ select: { universeId: true } });
+  const rows = await prisma.game.findMany({
+    select: { universeId: true },
+    orderBy: { lastCollectedAt: "asc" },
+  });
   return rows.map((r) => r.universeId);
 }
 

@@ -41,7 +41,14 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
         run: |
-          if [ "${{ inputs.knownOnly }}" = "true" ]; then
+          # Scheduled runs stay in maintenance mode (--known-only). Discovery is
+          # throttled to ~nothing on GitHub's datacenter IP, so the cron spends its
+          # whole budget RE-COLLECTING known games (stalest first — see
+          # getKnownUniverseIds) rather than wasting it on discovery it can't do.
+          # Corpus GROWTH comes from manual `npm run collect:prod` on a residential
+          # IP. A manual workflow_dispatch can still force a full-discovery run by
+          # leaving knownOnly unchecked.
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.knownOnly }}" = "true" ]; then
             npm run collect -- --known-only
           else
             npm run collect
