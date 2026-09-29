@@ -42,6 +42,9 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
           PYTHONIOENCODING: utf-8 # game names contain emoji; CI stdout must not choke
+          # Print progress as it happens: buffered output is lost when a run is
+          # killed by the timeout, which hid where the time went.
+          PYTHONUNBUFFERED: "1"
         run: python analytics/run.py
 
   # Alert on failed runs (Task #34) — see the note in collect.yml.

@@ -89,3 +89,16 @@ def test_old_duplicates_are_cleaned_up_keeping_the_newest(con):
 def test_duplicate_scopes_in_one_run_are_rejected(con):
     with pytest.raises(ValueError):
         write_results(con, "k", [row("a", {"x": 1}), row("a", {"x": 2})])
+
+
+def test_batches_larger_than_one_statement_round_trip_correctly(con):
+    # More rows than DELETE_CHUNK / UPSERT_CHUNK, so every path spans several
+    # multi-row statements (the writer never uses per-row executemany).
+    n = 1234
+    write_results(con, "k", [row(str(i), {"x": i}) for i in range(n)])
+    # change every 3rd, drop the last 600, keep the rest
+    rows = [row(str(i), {"x": i + (1 if i % 3 == 0 else 0)}) for i in range(n - 600)]
+    stats = write_results(con, "k", rows)
+    changed = len([i for i in range(n - 600) if i % 3 == 0])
+    assert stats == {"inserted": 0, "updated": changed, "deleted": 600, "unchanged": n - 600 - changed}
+    assert stored(con) == {str(i): f'{{"x":{i + (1 if i % 3 == 0 else 0)}}}' for i in range(n - 600)}

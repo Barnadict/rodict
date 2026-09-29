@@ -225,6 +225,17 @@ def record_job_run(
     con.commit()
 
 
+# Rows per multi-row statement. Both stay under SQLite's classic 999
+# bound-parameter limit (100 rows x 9 columns = 900), so the same SQL runs on
+# local sqlite3 and on Turso.
+DELETE_CHUNK = 500
+UPSERT_CHUNK = 100
+
+
+def _chunks(items: list, size: int) -> list[list]:
+    return [items[i : i + size] for i in range(0, len(items), size)]
+
+
 def write_results(con: Connection, kind: str, rows: list[dict]) -> dict:
     """Sync the AnalyticsResult rows of `kind` to `rows`, writing only what changed.
 
@@ -277,24 +288,28 @@ def write_results(con: Connection, kind: str, rows: list[dict]) -> dict:
         elif prev[1:] == (payload, version, p_start, p_end):
             unchanged += 1
         else:
-            updates.append((payload, version, p_start, p_end, now, prev[0]))
+            # Same row id, so the upsert below updates it in place.
+            updates.append((prev[0], kind, key[0], key[1], p_start, p_end, now, version, payload))
     delete_ids += [ref[0] for key, ref in existing.items() if key not in seen]
 
-    if delete_ids:
-        cur.executemany('DELETE FROM "AnalyticsResult" WHERE id = ?', [(i,) for i in delete_ids])
-    if updates:
-        cur.executemany(
-            """UPDATE "AnalyticsResult"
-               SET payload = ?, version = ?, periodStart = ?, periodEnd = ?, computedAt = ?
-               WHERE id = ?""",
-            updates,
+    # Multi-row statements, never `executemany`: against remote Turso the libsql
+    # driver sends executemany as one network round trip PER ROW, so deleting
+    # ~5.3K stale rows alone took minutes and ran analytics into its timeout.
+    for ids in _chunks(delete_ids, DELETE_CHUNK):
+        cur.execute(
+            f'DELETE FROM "AnalyticsResult" WHERE id IN ({", ".join("?" * len(ids))})', ids
         )
-    if inserts:
-        cur.executemany(
-            """INSERT INTO "AnalyticsResult"
-               (id, kind, scopeType, scopeId, periodStart, periodEnd, computedAt, version, payload)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            inserts,
+    for group in _chunks(inserts + updates, UPSERT_CHUNK):
+        placeholders = ", ".join(["(?, ?, ?, ?, ?, ?, ?, ?, ?)"] * len(group))
+        cur.execute(
+            f"""INSERT INTO "AnalyticsResult"
+                (id, kind, scopeType, scopeId, periodStart, periodEnd, computedAt, version, payload)
+                VALUES {placeholders}
+                ON CONFLICT(id) DO UPDATE SET
+                  payload = excluded.payload, version = excluded.version,
+                  periodStart = excluded.periodStart, periodEnd = excluded.periodEnd,
+                  computedAt = excluded.computedAt""",
+            [v for row in group for v in row],
         )
     con.commit()
     return {
