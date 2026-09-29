@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import type { CleanGame } from "@/lib/validation/sanitize";
 import { addWrites, type WriteCounts } from "@/lib/db/write-counts";
 import { collectionTier, isDueForCollection } from "@/lib/collector/cadence";
+import { rankSimilarGames, similarCcuBand } from "@/lib/game-metrics";
 
 // ---------------------------------------------------------------------------
 // Write path (used by the collector, Task #8)
@@ -413,4 +414,42 @@ export async function getUniverseIds(gameIds: string[]): Promise<Record<string, 
     select: { id: true, universeId: true },
   });
   return Object.fromEntries(rows.map((r) => [r.id, r.universeId.toString()]));
+}
+
+/** Candidates scanned per similar-games lookup before ranking in memory. */
+const SIMILAR_CANDIDATES = 60;
+
+/**
+ * "Similar games" for the game page (Task #62): active games in the same genre
+ * within a CCU band, ranked by shared themes then CCU closeness. One indexed
+ * read (currentGenreId); games without a genre get none rather than a guess.
+ */
+export async function getSimilarGames(
+  game: { id: string; currentGenreId: string | null; currentPlaying: number; themeIds: string[] },
+  limit = 6,
+) {
+  if (!game.currentGenreId) return [];
+  const band = similarCcuBand(game.currentPlaying);
+  const rows = await prisma.game.findMany({
+    where: {
+      currentGenreId: game.currentGenreId,
+      status: "active",
+      id: { not: game.id },
+      currentPlaying: { gte: band.min, lte: band.max },
+    },
+    orderBy: { currentPlaying: "desc" },
+    take: SIMILAR_CANDIDATES,
+    select: {
+      id: true,
+      universeId: true,
+      name: true,
+      currentPlaying: true,
+      themes: { select: { themeId: true } },
+    },
+  });
+  return rankSimilarGames(
+    { currentPlaying: game.currentPlaying, themeIds: game.themeIds },
+    rows.map(({ themes, ...r }) => ({ ...r, themeIds: themes.map((t) => t.themeId) })),
+    limit,
+  );
 }

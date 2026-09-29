@@ -10,12 +10,19 @@ import {
   CartesianGrid,
   Tooltip,
   ReferenceArea,
+  ReferenceDot,
   type TooltipContentProps,
 } from "recharts";
 import type { NameType, ValueType } from "recharts/types/component/DefaultTooltipContent";
 
 import { formatCompact } from "@/lib/format";
-import { LOW_COVERAGE, findSeriesGaps, movingAverage, type ProjectionPoint } from "@/lib/stats";
+import {
+  LOW_COVERAGE,
+  findSeriesGaps,
+  formatGrowthPct,
+  movingAverage,
+  type ProjectionPoint,
+} from "@/lib/stats";
 
 export interface TrendPoint {
   /** ISO timestamp. */
@@ -23,6 +30,24 @@ export interface TrendPoint {
   value: number;
   /** Share (0–1) of the series' members included in this point (genre series). */
   coverage?: number | null;
+}
+
+/** A flagged spike or drop drawn on the line (Task #62). */
+export interface TrendMarker {
+  /** ISO timestamp of the point the change landed on. */
+  date: string;
+  value: number;
+  direction: "spike" | "drop";
+  /** Relative change, e.g. 0.8 = +80%. */
+  changePct: number;
+}
+
+/** How values render on the axis and in the tooltip. Functions can't cross the
+ * server→client boundary, so this is a name rather than a formatter. */
+export type TrendValueFormat = "compact" | "percent";
+
+function formatValue(v: number, format: TrendValueFormat): string {
+  return format === "percent" ? `${Math.round(v * 1000) / 10}%` : formatCompact(Math.round(v));
 }
 
 interface TrendChartProps {
@@ -40,6 +65,8 @@ interface TrendChartProps {
   /** Forecast drawn after the real data as a dashed line in a shaded band
    * (Task #57); build it with `buildProjection`. */
   projection?: ProjectionPoint[];
+  valueFormat?: TrendValueFormat;
+  markers?: TrendMarker[];
 }
 
 type ChartRow = {
@@ -50,9 +77,13 @@ type ChartRow = {
   ma?: number | null;
   forecast?: number;
   band?: [number, number];
+  marker?: TrendMarker;
 };
 
-function makeTooltip(unit: string, hasMa: boolean) {
+/** A marker attaches to the real row within this of its timestamp. */
+const MARKER_SNAP_MS = 60_000;
+
+function makeTooltip(unit: string, hasMa: boolean, format: TrendValueFormat) {
   return function TrendTooltip({
     active,
     payload,
@@ -69,23 +100,34 @@ function makeTooltip(unit: string, hasMa: boolean) {
         {isProjection ? (
           <>
             <div className="font-medium tabular-nums text-popover-foreground">
-              Projection: ~{formatCompact(Math.round(point.forecast!))} {unit}
+              Projection: ~{formatValue(point.forecast!, format)} {unit}
             </div>
             {point.band && (
               <div className="text-xs text-muted-foreground tabular-nums">
-                ~80% band {formatCompact(Math.round(point.band[0]))}–
-                {formatCompact(Math.round(point.band[1]))}
+                ~80% band {formatValue(point.band[0], format)}–{formatValue(point.band[1], format)}
               </div>
             )}
           </>
         ) : (
           <div className="font-medium tabular-nums text-popover-foreground">
-            {formatCompact(point.value!)} {unit}
+            {formatValue(point.value!, format)} {unit}
+          </div>
+        )}
+        {point.marker && (
+          <div
+            className={
+              point.marker.direction === "spike"
+                ? "text-xs font-medium text-emerald-600 dark:text-emerald-400"
+                : "text-xs font-medium text-destructive"
+            }
+          >
+            {point.marker.direction === "spike" ? "▲ Flagged spike" : "▼ Flagged drop"}{" "}
+            {formatGrowthPct(point.marker.changePct)}
           </div>
         )}
         {hasMa && typeof point.ma === "number" && (
           <div className="text-xs text-muted-foreground tabular-nums">
-            avg {formatCompact(Math.round(point.ma))}
+            avg {formatValue(point.ma, format)}
           </div>
         )}
         {typeof point.coverage === "number" && (
@@ -112,6 +154,8 @@ export function TrendChart({
   height = 288,
   ariaLabel = "Line chart",
   projection = [],
+  valueFormat = "compact",
+  markers = [],
 }: TrendChartProps) {
   if (data.length === 0) {
     return (
@@ -161,9 +205,22 @@ export function TrendChart({
   chartData.sort((a, b) => a.t - b.t);
   const showProjection = projection.length > 0;
 
+  // Only markers inside the plotted range; each also tags its row so the
+  // tooltip names the change when hovering that point.
+  const first = points[0].t;
+  const last = points[points.length - 1].t;
+  const shownMarkers = markers
+    .map((m) => ({ ...m, t: Date.parse(m.date) }))
+    .filter((m) => m.t >= first - MARKER_SNAP_MS && m.t <= last + MARKER_SNAP_MS);
+  for (const m of shownMarkers) {
+    const row = points.find((p) => Math.abs(p.t - m.t) <= MARKER_SNAP_MS);
+    if (row) (row as ChartRow).marker = m;
+  }
+  const showMarkers = shownMarkers.length > 0;
+
   return (
     <div className="flex flex-col gap-2">
-      {(showMa || showProjection) && (
+      {(showMa || showProjection || showMarkers) && (
         <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1.5">
             <span className="h-0.5 w-4 rounded bg-primary" /> Actual
@@ -178,6 +235,12 @@ export function TrendChart({
             <span className="inline-flex items-center gap-1.5">
               <span className="h-2.5 w-4 rounded-sm border-t-2 border-dashed border-primary bg-primary/15" />{" "}
               Projection (~80% band)
+            </span>
+          )}
+          {showMarkers && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="size-2.5 rounded-full bg-emerald-500" /> Flagged spike
+              <span className="ml-2 size-2.5 rounded-full bg-destructive" /> Flagged drop
             </span>
           )}
         </div>
@@ -200,7 +263,7 @@ export function TrendChart({
             minTickGap={40}
           />
           <YAxis
-            tickFormatter={(v: number) => formatCompact(v)}
+            tickFormatter={(v: number) => formatValue(v, valueFormat)}
             stroke="var(--muted-foreground)"
             tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
             tickLine={false}
@@ -208,7 +271,7 @@ export function TrendChart({
             width={48}
           />
           <Tooltip
-            content={makeTooltip(unit, showMa)}
+            content={makeTooltip(unit, showMa, valueFormat)}
             cursor={{ stroke: "var(--muted-foreground)", strokeWidth: 1 }}
           />
           {gaps.map((g) => (
@@ -271,6 +334,18 @@ export function TrendChart({
             activeDot={{ r: 4, stroke: "var(--background)", strokeWidth: 2 }}
             isAnimationActive={false}
           />
+          {shownMarkers.map((m) => (
+            <ReferenceDot
+              key={m.t}
+              x={m.t}
+              y={m.value}
+              r={5}
+              fill={m.direction === "spike" ? "var(--color-emerald-500)" : "var(--destructive)"}
+              stroke="var(--background)"
+              strokeWidth={2}
+              ifOverflow="discard"
+            />
+          ))}
         </ComposedChart>
       </ResponsiveContainer>
     </div>

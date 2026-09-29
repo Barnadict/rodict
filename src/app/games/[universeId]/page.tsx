@@ -1,17 +1,33 @@
 import Image from "next/image";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cacheLife } from "next/cache";
+import { ExternalLink } from "lucide-react";
 
-import { getGameByUniverseId, getGameSnapshots } from "@/lib/db/games";
+import { getGameByUniverseId, getGameSnapshots, getSimilarGames } from "@/lib/db/games";
 import { getAnomaliesForGame } from "@/lib/db/analytics";
 import { getGameIcons } from "@/lib/roblox/client";
 import { deriveSnapshotMetrics } from "@/lib/earnings/estimate";
-import { formatCompact, formatExact, formatUsdRange } from "@/lib/format";
+import { formatCompact, formatExact, formatRelativeTime, formatUsdRange } from "@/lib/format";
 import { formatGrowthPct } from "@/lib/stats";
+import {
+  DEFAULT_GAME_METRIC,
+  GAME_METRICS,
+  buildMetricSeries,
+  cleanDescription,
+  parseGameMetric,
+  robloxCreatorUrl,
+  robloxGameUrl,
+  type GameMetric,
+} from "@/lib/game-metrics";
 
 import { Badge } from "@/components/ui/badge";
 import { PresetLinks } from "@/components/filters/preset-links";
-import { TrendChart, type TrendPoint } from "@/components/charts/trend-chart";
+import {
+  TrendChart,
+  type TrendMarker,
+  type TrendValueFormat,
+} from "@/components/charts/trend-chart";
 import { LocalTime } from "@/components/local-time";
 import { StatTile } from "@/components/data-table/stat-tile";
 import { WatchlistButton } from "@/components/watchlist/watchlist-button";
@@ -46,32 +62,101 @@ async function getGameDetail(universeIdParam: string, range: RangeKey) {
   const game = await getGameByUniverseId(universeId);
   if (!game) return null;
 
-  const [snapshots, icons, anomalies] = await Promise.all([
+  // Similar games' icons ride along in the same Roblox icon request as this
+  // game's, so the page still makes one third-party call.
+  const similarWithIcons = getSimilarGames({
+    id: game.id,
+    currentGenreId: game.currentGenreId,
+    currentPlaying: game.currentPlaying,
+    themeIds: game.themes.map((t) => t.themeId),
+  }).then(async (similar) => {
+    const icons = await getGameIcons([universeId, ...similar.map((g) => g.universeId)]);
+    return { similar, icons: new Map(icons.map((i) => [String(i.universeId), i.imageUrl])) };
+  });
+
+  const [snapshots, anomalies, { similar, icons }] = await Promise.all([
     getGameSnapshots(game.id, { from: rangeToCutoff(range) }),
-    getGameIcons([universeId]),
     getAnomaliesForGame(game.id),
+    similarWithIcons,
   ]);
 
-  return { game, snapshots, anomalies, iconUrl: icons[0]?.imageUrl ?? null };
+  return {
+    game,
+    snapshots,
+    anomalies,
+    similar,
+    icons,
+    iconUrl: icons.get(String(universeId)) ?? null,
+  };
 }
+
+/** Per-metric chart labels. Visits/day is derived from cumulative visits. */
+const METRIC_CHART: Record<
+  GameMetric,
+  { title: string; unit: string; format: TrendValueFormat; column: string; note?: string }
+> = {
+  players: { title: "Players over time", unit: "players", format: "compact", column: "Players" },
+  visits: {
+    title: "Visits per day",
+    unit: "visits/day",
+    format: "compact",
+    column: "Visits/day",
+    note: "Derived: the change in total visits between collections, scaled to a day. Roblox doesn't report this directly, and spans across collection gaps are left out.",
+  },
+  favorites: {
+    title: "Favorites over time",
+    unit: "favorites",
+    format: "compact",
+    column: "Favorites",
+  },
+  likes: {
+    title: "Like ratio over time",
+    unit: "liked",
+    format: "percent",
+    column: "Like ratio",
+    note: "Likes ÷ (likes + dislikes) at each collection.",
+  },
+};
 
 export default async function GameDetailPage(props: PageProps<"/games/[universeId]">) {
   const { universeId: universeIdParam } = await props.params;
   const sp = await props.searchParams;
   const range = parseRangeKey(Array.isArray(sp.range) ? sp.range[0] : sp.range);
+  const metric = parseGameMetric(Array.isArray(sp.metric) ? sp.metric[0] : sp.metric);
 
   const data = await getGameDetail(universeIdParam, range);
   if (!data) notFound();
 
-  const { game, snapshots, anomalies, iconUrl } = data;
+  const { game, snapshots, anomalies, similar, icons, iconUrl } = data;
   const latest = snapshots[snapshots.length - 1];
   const previous = snapshots.length > 1 ? snapshots[snapshots.length - 2] : undefined;
   const derived = latest ? deriveSnapshotMetrics(latest, previous) : null;
 
-  const chartData: TrendPoint[] = snapshots.map((s) => ({
-    date: s.collectedAt.toISOString(),
-    value: s.playing,
-  }));
+  const chart = METRIC_CHART[metric];
+  const chartData = buildMetricSeries(snapshots, metric);
+  // Anomalies are flagged on the CCU series, so they only belong on that chart.
+  const markers: TrendMarker[] =
+    metric === "players" && anomalies
+      ? anomalies.anomalies.map((a) => ({
+          date: a.at,
+          value: a.value,
+          direction: a.direction,
+          changePct: a.changePct,
+        }))
+      : [];
+
+  // Past the searchParams await the page renders per request, so reading the
+  // clock here can't bake a build-time value into a prerender.
+  const now = new Date();
+  const gameUrl = robloxGameUrl(game.rootPlaceId);
+  const creatorUrl = robloxCreatorUrl(game.creatorId, game.creatorType);
+  const description = cleanDescription(game.description);
+  const descriptionPreview = description?.split("\n")[0].slice(0, 120);
+  const lifecycle: { label: string; at: Date | null }[] = [
+    { label: "Created on Roblox", at: game.robloxCreatedAt },
+    { label: "Last updated", at: game.robloxUpdatedAt },
+    { label: "First tracked", at: game.firstSeenAt },
+  ];
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
@@ -101,12 +186,71 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
               {game.status === "dead" && <Badge variant="destructive">Dead</Badge>}
             </div>
             {game.creatorName && (
-              <p className="text-sm text-muted-foreground">by {game.creatorName}</p>
+              <p className="text-sm text-muted-foreground">
+                by{" "}
+                {creatorUrl ? (
+                  <a
+                    href={creatorUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline-offset-4 hover:text-foreground hover:underline"
+                  >
+                    {game.creatorName}
+                  </a>
+                ) : (
+                  game.creatorName
+                )}
+              </p>
             )}
           </div>
         </div>
-        <WatchlistButton kind="game" id={game.universeId.toString()} name={game.name} />
+        <div className="flex items-center gap-2">
+          {gameUrl && (
+            <a
+              href={gameUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors hover:bg-muted"
+            >
+              Open on Roblox <ExternalLink className="size-3.5" aria-hidden />
+            </a>
+          )}
+          <WatchlistButton kind="game" id={game.universeId.toString()} name={game.name} />
+        </div>
       </div>
+
+      <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
+        {lifecycle.map(({ label, at }) => (
+          <div key={label} className="flex flex-col">
+            <dt className="text-muted-foreground">{label}</dt>
+            <dd>
+              {at ? (
+                <>
+                  <LocalTime value={at} options={{ dateStyle: "medium" }} />{" "}
+                  <span className="text-muted-foreground">({formatRelativeTime(at, now)})</span>
+                </>
+              ) : (
+                "—"
+              )}
+            </dd>
+          </div>
+        ))}
+      </dl>
+
+      {description && (
+        <details className="group rounded-lg border p-3 text-sm">
+          <summary className="cursor-pointer select-none font-medium">
+            Description
+            <span className="ml-2 font-normal text-muted-foreground group-open:hidden">
+              {descriptionPreview}
+              {descriptionPreview !== description ? "…" : ""}
+            </span>
+          </summary>
+          <p className="mt-2 whitespace-pre-line wrap-break-word text-muted-foreground">
+            {description}
+          </p>
+        </details>
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label="Players now" value={formatCompact(game.currentPlaying)} />
@@ -136,24 +280,44 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
       </div>
 
       <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h2 className="font-medium">Players over time</h2>
-          <PresetLinks
-            param="range"
-            options={RANGE_OPTIONS}
-            current={range}
-            clearValue={RANGE_CLEAR_VALUE}
-          />
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 font-medium">
+            {chart.title}
+            {metric === "visits" && <Badge variant="outline">Derived</Badge>}
+          </h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <PresetLinks
+              param="metric"
+              options={GAME_METRICS}
+              current={metric}
+              clearValue={DEFAULT_GAME_METRIC}
+              baseParams={{ range: range === RANGE_CLEAR_VALUE ? undefined : range }}
+            />
+            <PresetLinks
+              param="range"
+              options={RANGE_OPTIONS}
+              current={range}
+              clearValue={RANGE_CLEAR_VALUE}
+              baseParams={{ metric: metric === DEFAULT_GAME_METRIC ? undefined : metric }}
+            />
+          </div>
         </div>
+        {chart.note && <p className="text-sm text-muted-foreground">{chart.note}</p>}
         <div className="rounded-lg border p-4">
           <TrendChart
             data={chartData}
-            unit="players"
-            emptyMessage="No snapshots in this range yet."
-            ariaLabel={`Line chart of ${game.name}'s concurrent players over time`}
+            unit={chart.unit}
+            valueFormat={chart.format}
+            markers={markers}
+            emptyMessage={
+              metric === "visits" && snapshots.length > 0
+                ? "Needs two collections close together to derive visits per day."
+                : "No snapshots in this range yet."
+            }
+            ariaLabel={`Line chart of ${game.name}: ${chart.title.toLowerCase()}`}
           />
         </div>
-        {snapshots.length > 0 && (
+        {chartData.length > 0 && (
           <details className="text-sm text-muted-foreground">
             <summary className="cursor-pointer select-none hover:text-foreground">
               View as table
@@ -163,17 +327,19 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
                 <thead className="sticky top-0 bg-muted/50">
                   <tr>
                     <th className="px-3 py-1.5 text-left font-medium">Collected at</th>
-                    <th className="px-3 py-1.5 text-right font-medium">Players</th>
+                    <th className="px-3 py-1.5 text-right font-medium">{chart.column}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {[...snapshots].reverse().map((s) => (
-                    <tr key={s.id} className="border-t">
+                  {[...chartData].reverse().map((p) => (
+                    <tr key={p.date} className="border-t">
                       <td className="px-3 py-1.5">
-                        <LocalTime value={s.collectedAt} />
+                        <LocalTime value={p.date} />
                       </td>
                       <td className="px-3 py-1.5 text-right tabular-nums">
-                        {formatExact(s.playing)}
+                        {chart.format === "percent"
+                          ? `${(p.value * 100).toFixed(1)}%`
+                          : formatExact(p.value)}
                       </td>
                     </tr>
                   ))}
@@ -189,7 +355,8 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
           <h2 className="font-medium">Notable changes</h2>
           <p className="text-sm text-muted-foreground">
             Automatically flagged spikes and drops — moves that are both large relative to this
-            game&apos;s typical step-to-step change and substantial in their own right.
+            game&apos;s typical step-to-step change and substantial in their own right. They&apos;re
+            also marked on the Players chart.
           </p>
           <div className="flex flex-col divide-y rounded-lg border">
             {[...anomalies.anomalies].reverse().map((a) => (
@@ -207,6 +374,49 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
                 </span>
               </div>
             ))}
+          </div>
+        </section>
+      )}
+
+      {similar.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <h2 className="font-medium">Similar games</h2>
+          <p className="text-sm text-muted-foreground">
+            Same genre and a similar number of players right now; games sharing more themes come
+            first.
+          </p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {similar.map((g) => {
+              const icon = icons.get(String(g.universeId)) ?? null;
+              return (
+                <Link
+                  key={g.id}
+                  href={`/games/${g.universeId}`}
+                  className="flex items-center gap-3 rounded-lg border p-2 transition-colors hover:border-primary/50"
+                >
+                  {icon ? (
+                    <Image
+                      src={icon}
+                      alt=""
+                      width={40}
+                      height={40}
+                      className="shrink-0 rounded-md border"
+                      unoptimized
+                    />
+                  ) : (
+                    <div className="size-10 shrink-0 rounded-md border bg-muted" />
+                  )}
+                  <div className="flex min-w-0 flex-col">
+                    <span className="truncate text-sm font-medium">{g.name}</span>
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {formatCompact(g.currentPlaying)} playing
+                      {g.sharedThemes > 0 &&
+                        ` · ${g.sharedThemes} shared theme${g.sharedThemes > 1 ? "s" : ""}`}
+                    </span>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         </section>
       )}
