@@ -1,4 +1,4 @@
-name: "Tests (Task #37)" # quoted: an unquoted `#` would truncate the name
+name: Tests
 
 # Runs both unit suites on every push/PR. They're pure functions — no DB, no
 # network, no secrets — so this needs none of the collector's configuration and

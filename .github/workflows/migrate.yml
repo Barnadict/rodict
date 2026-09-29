@@ -1,5 +1,4 @@
-# Quoted because an unquoted `#` starts a YAML comment — see collect.yml.
-name: "Deploy migrations (Task #30)"
+name: Deploy migrations
 
 # Applies pending Prisma migrations to the hosted Turso DB.
 #

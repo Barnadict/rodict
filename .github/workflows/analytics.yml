@@ -1,4 +1,4 @@
-name: "Analytics (Task #33)" # quoted: an unquoted `#` would truncate the name
+name: Analytics
 
 # Runs the Phase 4 Python analytics jobs against the hosted DB and writes the
 # precomputed results into AnalyticsResult (the frontend only reads them).
@@ -10,7 +10,7 @@ name: "Analytics (Task #33)" # quoted: an unquoted `#` would truncate the name
 
 on:
   workflow_run:
-    workflows: ["Collect (Task #32)"]
+    workflows: ["Collect"]
     types: [completed]
   workflow_dispatch:
 
