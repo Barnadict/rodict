@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table";
 import { SaturationScatter, type SaturationPoint } from "@/components/charts/saturation-scatter";
 import { PresetLinks } from "@/components/filters/preset-links";
+import { LocalTime } from "@/components/local-time";
 import {
   RANGE_OPTIONS,
   RANGE_CLEAR_VALUE,
@@ -153,8 +154,12 @@ export default async function SaturationPage(props: PageProps<"/saturation">) {
             The <span className="font-medium text-foreground">Opportunity</span> score (0–100) is a
             precomputed composite of demand intensity, total demand, momentum, and crowding — a
             descriptive signal, not advice.
-            {analyticsAt &&
-              ` Last computed ${analyticsAt.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}.`}
+            {analyticsAt && (
+              <>
+                {" "}
+                Last computed <LocalTime value={analyticsAt} />.
+              </>
+            )}
           </>
         ) : (
           <>

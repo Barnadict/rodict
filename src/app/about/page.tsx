@@ -1,5 +1,8 @@
 import { COLLECTION_CADENCE } from "@/lib/collector/cadence";
 import { BUDGET_GUARD } from "@/lib/collector/budget-guard";
+import { GENRE_CARRY_MAX_AGE_HOURS } from "@/lib/db/genre-snapshots";
+import { RISING } from "@/lib/db/trends";
+import { SERIES_GAP_DAYS } from "@/lib/stats";
 import Link from "next/link";
 
 import { EARNINGS_ASSUMPTIONS } from "@/lib/earnings/estimate";
@@ -349,12 +352,34 @@ export default function AboutPage() {
                 </TableCell>
               </TableRow>
               <TableRow>
+                <TableCell className="font-medium">Rising games and genres</TableCell>
+                <TableCell className="text-muted-foreground">
+                  Average players over the first {RISING.avgWindowHours}h of the chosen window
+                  compared with the last {RISING.avgWindowHours}h, so the daily cycle of Roblox
+                  traffic isn&apos;t mistaken for growth. Only series averaging at least{" "}
+                  {RISING.minBaseline} players at the start are ranked, and the starting average is
+                  shown next to every percentage.
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">Genre players over time</TableCell>
+                <TableCell className="text-muted-foreground">
+                  Each point sums one collection run. Quiet games, collected about daily, count with
+                  their latest reading for up to {GENRE_CARRY_MAX_AGE_HOURS}h; older readings are
+                  left out, and each point records the share of the genre&apos;s games it includes.
+                  Collection gaps of more than {SERIES_GAP_DAYS} days are drawn as missing, not as a
+                  line across them.
+                </TableCell>
+              </TableRow>
+              <TableRow>
                 <TableCell className="font-medium">Notable changes (spikes / drops)</TableCell>
                 <TableCell className="text-muted-foreground">
                   A step is flagged only if it is both statistically unusual for that game&apos;s
                   own curve (robust z-score using median/MAD) <em>and</em> large in absolute terms.
                   Both bars are required — judged on unusualness alone, an ordinary wiggle on a very
-                  steady curve scores as an extreme outlier.
+                  steady curve scores as an extreme outlier. A step must also move at least 50
+                  players, so a small game going from 8 to 12 isn&apos;t flagged, and steps across a
+                  collection gap aren&apos;t compared at all.
                 </TableCell>
               </TableRow>
               <TableRow>
@@ -464,6 +489,12 @@ export default function AboutPage() {
             recently, so anything needing weeks or months of data — survival curves, seasonality,
             forecasts — is thin or unavailable. Those sections say so explicitly rather than showing
             a confident-looking number computed from noise.
+          </li>
+          <li>
+            <strong className="text-foreground">History has a gap.</strong> Nothing was collected
+            from 20 August to 29 September 2026, after the database hit its hosting plan&apos;s
+            monthly write limit. Charts show that span as missing data, and it can&apos;t be filled
+            in later.
           </li>
           <li>
             <strong className="text-foreground">The dataset is a sample, not all of Roblox.</strong>{" "}

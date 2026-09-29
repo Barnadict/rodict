@@ -24,3 +24,27 @@ export function formatGrowthPct(growth: number | null): string {
   const sign = pct > 0 ? "+" : pct < 0 ? "−" : "";
   return `${sign}${Math.abs(pct)}%`;
 }
+
+/**
+ * A pause in a time series longer than this is drawn as missing data, not
+ * bridged with a line (Task #52). Matches the dead rule's MAX_GAP_DAYS in
+ * analytics/deadrule.py: normal gaps are at most ~1 day (quiet games are
+ * collected daily), while e.g. the 2026-08-20 → 2026-09-29 outage is not data.
+ */
+export const SERIES_GAP_DAYS = 3;
+
+/** Spans [from, to] (epoch ms) between consecutive points more than `gapDays` apart. */
+export function findSeriesGaps(
+  times: number[],
+  gapDays = SERIES_GAP_DAYS,
+): { from: number; to: number }[] {
+  const gapMs = gapDays * 86_400_000;
+  const gaps: { from: number; to: number }[] = [];
+  for (let i = 1; i < times.length; i++) {
+    if (times[i] - times[i - 1] > gapMs) gaps.push({ from: times[i - 1], to: times[i] });
+  }
+  return gaps;
+}
+
+/** Genre points covering less than this share of the genre's games are flagged in charts. */
+export const LOW_COVERAGE = 0.8;

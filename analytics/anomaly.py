@@ -18,6 +18,17 @@ curve the typical step is tiny, so MAD shrinks and an ordinary 2% wiggle scores
 z=36. Two real failure modes this closes (both found by the Task #37 tests):
 low-noise oscillation reported as +/-5% "notable changes", and the tail of a
 smooth decline reported as a series of drops when nothing actually happened.
+
+Re-tuned for the ~5.3K-game corpus (Task #55). Two more bars, both about noise
+the 30-game tuning set never had:
+  - MIN_ABS_PLAYERS: half the corpus sits below 50 players, where 8 -> 12 is
+    +50% and routinely clears both bars above. A step must also move at least
+    this many players.
+  - Steps across a collection gap longer than MAX_GAP_DAYS are not compared:
+    a change measured across e.g. the 2026-08-20 -> 2026-09-29 outage is weeks
+    of unobserved drift, not an event at the timestamp it lands on.
+The global payload also records how many series were checked and how many
+flagged, so the per-game anomaly rate is visible after every run.
 """
 from __future__ import annotations
 
@@ -25,6 +36,7 @@ import numpy as np
 import pandas as pd
 
 from db import AnalyticsData, Connection, run_standalone, write_results
+from deadrule import MAX_GAP_DAYS
 
 KIND = "change_point"
 MIN_POINTS = 4
@@ -35,6 +47,10 @@ MAD_TO_STD = 1.4826
 # percent (a verified spike in testing was +165%); this floor is what keeps
 # statistical outliers that nobody would call an event out of the UI.
 MIN_ABS_CHANGE = 0.25
+# Minimum |change in players| for a flagged step. Matches the collector's busy
+# tier (COLLECTION_CADENCE.busyMinPlaying): a game that never moves 50 players
+# at once has no change worth a "notable" label, whatever its percentage.
+MIN_ABS_PLAYERS = 50
 
 
 def _anomalies(times: list, values: np.ndarray) -> list[dict]:
@@ -44,15 +60,26 @@ def _anomalies(times: list, values: np.ndarray) -> list[dict]:
     prev = values[:-1]
     with np.errstate(divide="ignore", invalid="ignore"):
         pct = np.where(prev > 0, (values[1:] - prev) / prev, 0.0)
-    med = np.median(pct)
-    mad = np.median(np.abs(pct - med))
+    # Steps spanning a collection gap are neither flagged nor allowed to shape
+    # the series' typical step size.
+    gap = pd.Timedelta(days=MAX_GAP_DAYS)
+    observed = np.array([times[i + 1] - times[i] <= gap for i in range(len(pct))], dtype=bool)
+    if observed.sum() < MIN_POINTS - 1:
+        return []
+    med = np.median(pct[observed])
+    mad = np.median(np.abs(pct[observed] - med))
     if mad <= 1e-9:
         return []  # no typical variation to compare against yet
     z = (pct - med) / (MAD_TO_STD * mad)
 
     out = []
     for i, zi in enumerate(z):
-        if abs(zi) >= Z_THRESHOLD and abs(pct[i]) >= MIN_ABS_CHANGE:
+        if (
+            observed[i]
+            and abs(zi) >= Z_THRESHOLD
+            and abs(pct[i]) >= MIN_ABS_CHANGE
+            and abs(values[i + 1] - values[i]) >= MIN_ABS_PLAYERS
+        ):
             out.append(
                 {
                     "at": times[i + 1].isoformat(timespec="milliseconds"),
@@ -75,8 +102,10 @@ def run(con: Connection, data: AnalyticsData) -> dict:
 
     results = []
     recent = []  # global feed of the most notable changes
+    games_checked = 0
 
     for gid, gs in data.snaps_by_game().items():
+        games_checked += 1
         an = _anomalies(gs["collectedAt"].to_list(), gs["playing"].to_numpy(dtype=float))
         if an:
             results.append({"scopeType": "game", "scopeId": gid,
@@ -94,7 +123,13 @@ def run(con: Connection, data: AnalyticsData) -> dict:
 
     recent.sort(key=lambda a: a["score"], reverse=True)
     results.append({"scopeType": "global", "scopeId": None,
-                    "payload": {"recent": recent[:20], "nTotal": len(recent)}})
+                    "payload": {
+                        "recent": recent[:20],
+                        "nTotal": len(recent),
+                        # Per-game anomaly rate (Task #55): series checked vs flagged.
+                        "nGamesChecked": games_checked,
+                        "nGamesFlagged": sum(1 for r in results if r["scopeType"] == "game"),
+                    }})
 
     return write_results(con, KIND, results)
 

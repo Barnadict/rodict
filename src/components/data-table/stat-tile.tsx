@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { Badge } from "@/components/ui/badge";
 
 export function StatTile({
@@ -6,7 +8,7 @@ export function StatTile({
   badge,
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
   badge?: string;
 }) {
   return (

@@ -3,7 +3,7 @@ import { cacheLife } from "next/cache";
 import { TrendingUp, ArrowRight } from "lucide-react";
 
 import { getGenreStats } from "@/lib/db/genre-stats";
-import { getRisingGames, getRisingGenres } from "@/lib/db/trends";
+import { RISING, getRisingGames, getRisingGenres } from "@/lib/db/trends";
 import { getLastCollectedAt, countGames } from "@/lib/db/games";
 import { getCorrelation } from "@/lib/db/analytics";
 import { rangeToCutoff } from "@/lib/date-range";
@@ -13,6 +13,7 @@ import { formatCompact, formatUsdRange } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { GrowthBadge } from "@/components/data-table/growth-badge";
 import { StatTile } from "@/components/data-table/stat-tile";
+import { LocalTime } from "@/components/local-time";
 
 /**
  * Cached: the collector only writes every 3h, so re-querying on every request
@@ -93,14 +94,7 @@ export default async function Home() {
             />
             <StatTile
               label="Last collected"
-              value={
-                lastCollectedAt
-                  ? lastCollectedAt.toLocaleString(undefined, {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })
-                  : "—"
-              }
+              value={lastCollectedAt ? <LocalTime value={lastCollectedAt} /> : "—"}
             />
           </div>
 
@@ -157,8 +151,8 @@ export default async function Home() {
               <div className="flex flex-col divide-y rounded-lg border">
                 {risingGames.length === 0 && risingGenres.length === 0 && (
                   <p className="p-4 text-sm text-muted-foreground">
-                    Not enough history yet to compute weekly movers — this fills in as the collector
-                    runs.
+                    Nothing has grown this week yet, or there isn&apos;t enough history — this fills
+                    in as the collector runs.
                   </p>
                 )}
                 {risingGames.map((g) => (
@@ -168,7 +162,13 @@ export default async function Home() {
                     className="flex items-center justify-between gap-3 p-3 hover:bg-muted/50"
                   >
                     <span className="min-w-0 truncate font-medium">{g.name}</span>
-                    <GrowthBadge growth={g.growthPct} />
+                    <span className="flex shrink-0 items-center gap-2">
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {formatCompact(Math.round(g.basePlaying))} →{" "}
+                        {formatCompact(Math.round(g.currentPlaying))}
+                      </span>
+                      <GrowthBadge growth={g.growthPct} />
+                    </span>
                   </Link>
                 ))}
                 {risingGenres.map((g) => (
@@ -183,10 +183,20 @@ export default async function Home() {
                         genre
                       </Badge>
                     </span>
-                    <GrowthBadge growth={g.growthPct} />
+                    <span className="flex shrink-0 items-center gap-2">
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {formatCompact(Math.round(g.basePlaying))} →{" "}
+                        {formatCompact(Math.round(g.currentPlaying))}
+                      </span>
+                      <GrowthBadge growth={g.growthPct} />
+                    </span>
                   </Link>
                 ))}
               </div>
+              <p className="text-xs text-muted-foreground">
+                Average players on the first day of the week → the last day. Only games averaging at
+                least {RISING.minBaseline} players at the start are ranked.
+              </p>
             </section>
           </div>
 

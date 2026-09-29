@@ -4,7 +4,7 @@ import { cacheLife } from "next/cache";
 
 import { getGenreBySlug } from "@/lib/db/genres";
 import { getGenreStatBySlug, getGenreLifecycle } from "@/lib/db/genre-stats";
-import { getGenreSnapshots } from "@/lib/db/genre-snapshots";
+import { GENRE_CARRY_MAX_AGE_HOURS, getGenreSnapshots } from "@/lib/db/genre-snapshots";
 import { getGamesList } from "@/lib/db/games";
 import { getGrowthForGames } from "@/lib/db/trends";
 import {
@@ -19,7 +19,7 @@ import {
 } from "@/lib/db/analytics";
 import { estimateDailyEarningsFromCcu } from "@/lib/earnings/estimate";
 import { formatCompact, formatUsdRange } from "@/lib/format";
-import { formatGrowthPct } from "@/lib/stats";
+import { LOW_COVERAGE, formatGrowthPct } from "@/lib/stats";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -31,6 +31,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TrendChart, type TrendPoint } from "@/components/charts/trend-chart";
+import { LocalTime } from "@/components/local-time";
 import { LifecycleChart } from "@/components/charts/lifecycle-chart";
 import { GrowthBadge } from "@/components/data-table/growth-badge";
 import { StatTile } from "@/components/data-table/stat-tile";
@@ -154,6 +155,7 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
   const trendData: TrendPoint[] = series.map((s) => ({
     date: s.collectedAt.toISOString(),
     value: s.totalPlaying,
+    coverage: s.coverage,
   }));
 
   return (
@@ -186,8 +188,12 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
             <h2 className="font-medium">Insights</h2>
             <span className="text-xs text-muted-foreground">
               Precomputed
-              {analyticsAt &&
-                ` · updated ${analyticsAt.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}`}
+              {analyticsAt && (
+                <>
+                  {" "}
+                  · updated <LocalTime value={analyticsAt} />
+                </>
+              )}
             </span>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -256,6 +262,13 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
             ariaLabel={`Line chart of total concurrent players over time for ${genre.name}`}
           />
         </div>
+        <p className="text-xs text-muted-foreground">
+          Each point sums the genre&apos;s games at one collection run. Quiet games are collected
+          about once a day, so between collections their latest reading is carried forward for up to{" "}
+          {GENRE_CARRY_MAX_AGE_HOURS}h; older readings are left out. The tooltip shows the share of
+          the genre&apos;s games a point includes, and hollow markers flag points below{" "}
+          {Math.round(LOW_COVERAGE * 100)}%. Shaded spans are periods with no collection.
+        </p>
       </section>
 
       <section className="flex flex-col gap-3">

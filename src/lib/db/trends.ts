@@ -2,46 +2,79 @@ import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 
 /**
- * Rising / trending computations (Task #17), extended for Task #19's shared
- * date-range control.
+ * Rising / trending computations (Task #17, reworked in Task #53).
  *
- * Growth is measured over a window as (latest − earliest) / earliest using the
- * snapshots we actually have INSIDE that window: baseline = earliest snapshot
- * at-or-after `cutoff`, current = latest snapshot. `cutoff` undefined means "all
- * history" — baseline is the earliest snapshot ever recorded. This is honest
- * under cold-start — if we only have a few recent snapshots, growth simply
- * reflects the change across the history that exists (and anything with a
- * single snapshot in range is excluded, since there's nothing to compare).
+ * CCU swings strongly over a day, so comparing two single snapshots taken at
+ * different hours mostly measures time of day, and with no floor a game going
+ * from 2 to 40 players tops the list at +1900%. So growth compares DAILY
+ * AVERAGES: the mean of each series' readings over the first
+ * RISING.avgWindowHours of the window (baseline) against the mean over the last
+ * RISING.avgWindowHours (current). A series needs at least two full averaging
+ * windows of history inside the range, and a baseline of at least
+ * RISING.minBaseline players, or it isn't ranked; only series that grew are
+ * listed. `cutoff` undefined means "all
+ * history": the baseline window starts at the earliest snapshot ever recorded.
  *
- * The earliest/latest-in-window pick uses correlated MIN/MAX subqueries (plain
- * ANSI SQL, portable to SQLite + Postgres) rather than N+1 per-row queries.
+ * Reads: driven from the Game table (pre-filtered on the all-time peak, since a
+ * baseline average of N players needs some reading of at least N), each game
+ * costs two index seeks (first/last reading) plus two short index range scans,
+ * one per averaging window, on GameSnapshot's (gameId, collectedAt) unique
+ * index. That's ~a day of readings per side regardless of range length, where
+ * the previous version scanned every snapshot in the window (Turso bills rows
+ * read). The date arithmetic uses SQLite's julianday/strftime, and relies on
+ * Prisma storing DateTime as ISO-8601 text with a "+00:00" suffix, which
+ * strftime reproduces so the window bounds compare as text on the index. The
+ * CTEs are MATERIALIZED because SQLite otherwise inlines them and re-runs each
+ * correlated subquery once per reference (checked with EXPLAIN QUERY PLAN).
  */
+
+export const RISING = {
+  /** Minimum baseline daily-average players for a series to be ranked. */
+  minBaseline: 100,
+  /** Length of each averaging window, at the start and end of the range. */
+  avgWindowHours: 24,
+} as const;
+
+const AVG_DAYS = RISING.avgWindowHours / 24;
+/** Prisma's SQLite DateTime text format, so computed bounds compare as text. */
+const TS_FORMAT = "%Y-%m-%dT%H:%M:%f+00:00";
 
 export interface RisingGameRow {
   id: string;
   universeId: bigint;
   name: string;
   genreName: string | null;
+  /** Average players over the first averaging window of the range. */
   basePlaying: number;
+  /** Average players over the last averaging window of the range. */
   currentPlaying: number;
   delta: number;
-  /** (current − base) / base, or null when base is 0. */
+  /** (current − base) / base. The baseline floor keeps base > 0. */
   growthPct: number | null;
-  snapshotCount: number;
-  fromAt: Date;
-  toAt: Date;
 }
 
 export interface RisingParams {
-  /** Undefined = all history (compares the earliest-ever snapshot to the latest). */
+  /** Undefined = all history (compares the earliest-ever day to the latest). */
   cutoff?: Date;
   limit?: number;
 }
 
+function toGrowth<T extends { basePlaying: number; currentPlaying: number }>(r: T) {
+  const basePlaying = Number(r.basePlaying);
+  const currentPlaying = Number(r.currentPlaying);
+  return {
+    ...r,
+    basePlaying,
+    currentPlaying,
+    delta: currentPlaying - basePlaying,
+    growthPct: basePlaying > 0 ? (currentPlaying - basePlaying) / basePlaying : null,
+  };
+}
+
 export async function getRisingGames(params: RisingParams): Promise<RisingGameRow[]> {
   const { cutoff, limit = 25 } = params;
-  const filter = cutoff ? Prisma.sql`WHERE "collectedAt" >= ${cutoff}` : Prisma.empty;
-  const filterAnd = cutoff ? Prisma.sql`AND "collectedAt" >= ${cutoff}` : Prisma.empty;
+  const inWindow = cutoff ? Prisma.sql`AND s."collectedAt" >= ${cutoff}` : Prisma.empty;
+  const seenInWindow = cutoff ? Prisma.sql`AND g."lastSnapshotAt" >= ${cutoff}` : Prisma.empty;
 
   const rows = await prisma.$queryRaw<
     {
@@ -51,70 +84,69 @@ export async function getRisingGames(params: RisingParams): Promise<RisingGameRo
       genreName: string | null;
       basePlaying: number;
       currentPlaying: number;
-      snapshotCount: number;
-      fromAt: Date;
-      toAt: Date;
     }[]
   >`
+    WITH bounds AS MATERIALIZED (
+      SELECT
+        g.id, g."universeId", g.name, g."currentGenreId",
+        (SELECT MIN(s."collectedAt") FROM "GameSnapshot" s
+          WHERE s."gameId" = g.id ${inWindow}) AS "firstAt",
+        (SELECT MAX(s."collectedAt") FROM "GameSnapshot" s
+          WHERE s."gameId" = g.id) AS "lastAt"
+      FROM "Game" g
+      WHERE g."allTimePeakPlayers" >= ${RISING.minBaseline} ${seenInWindow}
+    ),
+    spans AS (
+      SELECT *,
+        strftime(${TS_FORMAT}, julianday("firstAt") + ${AVG_DAYS}) AS "baseEnd",
+        strftime(${TS_FORMAT}, julianday("lastAt") - ${AVG_DAYS}) AS "curStart"
+      FROM bounds
+      WHERE "firstAt" IS NOT NULL
+        AND julianday("lastAt") - julianday("firstAt") >= ${2 * AVG_DAYS}
+    ),
+    avgs AS MATERIALIZED (
+      SELECT sp.*,
+        (SELECT AVG(s.playing) FROM "GameSnapshot" s
+          WHERE s."gameId" = sp.id
+            AND s."collectedAt" >= sp."firstAt" AND s."collectedAt" < sp."baseEnd") AS "basePlaying",
+        (SELECT AVG(s.playing) FROM "GameSnapshot" s
+          WHERE s."gameId" = sp.id
+            AND s."collectedAt" > sp."curStart" AND s."collectedAt" <= sp."lastAt") AS "currentPlaying"
+      FROM spans sp
+    )
     SELECT
-      g.id            AS "id",
-      g."universeId"  AS "universeId",
-      g.name          AS "name",
-      gen.name        AS "genreName",
-      first.playing   AS "basePlaying",
-      last.playing    AS "currentPlaying",
-      w.cnt           AS "snapshotCount",
-      first."collectedAt" AS "fromAt",
-      last."collectedAt"  AS "toAt"
-    FROM (
-      SELECT "gameId", COUNT(*) AS cnt
-      FROM "GameSnapshot"
-      ${filter}
-      GROUP BY "gameId"
-      HAVING COUNT(*) >= 2
-    ) w
-    JOIN "Game" g ON g.id = w."gameId"
-    LEFT JOIN "Genre" gen ON gen.id = g."currentGenreId"
-    JOIN "GameSnapshot" first
-      ON first."gameId" = w."gameId"
-      AND first."collectedAt" = (
-        SELECT MIN("collectedAt") FROM "GameSnapshot"
-        WHERE "gameId" = w."gameId" ${filterAnd}
-      )
-    JOIN "GameSnapshot" last
-      ON last."gameId" = w."gameId"
-      AND last."collectedAt" = (
-        SELECT MAX("collectedAt") FROM "GameSnapshot"
-        WHERE "gameId" = w."gameId" ${filterAnd}
-      )
+      a.id           AS "id",
+      a."universeId" AS "universeId",
+      a.name         AS "name",
+      gen.name       AS "genreName",
+      a."basePlaying",
+      a."currentPlaying"
+    FROM avgs a
+    LEFT JOIN "Genre" gen ON gen.id = a."currentGenreId"
+    WHERE a."basePlaying" >= ${RISING.minBaseline} AND a."currentPlaying" > a."basePlaying"
+    ORDER BY (a."currentPlaying" - a."basePlaying") / a."basePlaying" DESC
+    LIMIT ${limit}
   `;
 
-  return rows
-    .map((r) => ({
-      ...r,
-      snapshotCount: Number(r.snapshotCount),
-      delta: r.currentPlaying - r.basePlaying,
-      growthPct: r.basePlaying > 0 ? (r.currentPlaying - r.basePlaying) / r.basePlaying : null,
-    }))
-    .sort((a, b) => (b.growthPct ?? -Infinity) - (a.growthPct ?? -Infinity))
-    .slice(0, limit);
+  return rows.map(toGrowth);
 }
 
 export interface RisingGenreRow {
   id: string;
   slug: string;
   name: string;
+  /** Average total players over the first averaging window of the range. */
   basePlaying: number;
+  /** Average total players over the last averaging window of the range. */
   currentPlaying: number;
   delta: number;
   growthPct: number | null;
-  snapshotCount: number;
 }
 
+/** Genre counterpart of getRisingGames, over GenreSnapshot.totalPlaying. */
 export async function getRisingGenres(params: RisingParams): Promise<RisingGenreRow[]> {
   const { cutoff, limit = 25 } = params;
-  const filter = cutoff ? Prisma.sql`WHERE "collectedAt" >= ${cutoff}` : Prisma.empty;
-  const filterAnd = cutoff ? Prisma.sql`AND "collectedAt" >= ${cutoff}` : Prisma.empty;
+  const inWindow = cutoff ? Prisma.sql`AND s."collectedAt" >= ${cutoff}` : Prisma.empty;
 
   const rows = await prisma.$queryRaw<
     {
@@ -123,47 +155,43 @@ export async function getRisingGenres(params: RisingParams): Promise<RisingGenre
       name: string;
       basePlaying: number;
       currentPlaying: number;
-      snapshotCount: number;
     }[]
   >`
-    SELECT
-      gen.id   AS "id",
-      gen.slug AS "slug",
-      gen.name AS "name",
-      first."totalPlaying" AS "basePlaying",
-      last."totalPlaying"  AS "currentPlaying",
-      w.cnt AS "snapshotCount"
-    FROM (
-      SELECT "genreId", COUNT(*) AS cnt
-      FROM "GenreSnapshot"
-      ${filter}
-      GROUP BY "genreId"
-      HAVING COUNT(*) >= 2
-    ) w
-    JOIN "Genre" gen ON gen.id = w."genreId"
-    JOIN "GenreSnapshot" first
-      ON first."genreId" = w."genreId"
-      AND first."collectedAt" = (
-        SELECT MIN("collectedAt") FROM "GenreSnapshot"
-        WHERE "genreId" = w."genreId" ${filterAnd}
-      )
-    JOIN "GenreSnapshot" last
-      ON last."genreId" = w."genreId"
-      AND last."collectedAt" = (
-        SELECT MAX("collectedAt") FROM "GenreSnapshot"
-        WHERE "genreId" = w."genreId" ${filterAnd}
-      )
+    WITH bounds AS MATERIALIZED (
+      SELECT
+        gen.id, gen.slug, gen.name,
+        (SELECT MIN(s."collectedAt") FROM "GenreSnapshot" s
+          WHERE s."genreId" = gen.id ${inWindow}) AS "firstAt",
+        (SELECT MAX(s."collectedAt") FROM "GenreSnapshot" s
+          WHERE s."genreId" = gen.id) AS "lastAt"
+      FROM "Genre" gen
+    ),
+    spans AS (
+      SELECT *,
+        strftime(${TS_FORMAT}, julianday("firstAt") + ${AVG_DAYS}) AS "baseEnd",
+        strftime(${TS_FORMAT}, julianday("lastAt") - ${AVG_DAYS}) AS "curStart"
+      FROM bounds
+      WHERE "firstAt" IS NOT NULL
+        AND julianday("lastAt") - julianday("firstAt") >= ${2 * AVG_DAYS}
+    ),
+    avgs AS MATERIALIZED (
+      SELECT sp.*,
+        (SELECT AVG(s."totalPlaying") FROM "GenreSnapshot" s
+          WHERE s."genreId" = sp.id
+            AND s."collectedAt" >= sp."firstAt" AND s."collectedAt" < sp."baseEnd") AS "basePlaying",
+        (SELECT AVG(s."totalPlaying") FROM "GenreSnapshot" s
+          WHERE s."genreId" = sp.id
+            AND s."collectedAt" > sp."curStart" AND s."collectedAt" <= sp."lastAt") AS "currentPlaying"
+      FROM spans sp
+    )
+    SELECT id, slug, name, "basePlaying", "currentPlaying"
+    FROM avgs
+    WHERE "basePlaying" >= ${RISING.minBaseline} AND "currentPlaying" > "basePlaying"
+    ORDER BY ("currentPlaying" - "basePlaying") / "basePlaying" DESC
+    LIMIT ${limit}
   `;
 
-  return rows
-    .map((r) => ({
-      ...r,
-      snapshotCount: Number(r.snapshotCount),
-      delta: r.currentPlaying - r.basePlaying,
-      growthPct: r.basePlaying > 0 ? (r.currentPlaying - r.basePlaying) / r.basePlaying : null,
-    }))
-    .sort((a, b) => (b.growthPct ?? -Infinity) - (a.growthPct ?? -Infinity))
-    .slice(0, limit);
+  return rows.map(toGrowth);
 }
 
 export interface GameGrowth {

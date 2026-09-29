@@ -12,6 +12,7 @@ import { formatGrowthPct } from "@/lib/stats";
 import { Badge } from "@/components/ui/badge";
 import { PresetLinks } from "@/components/filters/preset-links";
 import { TrendChart, type TrendPoint } from "@/components/charts/trend-chart";
+import { LocalTime } from "@/components/local-time";
 import { StatTile } from "@/components/data-table/stat-tile";
 import { WatchlistButton } from "@/components/watchlist/watchlist-button";
 import {
@@ -161,14 +162,16 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-muted/50">
                   <tr>
-                    <th className="px-3 py-1.5 text-left font-medium">Collected at (UTC)</th>
+                    <th className="px-3 py-1.5 text-left font-medium">Collected at</th>
                     <th className="px-3 py-1.5 text-right font-medium">Players</th>
                   </tr>
                 </thead>
                 <tbody>
                   {[...snapshots].reverse().map((s) => (
                     <tr key={s.id} className="border-t">
-                      <td className="px-3 py-1.5">{s.collectedAt.toISOString()}</td>
+                      <td className="px-3 py-1.5">
+                        <LocalTime value={s.collectedAt} />
+                      </td>
                       <td className="px-3 py-1.5 text-right tabular-nums">
                         {formatExact(s.playing)}
                       </td>
@@ -192,10 +195,7 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
             {[...anomalies.anomalies].reverse().map((a) => (
               <div key={a.at} className="flex items-center justify-between gap-3 p-3 text-sm">
                 <span className="text-muted-foreground">
-                  {new Date(a.at).toLocaleString(undefined, {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  })}
+                  <LocalTime value={a.at} />
                 </span>
                 <span className="flex items-center gap-3 tabular-nums">
                   <span className="text-muted-foreground">

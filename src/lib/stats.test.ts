@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { movingAverage, formatGrowthPct } from "./stats";
+import { movingAverage, formatGrowthPct, findSeriesGaps, SERIES_GAP_DAYS } from "./stats";
 
 describe("movingAverage", () => {
   it("averages the trailing window once enough points exist", () => {
@@ -66,5 +66,23 @@ describe("formatGrowthPct", () => {
 
   it("handles growth above 100%", () => {
     expect(formatGrowthPct(2.5)).toBe("+250%");
+  });
+});
+
+describe("findSeriesGaps", () => {
+  const DAY = 86_400_000;
+
+  it("finds only pauses longer than the gap threshold", () => {
+    const t = [0, DAY, 2 * DAY, 2 * DAY + (SERIES_GAP_DAYS + 1) * DAY, 3 * DAY + 5 * DAY];
+    expect(findSeriesGaps(t)).toEqual([{ from: 2 * DAY, to: t[3] }]);
+  });
+
+  it("treats a pause of exactly the threshold as continuous", () => {
+    expect(findSeriesGaps([0, SERIES_GAP_DAYS * DAY])).toEqual([]);
+  });
+
+  it("handles empty and single-point series", () => {
+    expect(findSeriesGaps([])).toEqual([]);
+    expect(findSeriesGaps([5])).toEqual([]);
   });
 });

@@ -207,6 +207,10 @@ model GenreSnapshot {
   totalFavorites BigInt @default(0)
   avgPlaying     Float  @default(0)
   medianPlaying  Float?
+  /// Share (0–1) of the genre's classified games included in this point: games
+  /// collected this run plus quiet games carried forward from their latest
+  /// daily reading (Task #52). Null on points written before it was recorded.
+  coverage       Float?
 
   genre Genre @relation(fields: [genreId], references: [id], onDelete: Cascade)
 

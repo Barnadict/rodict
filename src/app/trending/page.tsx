@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cacheLife } from "next/cache";
 
-import { getRisingGames, getRisingGenres } from "@/lib/db/trends";
+import { RISING, getRisingGames, getRisingGenres } from "@/lib/db/trends";
 import { getRecentAnomalies } from "@/lib/db/analytics";
 import { formatCompact } from "@/lib/format";
 import { formatGrowthPct } from "@/lib/stats";
@@ -61,7 +61,7 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Trending</h1>
         <p className="text-muted-foreground">
-          Fastest-growing games and genres by concurrent players over the selected window.
+          Fastest-growing games and genres by average concurrent players over the selected window.
         </p>
       </div>
 
@@ -74,10 +74,11 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
 
       {!hasData ? (
         <div className="flex h-48 flex-col items-center justify-center gap-1 rounded-lg border border-dashed text-center text-muted-foreground">
-          <p>Not enough history in this window to compute growth yet.</p>
+          <p>Nothing has grown in this window yet, or there isn&apos;t enough history.</p>
           <p className="text-sm">
-            Growth needs at least two snapshots per game/genre — this fills in as the collector
-            runs. Expected during cold start.
+            Growth needs {(2 * RISING.avgWindowHours) / 24} days of history in the window and a
+            starting average of at least {RISING.minBaseline} players — this fills in as the
+            collector runs.
           </p>
         </div>
       ) : (
@@ -90,7 +91,7 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
                   <TableRow>
                     <TableHead className="w-8">#</TableHead>
                     <TableHead>Game</TableHead>
-                    <TableHead className="text-right">Players</TableHead>
+                    <TableHead className="text-right">Avg players</TableHead>
                     <TableHead className="text-right">Growth</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -109,7 +110,10 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
                         )}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {formatCompact(g.currentPlaying)}
+                        <span className="text-muted-foreground">
+                          {formatCompact(Math.round(g.basePlaying))} →
+                        </span>{" "}
+                        {formatCompact(Math.round(g.currentPlaying))}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         <GrowthBadge growth={g.growthPct} />
@@ -129,7 +133,7 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
                   <TableRow>
                     <TableHead className="w-8">#</TableHead>
                     <TableHead>Genre</TableHead>
-                    <TableHead className="text-right">Players</TableHead>
+                    <TableHead className="text-right">Avg players</TableHead>
                     <TableHead className="text-right">Growth</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -143,7 +147,10 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
                         </Link>
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {formatCompact(g.currentPlaying)}
+                        <span className="text-muted-foreground">
+                          {formatCompact(Math.round(g.basePlaying))} →
+                        </span>{" "}
+                        {formatCompact(Math.round(g.currentPlaying))}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         <GrowthBadge growth={g.growthPct} />
@@ -200,9 +207,11 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
       )}
 
       <p className="text-sm text-muted-foreground">
-        Growth is measured across the snapshots collected within the window. With limited early
-        history it reflects change over whatever period we have — it grows more meaningful as data
-        accumulates.
+        Growth compares average concurrent players over the first {RISING.avgWindowHours}h of the
+        window with the last {RISING.avgWindowHours}h, so a game&apos;s daily peak-and-trough cycle
+        doesn&apos;t count as growth. Only games and genres averaging at least {RISING.minBaseline}{" "}
+        players at the start are ranked, which keeps a jump from 2 to 40 players off the list. With
+        &ldquo;All&rdquo;, the start is the first day we collected.
       </p>
     </div>
   );

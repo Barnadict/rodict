@@ -9,7 +9,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from anomaly import MIN_ABS_CHANGE, MIN_POINTS, _anomalies
+import deadrule
+from anomaly import MAX_GAP_DAYS, MIN_ABS_CHANGE, MIN_POINTS, _anomalies
 
 
 def times(n: int) -> list[pd.Timestamp]:
@@ -61,7 +62,8 @@ def test_a_step_must_be_materially_large_not_just_statistically_unusual():
 def test_a_step_just_over_the_materiality_bar_is_still_flagged():
     # Guards the other direction — the floor must not swallow real events.
     over = MIN_ABS_CHANGE + 0.15
-    values = [100.0, 100.5, 99.5, 100.0, 100.5, 100.0 * (1 + over)]
+    # 1000-player scale so MIN_ABS_PLAYERS doesn't interfere with this bar.
+    values = [1000.0, 1005.0, 995.0, 1000.0, 1005.0, 1000.0 * (1 + over)]
     out = run(values)
     assert len(out) == 1
     assert out[0]["direction"] == "spike"
@@ -119,3 +121,34 @@ def test_reported_fields_are_json_safe_scalars():
     assert isinstance(out["changePct"], float)
     assert isinstance(out["score"], float)
     assert isinstance(out["at"], str)
+
+
+# --- Task #55: re-tuned for a ~5.3K-game corpus -------------------------------
+
+def _hourly(values, start="2026-10-01", step_hours=3):
+    t0 = pd.Timestamp(start, tz="UTC")
+    return [t0 + pd.Timedelta(hours=step_hours * i) for i in range(len(values))]
+
+
+def test_small_games_do_not_flag_percentage_jumps_of_a_few_players():
+    # A steady ~10-player game jumping to 30 is +200% and a huge z-score, but
+    # only 20 players: noise at this size, not a notable change.
+    values = np.array([10, 11, 10, 11, 10, 11, 10, 30, 30, 30], dtype=float)
+    assert _anomalies(_hourly(values), values) == []
+
+
+def test_large_games_still_flag_the_same_relative_jump():
+    values = np.array([1000, 1010, 1000, 1010, 1000, 1010, 1000, 3000, 3000, 3000], dtype=float)
+    an = _anomalies(_hourly(values), values)
+    assert [a["direction"] for a in an] == ["spike"]
+    assert an[0]["value"] == 3000
+
+
+def test_steps_across_a_collection_gap_are_not_flagged():
+    values = np.array([1000, 1010, 1000, 1010, 1000, 200, 205, 200, 205, 200], dtype=float)
+    times = _hourly(values[:5]) + _hourly(values[5:], start="2026-11-10")
+    assert _anomalies(times, values) == []
+
+
+def test_gap_threshold_matches_the_dead_rule():
+    assert MAX_GAP_DAYS == deadrule.MAX_GAP_DAYS
