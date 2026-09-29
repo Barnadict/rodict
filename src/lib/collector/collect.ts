@@ -48,6 +48,8 @@ export interface CollectionSummary {
   newGames: number;
   peaksUpdated: number;
   genreChanges: number;
+  /** New Roblox "last updated" timestamps recorded (Task #63). */
+  updatesRecorded: number;
   unresolvedGenre: number;
   genreSnapshots: number;
   /** Rows written per table this run (Task #42), excluding the JobRun row itself. */
@@ -136,6 +138,7 @@ export async function runCollection(opts: CollectOptions = {}): Promise<Collecti
   let newGames = 0;
   let peaksUpdated = 0;
   let genreChanges = 0;
+  let updatesRecorded = 0;
   let writes: WriteCounts = {};
   try {
     const result = await persistCollectedGames(toPersist);
@@ -143,6 +146,7 @@ export async function runCollection(opts: CollectOptions = {}): Promise<Collecti
     newGames = result.newGames;
     peaksUpdated = result.peaksUpdated;
     genreChanges = result.genreChanges;
+    updatesRecorded = result.updatesRecorded;
     writes = result.writes;
   } catch (err) {
     errors.push(`bulk persist: ${err instanceof Error ? err.message : String(err)}`);
@@ -175,6 +179,7 @@ export async function runCollection(opts: CollectOptions = {}): Promise<Collecti
     newGames,
     peaksUpdated,
     genreChanges,
+    updatesRecorded,
     unresolvedGenre,
     genreSnapshots,
     writes,
@@ -203,6 +208,7 @@ function pausedSummary(startedAt: Date, budgetGuard: BudgetGuardDecision): Colle
     newGames: 0,
     peaksUpdated: 0,
     genreChanges: 0,
+    updatesRecorded: 0,
     unresolvedGenre: 0,
     genreSnapshots: 0,
     writes: {},

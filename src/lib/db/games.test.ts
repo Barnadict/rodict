@@ -5,7 +5,7 @@ import type { CleanGame } from "@/lib/validation/sanitize";
 
 /**
  * planGameWrite is the only non-mechanical part of the bulk collector write:
- * everything else in persistCollectedGames is row-building around these three
+ * everything else in persistCollectedGames is row-building around these
  * booleans. They drive the all-time-peak roll (which the "dead game" rule
  * depends on) and genre-history transitions, so a wrong flag corrupts the very
  * history the collector exists to build. Hence they're pinned here.
@@ -37,6 +37,7 @@ const existing = (overrides: Partial<ExistingGameRef> = {}): ExistingGameRef => 
   id: "game_1",
   allTimePeakPlayers: 0,
   currentGenreId: null,
+  robloxUpdatedAt: null,
   ...overrides,
 });
 
@@ -110,5 +111,33 @@ describe("planGameWrite — genreChanged", () => {
       planGameWrite({ game: cleanGame(), genreId: "g1" }, existing({ currentGenreId: "g1" }))
         .genreChanged,
     ).toBe(false);
+  });
+});
+
+describe("planGameWrite — newUpdate", () => {
+  const at = (iso: string) => new Date(iso);
+  const plan = (game: CleanGame, prev?: ExistingGameRef) =>
+    planGameWrite({ game, genreId: null }, prev).newUpdate;
+
+  it("records a new game's first timestamp", () => {
+    expect(plan(cleanGame(), undefined)).toBe(true);
+  });
+  it("records an existing game with no stored timestamp", () => {
+    expect(plan(cleanGame(), existing())).toBe(true);
+  });
+  it("records a timestamp that moved forward", () => {
+    const prev = existing({ robloxUpdatedAt: at("2024-05-01T00:00:00Z") });
+    expect(plan(cleanGame({ robloxUpdatedAt: at("2024-06-01T00:00:00Z") }), prev)).toBe(true);
+  });
+  it("ignores an unchanged timestamp", () => {
+    const prev = existing({ robloxUpdatedAt: at("2024-06-01T00:00:00Z") });
+    expect(plan(cleanGame({ robloxUpdatedAt: at("2024-06-01T00:00:00Z") }), prev)).toBe(false);
+  });
+  it("ignores a timestamp that moved backwards", () => {
+    const prev = existing({ robloxUpdatedAt: at("2024-07-01T00:00:00Z") });
+    expect(plan(cleanGame({ robloxUpdatedAt: at("2024-06-01T00:00:00Z") }), prev)).toBe(false);
+  });
+  it("ignores an invalid timestamp", () => {
+    expect(plan(cleanGame({ robloxUpdatedAt: new Date("nope") }), existing())).toBe(false);
   });
 });

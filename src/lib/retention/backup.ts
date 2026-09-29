@@ -75,6 +75,13 @@ export async function exportBackup(destDir?: string): Promise<BackupManifest> {
     GameTheme: await dumpTable(dir, "GameTheme", (skip, take) =>
       prisma.gameTheme.findMany({ skip, take, orderBy: [{ gameId: "asc" }, { themeId: "asc" }] }),
     ),
+    GameUpdate: await dumpTable(dir, "GameUpdate", (skip, take) =>
+      prisma.gameUpdate.findMany({
+        skip,
+        take,
+        orderBy: [{ gameId: "asc" }, { updatedAt: "asc" }],
+      }),
+    ),
     AnalyticsResult: await dumpTable(dir, "AnalyticsResult", (skip, take) =>
       prisma.analyticsResult.findMany({ skip, take, orderBy: { id: "asc" } }),
     ),

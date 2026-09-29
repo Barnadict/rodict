@@ -4,12 +4,18 @@ import { notFound } from "next/navigation";
 import { cacheLife } from "next/cache";
 import { ExternalLink } from "lucide-react";
 
-import { getGameByUniverseId, getGameSnapshots, getSimilarGames } from "@/lib/db/games";
+import {
+  getGameByUniverseId,
+  getGameSnapshots,
+  getGameUpdateHistory,
+  getSimilarGames,
+} from "@/lib/db/games";
 import { getAnomaliesForGame } from "@/lib/db/analytics";
 import { getGameIcons } from "@/lib/roblox/client";
 import { deriveSnapshotMetrics } from "@/lib/earnings/estimate";
 import { formatCompact, formatExact, formatRelativeTime, formatUsdRange } from "@/lib/format";
 import { formatGrowthPct } from "@/lib/stats";
+import { measureUpdateImpacts, type UpdateWindowImpact } from "@/lib/update-impact";
 import {
   DEFAULT_GAME_METRIC,
   GAME_METRICS,
@@ -30,6 +36,7 @@ import {
 } from "@/components/charts/trend-chart";
 import { LocalTime } from "@/components/local-time";
 import { StatTile } from "@/components/data-table/stat-tile";
+import { GrowthBadge } from "@/components/data-table/growth-badge";
 import { WatchlistButton } from "@/components/watchlist/watchlist-button";
 import {
   RANGE_OPTIONS,
@@ -74,9 +81,10 @@ async function getGameDetail(universeIdParam: string, range: RangeKey) {
     return { similar, icons: new Map(icons.map((i) => [String(i.universeId), i.imageUrl])) };
   });
 
-  const [snapshots, anomalies, { similar, icons }] = await Promise.all([
+  const [snapshots, anomalies, updateHistory, { similar, icons }] = await Promise.all([
     getGameSnapshots(game.id, { from: rangeToCutoff(range) }),
     getAnomaliesForGame(game.id),
+    getGameUpdateHistory(game.id),
     similarWithIcons,
   ]);
 
@@ -84,6 +92,7 @@ async function getGameDetail(universeIdParam: string, range: RangeKey) {
     game,
     snapshots,
     anomalies,
+    updateHistory,
     similar,
     icons,
     iconUrl: icons.get(String(universeId)) ?? null,
@@ -127,7 +136,7 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
   const data = await getGameDetail(universeIdParam, range);
   if (!data) notFound();
 
-  const { game, snapshots, anomalies, similar, icons, iconUrl } = data;
+  const { game, snapshots, anomalies, updateHistory, similar, icons, iconUrl } = data;
   const latest = snapshots[snapshots.length - 1];
   const previous = snapshots.length > 1 ? snapshots[snapshots.length - 2] : undefined;
   const derived = latest ? deriveSnapshotMetrics(latest, previous) : null;
@@ -148,6 +157,7 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
   // Past the searchParams await the page renders per request, so reading the
   // clock here can't bake a build-time value into a prerender.
   const now = new Date();
+  const updateImpacts = measureUpdateImpacts(updateHistory.updates, updateHistory.snapshots, now);
   const gameUrl = robloxGameUrl(game.rootPlaceId);
   const creatorUrl = robloxCreatorUrl(game.creatorId, game.creatorType);
   const description = cleanDescription(game.description);
@@ -309,6 +319,8 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
             unit={chart.unit}
             valueFormat={chart.format}
             markers={markers}
+            events={metric === "players" ? updateHistory.updates.map((u) => u.toISOString()) : []}
+            eventLabel="Update"
             emptyMessage={
               metric === "visits" && snapshots.length > 0
                 ? "Needs two collections close together to derive visits per day."
@@ -378,6 +390,51 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
         </section>
       )}
 
+      {updateImpacts.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <h2 className="flex items-center gap-2 font-medium">
+            Updates <Badge variant="outline">Observational</Badge>
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Each time Roblox&apos;s &ldquo;last updated&rdquo; time changed (a publish, or some
+            settings edits), with average players in the 24 and 72 hours before vs. after. This
+            shows what happened around an update, not what it caused: weekends, events and other
+            changes land in the same windows. History starts with the time each game showed when
+            update tracking began; earlier updates weren&apos;t kept.
+            {updateHistory.total > updateImpacts.length &&
+              ` Showing the latest ${updateImpacts.length} of ${updateHistory.total}.`}
+          </p>
+          <div className="overflow-x-auto rounded-lg border">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50">
+                <tr>
+                  <th className="px-3 py-1.5 text-left font-medium">Updated</th>
+                  <th className="px-3 py-1.5 text-right font-medium">24h before → after</th>
+                  <th className="px-3 py-1.5 text-right font-medium">72h before → after</th>
+                </tr>
+              </thead>
+              <tbody>
+                {updateImpacts.map((u) => (
+                  <tr key={u.updatedAt.toISOString()} className="border-t">
+                    <td className="px-3 py-1.5">
+                      <LocalTime value={u.updatedAt} />{" "}
+                      <span className="text-muted-foreground">
+                        ({formatRelativeTime(u.updatedAt, now)})
+                      </span>
+                    </td>
+                    {u.windows.map((w) => (
+                      <td key={w.hours} className="px-3 py-1.5 text-right tabular-nums">
+                        <ImpactCell window={w} />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
       {similar.length > 0 && (
         <section className="flex flex-col gap-2">
           <h2 className="font-medium">Similar games</h2>
@@ -421,5 +478,34 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
         </section>
       )}
     </div>
+  );
+}
+
+/** One before → after window. Readings per side are in the tooltip, since a
+ * quiet game collected daily may have a single reading on each side. */
+function ImpactCell({ window: w }: { window: UpdateWindowImpact }) {
+  if (w.status === "pending") return <span className="text-muted-foreground">Measuring…</span>;
+  if (w.status === "no_data") {
+    return (
+      <span className="text-muted-foreground" title="No readings on one side of the update">
+        —
+      </span>
+    );
+  }
+  return (
+    <span
+      className="inline-flex flex-col items-end"
+      title={`${w.nBefore} reading${w.nBefore === 1 ? "" : "s"} before, ${w.nAfter} after`}
+    >
+      <span>
+        <span className="text-muted-foreground">
+          {formatCompact(Math.round(w.before!))} → {formatCompact(Math.round(w.after!))}
+        </span>{" "}
+        <GrowthBadge growth={w.changePct} />
+      </span>
+      {w.overlapped && (
+        <span className="text-xs text-muted-foreground">overlaps another update</span>
+      )}
+    </span>
   );
 }

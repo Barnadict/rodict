@@ -17,6 +17,7 @@ reads the results — nothing statistical runs in the browser or a request.
 | `cohort.py` | #27 | `cohort` — games grouped by launch quarter, per genre + global |
 | `seasonality.py` | #28 | `seasonality` — day-of-week / hour indices on genre popularity |
 | `forecast.py` | #29 | `forecast` — Holt exponential-smoothing projection + uncertainty band |
+| `update_impact.py` | #63 | `update_impact` — per-genre players 24h/72h after vs. before a recorded update (median, quartiles, share up) |
 
 `run.py` loads the data **once** (`db.load_all`) and hands it to every job as
 `run(con, data)`; no job reads the snapshot tables itself (Task #44). Each job

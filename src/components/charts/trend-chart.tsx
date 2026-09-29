@@ -11,6 +11,7 @@ import {
   Tooltip,
   ReferenceArea,
   ReferenceDot,
+  ReferenceLine,
   type TooltipContentProps,
 } from "recharts";
 import type { NameType, ValueType } from "recharts/types/component/DefaultTooltipContent";
@@ -67,6 +68,10 @@ interface TrendChartProps {
   projection?: ProjectionPoint[];
   valueFormat?: TrendValueFormat;
   markers?: TrendMarker[];
+  /** ISO timestamps drawn as dashed vertical lines, e.g. game updates (Task #63). */
+  events?: string[];
+  /** Legend label for `events`. */
+  eventLabel?: string;
 }
 
 type ChartRow = {
@@ -156,6 +161,8 @@ export function TrendChart({
   projection = [],
   valueFormat = "compact",
   markers = [],
+  events = [],
+  eventLabel = "Event",
 }: TrendChartProps) {
   if (data.length === 0) {
     return (
@@ -217,10 +224,12 @@ export function TrendChart({
     if (row) (row as ChartRow).marker = m;
   }
   const showMarkers = shownMarkers.length > 0;
+  const shownEvents = events.map((e) => Date.parse(e)).filter((t) => t >= first && t <= last);
+  const showEvents = shownEvents.length > 0;
 
   return (
     <div className="flex flex-col gap-2">
-      {(showMa || showProjection || showMarkers) && (
+      {(showMa || showProjection || showMarkers || showEvents) && (
         <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1.5">
             <span className="h-0.5 w-4 rounded bg-primary" /> Actual
@@ -241,6 +250,12 @@ export function TrendChart({
             <span className="inline-flex items-center gap-1.5">
               <span className="size-2.5 rounded-full bg-emerald-500" /> Flagged spike
               <span className="ml-2 size-2.5 rounded-full bg-destructive" /> Flagged drop
+            </span>
+          )}
+          {showEvents && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-3 w-0 border-l-2 border-dashed border-muted-foreground" />{" "}
+              {eventLabel}
             </span>
           )}
         </div>
@@ -288,6 +303,15 @@ export function TrendChart({
                 fontSize: 11,
                 fill: "var(--muted-foreground)",
               }}
+            />
+          ))}
+          {shownEvents.map((t) => (
+            <ReferenceLine
+              key={t}
+              x={t}
+              stroke="var(--muted-foreground)"
+              strokeDasharray="4 3"
+              ifOverflow="hidden"
             />
           ))}
           {showProjection && (

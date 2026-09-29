@@ -15,6 +15,7 @@ import {
   getCohortsForGenre,
   getSeasonalityForGenre,
   getForecastForGenre,
+  getUpdateImpactForGenre,
   getAnalyticsComputedAt,
 } from "@/lib/db/analytics";
 import { estimateDailyEarningsFromCcu } from "@/lib/earnings/estimate";
@@ -81,6 +82,7 @@ async function getGenreDetail(slug: string, range: RangeKey) {
     cohorts,
     seasonality,
     forecast,
+    updateImpact,
     analyticsAt,
   ] = await Promise.all([
     getGenreStatBySlug(slug),
@@ -94,6 +96,7 @@ async function getGenreDetail(slug: string, range: RangeKey) {
     getCohortsForGenre(genre.id),
     getSeasonalityForGenre(genre.id),
     getForecastForGenre(genre.id),
+    getUpdateImpactForGenre(genre.id),
     getAnalyticsComputedAt(),
   ]);
 
@@ -122,6 +125,7 @@ async function getGenreDetail(slug: string, range: RangeKey) {
     cohorts,
     seasonality,
     forecast,
+    updateImpact,
     analyticsAt,
     growthByGame,
     moverUniverseIds,
@@ -152,6 +156,7 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
     cohorts,
     seasonality,
     forecast,
+    updateImpact,
     analyticsAt,
     growthByGame,
     moverUniverseIds,
@@ -442,6 +447,49 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
                   : "."}
               </p>
             )}
+          </div>
+        </section>
+      )}
+
+      {updateImpact && (
+        <section className="flex flex-col gap-3">
+          <div>
+            <h2 className="flex items-center gap-2 font-medium">
+              Players after updates <Badge variant="outline">Observational</Badge>
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              How this genre&apos;s games moved after an update (a change in Roblox&apos;s
+              &ldquo;last updated&rdquo; time): average players in the window after it vs. the same
+              window before. Counts only games averaging {updateImpact.minBaseline}+ players before,
+              and leaves out updates with another update in the window. It describes what happened
+              around updates, not what they caused: games tend to update before weekends and events,
+              when play rises anyway.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {updateImpact.windows.map((w) => (
+              <div key={w.hours} className="flex flex-col gap-1 rounded-lg border p-4 text-sm">
+                <span className="text-muted-foreground">{w.hours}h after vs. before</span>
+                {w.status === "ok" ? (
+                  <>
+                    <span className="text-xl font-semibold tabular-nums">
+                      <GrowthBadge growth={w.medianChangePct} />{" "}
+                      <span className="text-sm font-normal text-muted-foreground">median</span>
+                    </span>
+                    <span className="text-muted-foreground tabular-nums">
+                      Middle half {formatGrowthPct(w.p25ChangePct)} to{" "}
+                      {formatGrowthPct(w.p75ChangePct)} · {Math.round(w.shareUp * 100)}% rose · n ={" "}
+                      {formatCompact(w.n)} updates
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-muted-foreground">
+                    Needs {w.needUpdates} measured updates (have {w.n}). Update history only started
+                    being kept recently, so this fills in over the coming weeks.
+                  </span>
+                )}
+              </div>
+            ))}
           </div>
         </section>
       )}

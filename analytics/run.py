@@ -29,6 +29,7 @@ import correlation
 import cohort
 import seasonality
 import forecast
+import update_impact
 
 JOBS = [
     ("survival_km", survival.run),
@@ -40,6 +41,7 @@ JOBS = [
     ("cohort", cohort.run),
     ("seasonality", seasonality.run),
     ("forecast", forecast.run),
+    ("update_impact", update_impact.run),
 ]
 
 

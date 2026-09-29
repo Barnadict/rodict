@@ -4,6 +4,7 @@ import type { CleanGame } from "@/lib/validation/sanitize";
 import { addWrites, type WriteCounts } from "@/lib/db/write-counts";
 import { collectionTier, isDueForCollection } from "@/lib/collector/cadence";
 import { rankSimilarGames, similarCcuBand } from "@/lib/game-metrics";
+import { impactSnapshotRange } from "@/lib/update-impact";
 
 // ---------------------------------------------------------------------------
 // Write path (used by the collector, Task #8)
@@ -26,6 +27,8 @@ export interface BulkPersistSummary {
   newGames: number;
   peaksUpdated: number;
   genreChanges: number;
+  /** Roblox "last updated" timestamps recorded as GameUpdate events (Task #63). */
+  updatesRecorded: number;
   /** Rows written per table (Task #42 write-budget accounting). */
   writes: WriteCounts;
 }
@@ -36,6 +39,7 @@ export interface ExistingGameRef {
   id: string;
   allTimePeakPlayers: number;
   currentGenreId: string | null;
+  robloxUpdatedAt: Date | null;
 }
 
 export interface GameWriteDecision {
@@ -44,6 +48,9 @@ export interface GameWriteDecision {
   /** True when the resolved genre differs from what's currently stored. For a
    * new game with a resolved genre this is true (it opens the first history). */
   genreChanged: boolean;
+  /** True when the game's Roblox "last updated" timestamp is one we haven't
+   * recorded yet: it moved forward, or this is the first reading (Task #63). */
+  newUpdate: boolean;
 }
 
 /**
@@ -56,10 +63,15 @@ export function planGameWrite(
   existing: ExistingGameRef | undefined,
 ): GameWriteDecision {
   const { game, genreId } = input;
+  const updatedAt = game.robloxUpdatedAt.getTime();
+  const previous = existing?.robloxUpdatedAt?.getTime() ?? null;
   return {
     isNew: existing === undefined,
     peakUpdated: game.playing > (existing?.allTimePeakPlayers ?? 0),
     genreChanged: genreId !== null && genreId !== (existing?.currentGenreId ?? null),
+    // Only forward moves: an older timestamp than the stored one is Roblox
+    // noise, not a new update, and could collide with a recorded event.
+    newUpdate: !Number.isNaN(updatedAt) && (previous === null || updatedAt > previous),
   };
 }
 
@@ -95,7 +107,14 @@ const TX_BATCH = 50;
  */
 export async function persistCollectedGames(inputs: PersistInput[]): Promise<BulkPersistSummary> {
   if (inputs.length === 0) {
-    return { persisted: 0, newGames: 0, peaksUpdated: 0, genreChanges: 0, writes: {} };
+    return {
+      persisted: 0,
+      newGames: 0,
+      peaksUpdated: 0,
+      genreChanges: 0,
+      updatesRecorded: 0,
+      writes: {},
+    };
   }
   const writes: WriteCounts = {};
 
@@ -105,13 +124,20 @@ export async function persistCollectedGames(inputs: PersistInput[]): Promise<Bul
   for (const ids of chunk(universeIds, IN_CHUNK)) {
     const rows = await prisma.game.findMany({
       where: { universeId: { in: ids } },
-      select: { id: true, universeId: true, allTimePeakPlayers: true, currentGenreId: true },
+      select: {
+        id: true,
+        universeId: true,
+        allTimePeakPlayers: true,
+        currentGenreId: true,
+        robloxUpdatedAt: true,
+      },
     });
     for (const r of rows) {
       existingByUniverse.set(r.universeId, {
         id: r.id,
         allTimePeakPlayers: r.allTimePeakPlayers,
         currentGenreId: r.currentGenreId,
+        robloxUpdatedAt: r.robloxUpdatedAt,
       });
     }
   }
@@ -160,7 +186,23 @@ export async function persistCollectedGames(inputs: PersistInput[]): Promise<Bul
     }
   }
 
-  // --- Phase 2: write the games (createMany for new, batched updates for old) --
+  // --- Phase 2a: record update events for existing games ---------------------
+  // Before the Game rows are overwritten: if the run dies in between, the next
+  // run still sees the old timestamp and records the event then.
+  const updateEvents: Prisma.GameUpdateCreateManyInput[] = [];
+  for (const input of inputs) {
+    const existing = existingByUniverse.get(input.game.universeId);
+    if (!existing || !planGameWrite(input, existing).newUpdate) continue;
+    updateEvents.push({
+      gameId: existing.id,
+      updatedAt: input.game.robloxUpdatedAt,
+      previousUpdatedAt: existing.robloxUpdatedAt,
+      detectedAt: input.collectedAt,
+    });
+  }
+  let updatesRecorded = await recordGameUpdates(updateEvents, writes);
+
+  // --- Phase 2b: write the games (createMany for new, batched updates for old) --
   for (const group of chunk(creates, CREATE_CHUNK)) {
     const { count } = await prisma.game.createMany({ data: group });
     addWrites(writes, "Game", { inserted: count });
@@ -185,6 +227,17 @@ export async function persistCollectedGames(inputs: PersistInput[]): Promise<Bul
     });
     for (const r of rows) idByUniverse.set(r.universeId, r.id);
   }
+
+  // New games' first timestamp starts their update history.
+  updatesRecorded += await recordGameUpdates(
+    creates.map((c) => ({
+      gameId: idByUniverse.get(c.universeId as bigint)!,
+      updatedAt: c.robloxUpdatedAt as Date,
+      previousUpdatedAt: null,
+      detectedAt: c.firstSeenAt as Date,
+    })),
+    writes,
+  );
 
   // --- Phase 4: append this run's snapshots -----------------------------------
   const snapshots: Prisma.GameSnapshotCreateManyInput[] = inputs.map((input) => ({
@@ -279,7 +332,43 @@ export async function persistCollectedGames(inputs: PersistInput[]): Promise<Bul
     addWrites(writes, "GameTheme", { deleted: results.reduce((n, r) => n + r.count, 0) });
   }
 
-  return { persisted: inputs.length, newGames, peaksUpdated, genreChanges, writes };
+  return {
+    persisted: inputs.length,
+    newGames,
+    peaksUpdated,
+    genreChanges,
+    updatesRecorded,
+    writes,
+  };
+}
+
+/**
+ * Insert GameUpdate events, skipping any already stored (a re-run after a
+ * crash between this and the Game update). SQLite's createMany has no
+ * skipDuplicates, so the few candidate rows are checked with one read first.
+ */
+async function recordGameUpdates(
+  events: Prisma.GameUpdateCreateManyInput[],
+  writes: WriteCounts,
+): Promise<number> {
+  const valid = events.filter((e) => !Number.isNaN((e.updatedAt as Date).getTime()));
+  if (valid.length === 0) return 0;
+  const stored = new Set<string>();
+  for (const group of chunk(valid, IN_CHUNK)) {
+    const rows = await prisma.gameUpdate.findMany({
+      where: { OR: group.map((e) => ({ gameId: e.gameId, updatedAt: e.updatedAt })) },
+      select: { gameId: true, updatedAt: true },
+    });
+    for (const r of rows) stored.add(`${r.gameId}|${r.updatedAt.getTime()}`);
+  }
+  const fresh = valid.filter((e) => !stored.has(`${e.gameId}|${(e.updatedAt as Date).getTime()}`));
+  let inserted = 0;
+  for (const group of chunk(fresh, CREATE_CHUNK)) {
+    const { count } = await prisma.gameUpdate.createMany({ data: group });
+    inserted += count;
+  }
+  addWrites(writes, "GameUpdate", { inserted });
+  return inserted;
 }
 
 /** Universe ids of every game we already track — so the collector keeps
@@ -452,4 +541,34 @@ export async function getSimilarGames(
     rows.map(({ themes, ...r }) => ({ ...r, themeIds: themes.map((t) => t.themeId) })),
     limit,
   );
+}
+
+/** Most recent updates measured on the game page. */
+const UPDATES_SHOWN = 10;
+
+/**
+ * A game's recent recorded updates (Task #63) plus the snapshots around them,
+ * for measuring before/after players on read. Two indexed reads: the updates by
+ * the (gameId, updatedAt) key, then one snapshot range spanning their windows.
+ */
+export async function getGameUpdateHistory(gameId: string) {
+  const [rows, total] = await Promise.all([
+    prisma.gameUpdate.findMany({
+      where: { gameId },
+      orderBy: { updatedAt: "desc" },
+      take: UPDATES_SHOWN,
+      select: { updatedAt: true },
+    }),
+    prisma.gameUpdate.count({ where: { gameId } }),
+  ]);
+  const updates = rows.map((r) => r.updatedAt);
+  const range = impactSnapshotRange(updates);
+  const snapshots = range
+    ? await prisma.gameSnapshot.findMany({
+        where: { gameId, collectedAt: { gte: range.from, lte: range.to } },
+        orderBy: { collectedAt: "asc" },
+        select: { collectedAt: true, playing: true },
+      })
+    : [];
+  return { updates, total, snapshots };
 }

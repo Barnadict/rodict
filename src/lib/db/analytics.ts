@@ -206,3 +206,24 @@ export async function getAnalyticsComputedAt(): Promise<Date | null> {
   });
   return row?.computedAt ?? null;
 }
+
+// --- Update impact (Task #63) ---
+
+export type UpdateImpactWindow =
+  | { hours: number; status: "insufficient"; n: number; needUpdates: number }
+  | {
+      hours: number;
+      status: "ok";
+      n: number;
+      medianChangePct: number;
+      p25ChangePct: number;
+      p75ChangePct: number;
+      shareUp: number;
+    };
+export interface UpdateImpactGenre {
+  minBaseline: number;
+  windows: UpdateImpactWindow[];
+}
+export function getUpdateImpactForGenre(genreId: string) {
+  return getPayload<UpdateImpactGenre>("update_impact", "genre", genreId);
+}

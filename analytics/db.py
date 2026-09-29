@@ -120,6 +120,13 @@ def load_genre_snapshots(con: Connection) -> pd.DataFrame:
     return df.sort_values("collectedAt", kind="stable").reset_index(drop=True)
 
 
+def load_game_updates(con: Connection) -> pd.DataFrame:
+    """Recorded Roblox "last updated" events (Task #63): one row per change."""
+    df = pd.read_sql_query('SELECT gameId, updatedAt FROM "GameUpdate"', con)
+    df["updatedAt"] = _parse_times(df["updatedAt"])
+    return df
+
+
 @dataclass
 class AnalyticsData:
     """Everything the jobs read, loaded once per run and shared (Task #44).
@@ -137,6 +144,9 @@ class AnalyticsData:
     genres: pd.DataFrame
     game_snapshots: pd.DataFrame
     genre_snapshots: pd.DataFrame
+    game_updates: pd.DataFrame = field(
+        default_factory=lambda: pd.DataFrame({"gameId": [], "updatedAt": []})
+    )
     _by_game: dict[str, pd.DataFrame] | None = field(default=None, init=False, repr=False)
 
     @property
@@ -165,6 +175,7 @@ class AnalyticsData:
             "Genre": len(self.genres),
             "GameSnapshot": len(self.game_snapshots),
             "GenreSnapshot": len(self.genre_snapshots),
+            "GameUpdate": len(self.game_updates),
         }
 
 
@@ -174,6 +185,7 @@ def load_all(con: Connection) -> AnalyticsData:
         genres=load_genres(con),
         game_snapshots=load_game_snapshots(con),
         genre_snapshots=load_genre_snapshots(con),
+        game_updates=load_game_updates(con),
     )
 
 

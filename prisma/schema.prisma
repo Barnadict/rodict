@@ -89,6 +89,7 @@ model Game {
   snapshots    GameSnapshot[]
   genreHistory GameGenreHistory[]
   themes       GameTheme[]
+  updates      GameUpdate[]
 
   // One index per user-sortable column on the games list (GameSortField in
   // src/lib/db/games.ts). Without one, SQLite falls back to a full scan plus a
@@ -165,6 +166,24 @@ model GameGenreHistory {
 
   @@index([gameId, assignedAt])
   @@index([genreId])
+}
+
+/// One row per distinct Roblox "last updated" timestamp we've seen for a game
+/// (Task #63). `Game.robloxUpdatedAt` is overwritten every run, so without this
+/// the update history is lost. Written only when the timestamp changes, not per
+/// snapshot, to stay inside the write budget: a few hundred rows a day (Est.).
+/// Roblox bumps the timestamp on a publish and on some settings edits, so an
+/// event is "the game changed", not necessarily a content update.
+model GameUpdate {
+  gameId            String
+  updatedAt         DateTime // Roblox's timestamp: when the update happened (UTC)
+  previousUpdatedAt DateTime? // the value it replaced; null for the first one we saw
+  detectedAt        DateTime // the collection run that first saw it
+
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@id([gameId, updatedAt]) // one row per distinct timestamp; also serves per-game reads
+  @@index([updatedAt])
 }
 
 // ---------------------------------------------------------------------------

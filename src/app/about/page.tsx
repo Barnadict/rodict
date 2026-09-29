@@ -3,6 +3,7 @@ import { BUDGET_GUARD } from "@/lib/collector/budget-guard";
 import { GENRE_CARRY_MAX_AGE_HOURS } from "@/lib/db/genre-snapshots";
 import { RISING } from "@/lib/db/trends";
 import { SERIES_GAP_DAYS } from "@/lib/stats";
+import { UPDATE_WINDOWS_HOURS } from "@/lib/update-impact";
 import Link from "next/link";
 
 import { EARNINGS_ASSUMPTIONS } from "@/lib/earnings/estimate";
@@ -409,6 +410,17 @@ export default function AboutPage() {
                   k-means clustering on scale-free curve-shape features, labeled from the cluster
                   centroids. The labels (Rising, Fading, Volatile, Steady) are our names for
                   clusters, not categories Roblox recognizes.
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">Players after updates</TableCell>
+                <TableCell className="text-muted-foreground">
+                  Average players in the {UPDATE_WINDOWS_HOURS.join("h and ")}h before a game&apos;s
+                  Roblox &ldquo;last updated&rdquo; time vs. the same span after. Roblox also bumps
+                  that time for some settings edits, only the latest change between two collections
+                  is seen, and history only goes back to when it started being recorded.{" "}
+                  <strong>Observational, not causal</strong>: games tend to update before weekends
+                  and events, when play rises anyway.
                 </TableCell>
               </TableRow>
             </TableBody>
