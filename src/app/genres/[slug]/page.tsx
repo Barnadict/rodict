@@ -5,7 +5,7 @@ import { cacheLife } from "next/cache";
 import { getGenreBySlug } from "@/lib/db/genres";
 import { getGenreStatBySlug, getGenreLifecycle } from "@/lib/db/genre-stats";
 import { GENRE_CARRY_MAX_AGE_HOURS, getGenreSnapshots } from "@/lib/db/genre-snapshots";
-import { getGamesList } from "@/lib/db/games";
+import { getGamesList, getUniverseIds } from "@/lib/db/games";
 import { getGrowthForGames } from "@/lib/db/trends";
 import {
   getSurvivalForGenre,
@@ -19,7 +19,7 @@ import {
 } from "@/lib/db/analytics";
 import { estimateDailyEarningsFromCcu } from "@/lib/earnings/estimate";
 import { formatCompact, formatUsdRange } from "@/lib/format";
-import { LOW_COVERAGE, formatGrowthPct } from "@/lib/stats";
+import { LOW_COVERAGE, buildProjection, formatGrowthPct } from "@/lib/stats";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -33,7 +33,10 @@ import {
 import { TrendChart, type TrendPoint } from "@/components/charts/trend-chart";
 import { LocalTime } from "@/components/local-time";
 import { LifecycleChart } from "@/components/charts/lifecycle-chart";
+import { SurvivalChart } from "@/components/charts/survival-chart";
+import { SeasonalityHeatmap } from "@/components/charts/seasonality-heatmap";
 import { GrowthBadge } from "@/components/data-table/growth-badge";
+import { CohortTable } from "@/components/data-table/cohort-table";
 import { StatTile } from "@/components/data-table/stat-tile";
 import { WatchlistButton } from "@/components/watchlist/watchlist-button";
 import { PresetLinks } from "@/components/filters/preset-links";
@@ -103,6 +106,9 @@ async function getGenreDetail(slug: string, range: RangeKey) {
       )
     : null;
 
+  // Top movers are stored by internal id; links need the universeId.
+  const moverUniverseIds = await getUniverseIds((momentum?.topMovers ?? []).map((m) => m.gameId));
+
   return {
     genre,
     stat,
@@ -118,6 +124,7 @@ async function getGenreDetail(slug: string, range: RangeKey) {
     forecast,
     analyticsAt,
     growthByGame,
+    moverUniverseIds,
     // Priced at the as-of date rather than "now" so the cached entry doesn't
     // depend on when it happens to be read.
     earnings: stat ? estimateDailyEarningsFromCcu(stat.totalPlaying, cutoff ?? new Date()) : null,
@@ -147,6 +154,7 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
     forecast,
     analyticsAt,
     growthByGame,
+    moverUniverseIds,
     earnings,
   } = data;
 
@@ -157,6 +165,17 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
     value: s.totalPlaying,
     coverage: s.coverage,
   }));
+  const projection =
+    forecast?.status === "ok"
+      ? buildProjection(
+          forecast,
+          series.map((s) => ({ t: s.collectedAt.getTime(), value: s.totalPlaying })),
+        )
+      : [];
+  const lastForecast = forecast?.status === "ok" ? forecast.points.at(-1) : undefined;
+  const survivalCurve =
+    survival?.status === "ok" && survival.curve.length >= 2 ? survival.curve : null;
+  const topMovers = (momentum?.topMovers ?? []).filter((m) => moverUniverseIds[m.gameId]);
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
@@ -233,12 +252,27 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
               ))}
             </div>
           )}
-          {survival?.status === "insufficient_deaths" && (
-            <p className="text-xs text-muted-foreground">
-              Survival (median lifespan) needs games followed until they die by the
-              &ldquo;dead&rdquo; rule (&lt;5% of peak for 7+ days). None observed yet — expected
-              during cold start.
-            </p>
+          {topMovers.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-col divide-y rounded-lg border">
+                <div className="p-3 text-sm text-muted-foreground">Top movers · 7 days</div>
+                {topMovers.map((m) => (
+                  <Link
+                    key={m.gameId}
+                    href={`/games/${moverUniverseIds[m.gameId]}`}
+                    className="flex items-center justify-between gap-3 p-3 hover:bg-muted/50"
+                  >
+                    <span className="min-w-0 truncate font-medium">{m.name}</span>
+                    <GrowthBadge growth={m.growth7d} />
+                  </Link>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Change from each game&apos;s first to its latest reading in the last 7 days. Single
+                readings swing with the time of day, so small games can move a lot; the Trending
+                page compares daily averages instead.
+              </p>
+            </div>
           )}
         </section>
       )}
@@ -258,6 +292,7 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
             data={trendData}
             unit="players"
             movingAverageWindow={5}
+            projection={projection}
             emptyMessage="No genre snapshots yet — the collector has only just started."
             ariaLabel={`Line chart of total concurrent players over time for ${genre.name}`}
           />
@@ -269,6 +304,39 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
           the genre&apos;s games a point includes, and hollow markers flag points below{" "}
           {Math.round(LOW_COVERAGE * 100)}%. Shaded spans are periods with no collection.
         </p>
+        {forecast?.status === "ok" ? (
+          <p className="text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Projection</span> (dashed, Est.): trend{" "}
+            <Badge
+              variant={
+                forecast.trend === "up"
+                  ? "secondary"
+                  : forecast.trend === "down"
+                    ? "destructive"
+                    : "outline"
+              }
+              className="text-[10px]"
+            >
+              {forecast.trend}
+            </Badge>
+            {lastForecast && (
+              <span className="tabular-nums">
+                {" "}
+                · ~{formatCompact(lastForecast.forecast)} players {forecast.horizon} collections
+                ahead, band {formatCompact(lastForecast.lower)}–{formatCompact(lastForecast.upper)}
+              </span>
+            )}
+            . {forecast.note}
+            {projection.length === 0 &&
+              " Newer collections have already passed this projection; it's redrawn after the next analytics run."}
+          </p>
+        ) : (
+          forecast && (
+            <p className="text-xs text-muted-foreground">
+              Not enough genre snapshots yet to project — expected during cold start.
+            </p>
+          )
+        )}
       </section>
 
       <section className="flex flex-col gap-3">
@@ -286,6 +354,49 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
         </div>
       </section>
 
+      {survival && (
+        <section className="flex flex-col gap-3">
+          <div>
+            <h2 className="font-medium">Survival</h2>
+            <p className="text-sm text-muted-foreground">
+              Kaplan-Meier estimate of the share of this genre&apos;s games still alive at each age,
+              by the &ldquo;dead&rdquo; rule (&lt;5% of peak for 7+ days). Games still alive count
+              up to their latest reading.
+            </p>
+          </div>
+          <div className="rounded-lg border p-4">
+            {survivalCurve ? (
+              <SurvivalChart
+                data={survivalCurve}
+                medianWeeks={survival.medianLifespanWeeks}
+                ariaLabel={`Survival curve: share of ${genre.name} games still alive by weeks since launch`}
+              />
+            ) : (
+              <div className="flex h-40 flex-col items-center justify-center gap-1 text-center text-muted-foreground">
+                <p>
+                  {survival.status === "insufficient_games"
+                    ? "Too few games with a known launch date to estimate survival."
+                    : "Survival needs games followed until they die by the dead rule."}
+                </p>
+                <p className="text-sm">
+                  {survival.nDeaths === 0
+                    ? "None observed yet — expected during cold start."
+                    : "Not enough deaths yet to draw a curve."}
+                </p>
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground tabular-nums">
+            n = {formatCompact(survival.nGames)} games · {formatCompact(survival.nDeaths)} deaths
+            observed
+            {survival.status === "ok" &&
+              (survival.medianLifespanWeeks !== null
+                ? ` · median lifespan ${survival.medianLifespanWeeks} weeks`
+                : " · median not reached (more than half are still alive)")}
+          </p>
+        </section>
+      )}
+
       {cohorts && cohorts.cohorts.length > 0 && (
         <section className="flex flex-col gap-3">
           <div>
@@ -296,91 +407,41 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
             </p>
           </div>
           <div className="overflow-x-auto rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Launched</TableHead>
-                  <TableHead className="text-right">Games</TableHead>
-                  <TableHead className="text-right">Avg players</TableHead>
-                  <TableHead className="text-right">Avg age</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {cohorts.cohorts.map((c) => (
-                  <TableRow key={c.cohort}>
-                    <TableCell className="font-medium">{c.cohort}</TableCell>
-                    <TableCell className="text-right tabular-nums">{c.nGames}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatCompact(Math.round(c.avgPlaying))}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {Math.round(c.avgAgeWeeks)} wk
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <CohortTable cohorts={cohorts.cohorts} />
           </div>
         </section>
       )}
 
-      {(forecast || seasonality) && (
+      {seasonality && (
         <section className="flex flex-col gap-3">
-          <h2 className="font-medium">Projection &amp; seasonality</h2>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-lg border p-4">
-              <div className="text-sm font-medium">Near-term projection</div>
-              {forecast?.status === "ok" ? (
-                <div className="mt-2 flex flex-col gap-1 text-sm">
-                  <span>
-                    Trend:{" "}
-                    <Badge
-                      variant={
-                        forecast.trend === "up"
-                          ? "secondary"
-                          : forecast.trend === "down"
-                            ? "destructive"
-                            : "outline"
-                      }
-                    >
-                      {forecast.trend}
-                    </Badge>
-                  </span>
-                  {forecast.points[forecast.points.length - 1] && (
-                    <span className="text-muted-foreground tabular-nums">
-                      ~{formatCompact(forecast.points[forecast.points.length - 1].forecast)} players
-                      in {forecast.horizon} steps (band{" "}
-                      {formatCompact(forecast.points[forecast.points.length - 1].lower)}–
-                      {formatCompact(forecast.points[forecast.points.length - 1].upper)})
-                    </span>
-                  )}
-                  <span className="text-xs text-muted-foreground">{forecast.note}</span>
-                </div>
-              ) : (
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Not enough genre snapshots yet to project — expected during cold start.
-                </p>
-              )}
-            </div>
-            <div className="rounded-lg border p-4">
-              <div className="text-sm font-medium">Weekly seasonality</div>
-              {seasonality?.status === "ok" ? (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {seasonality.byWeekday.map((d) => (
-                    <Badge key={d.label} variant="outline" className="tabular-nums">
-                      {d.label} {d.index.toFixed(2)}×
-                    </Badge>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Needs ≥7 days of history to detect day-of-week effects
-                  {seasonality?.distinctDays !== undefined
-                    ? ` (have ${seasonality.distinctDays}).`
-                    : "."}
-                </p>
-              )}
-            </div>
+          <div>
+            <h2 className="font-medium">When players are on</h2>
+            <p className="text-sm text-muted-foreground">
+              The genre&apos;s players at each weekday and hour, relative to its own average over
+              everything collected: 1.30× means 30% more players than average. Blank cells are hours
+              the collector didn&apos;t run.
+            </p>
+          </div>
+          <div className="rounded-lg border p-4">
+            {seasonality.status === "ok" && seasonality.byWeekdayHour?.length ? (
+              <SeasonalityHeatmap cells={seasonality.byWeekdayHour} />
+            ) : seasonality.status === "ok" ? (
+              // Payload from before the weekday × hour cells existed (UTC days).
+              <div className="flex flex-wrap gap-1.5">
+                {seasonality.byWeekday.map((d) => (
+                  <Badge key={d.label} variant="outline" className="tabular-nums">
+                    {d.label} (UTC) {d.index.toFixed(2)}×
+                  </Badge>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Needs ≥7 days of history to show weekday and hour patterns
+                {seasonality.distinctDays !== undefined
+                  ? ` (have ${seasonality.distinctDays}).`
+                  : "."}
+              </p>
+            )}
           </div>
         </section>
       )}

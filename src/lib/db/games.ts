@@ -404,3 +404,13 @@ export function getGameSnapshots(gameId: string, range: SnapshotRange = {}) {
 export function countGames(where: Prisma.GameWhereInput = {}) {
   return prisma.game.count({ where });
 }
+
+/** universeId (as a string, for links) by internal game id. Unknown ids are left out. */
+export async function getUniverseIds(gameIds: string[]): Promise<Record<string, string>> {
+  if (gameIds.length === 0) return {};
+  const rows = await prisma.game.findMany({
+    where: { id: { in: gameIds } },
+    select: { id: true, universeId: true },
+  });
+  return Object.fromEntries(rows.map((r) => [r.id, r.universeId.toString()]));
+}

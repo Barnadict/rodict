@@ -2,8 +2,9 @@
 
 import {
   ResponsiveContainer,
-  LineChart,
+  ComposedChart,
   Line,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -14,7 +15,7 @@ import {
 import type { NameType, ValueType } from "recharts/types/component/DefaultTooltipContent";
 
 import { formatCompact } from "@/lib/format";
-import { LOW_COVERAGE, findSeriesGaps, movingAverage } from "@/lib/stats";
+import { LOW_COVERAGE, findSeriesGaps, movingAverage, type ProjectionPoint } from "@/lib/stats";
 
 export interface TrendPoint {
   /** ISO timestamp. */
@@ -36,7 +37,20 @@ interface TrendChartProps {
    * useful text otherwise. The "view as table" fallback next to the chart
    * covers precise values; this covers what the chart IS. */
   ariaLabel?: string;
+  /** Forecast drawn after the real data as a dashed line in a shaded band
+   * (Task #57); build it with `buildProjection`. */
+  projection?: ProjectionPoint[];
 }
+
+type ChartRow = {
+  date: string;
+  t: number;
+  value: number | null;
+  coverage?: number | null;
+  ma?: number | null;
+  forecast?: number;
+  band?: [number, number];
+};
 
 function makeTooltip(unit: string, hasMa: boolean) {
   return function TrendTooltip({
@@ -46,15 +60,30 @@ function makeTooltip(unit: string, hasMa: boolean) {
   }: TooltipContentProps<ValueType, NameType>) {
     if (!active || !payload?.length || typeof label !== "number") return null;
     // Gap-break points carry a null value; there's nothing to describe there.
-    const point = payload[0]?.payload as
-      (Omit<TrendPoint, "value"> & { value: number | null; ma?: number }) | undefined;
-    if (!point || point.value === null) return null;
+    const point = payload[0]?.payload as ChartRow | undefined;
+    if (!point) return null;
+    const isProjection = point.value === null && point.forecast !== undefined;
+    if (point.value === null && !isProjection) return null;
     return (
       <div className="rounded-md border bg-popover px-3 py-2 text-sm shadow-md">
-        <div className="font-medium tabular-nums text-popover-foreground">
-          {formatCompact(point.value)} {unit}
-        </div>
-        {hasMa && point?.ma !== undefined && (
+        {isProjection ? (
+          <>
+            <div className="font-medium tabular-nums text-popover-foreground">
+              Projection: ~{formatCompact(Math.round(point.forecast!))} {unit}
+            </div>
+            {point.band && (
+              <div className="text-xs text-muted-foreground tabular-nums">
+                ~80% band {formatCompact(Math.round(point.band[0]))}–
+                {formatCompact(Math.round(point.band[1]))}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="font-medium tabular-nums text-popover-foreground">
+            {formatCompact(point.value!)} {unit}
+          </div>
+        )}
+        {hasMa && typeof point.ma === "number" && (
           <div className="text-xs text-muted-foreground tabular-nums">
             avg {formatCompact(Math.round(point.ma))}
           </div>
@@ -82,6 +111,7 @@ export function TrendChart({
   emptyMessage = "No data in this range yet.",
   height = 288,
   ariaLabel = "Line chart",
+  projection = [],
 }: TrendChartProps) {
   if (data.length === 0) {
     return (
@@ -114,29 +144,46 @@ export function TrendChart({
   // each gap breaks both lines there (connectNulls is off), and the span is
   // shaded and labeled so the break reads as "not collected" rather than zero.
   const gaps = findSeriesGaps(points.map((p) => p.t));
-  const chartData: (Omit<(typeof points)[number], "value" | "ma"> & {
-    value: number | null;
-    ma: number | null | undefined;
-  })[] = [...points];
+  const chartData: ChartRow[] = [...points];
   for (const g of gaps) {
     chartData.push({ date: "", t: (g.from + g.to) / 2, value: null, ma: null });
   }
+  // The projection's anchor lands on the real point it was fitted on; its steps
+  // come after the real data, so they never break the real line (see
+  // buildProjection). Its own line and band bridge the rows in between.
+  const rowByT = new Map(chartData.map((r) => [r.t, r]));
+  for (const p of projection) {
+    const extra = { forecast: p.forecast, band: [p.lower, p.upper] as [number, number] };
+    const row = rowByT.get(p.t);
+    if (row) Object.assign(row, extra);
+    else chartData.push({ date: "", t: p.t, value: null, ma: null, ...extra });
+  }
   chartData.sort((a, b) => a.t - b.t);
+  const showProjection = projection.length > 0;
 
   return (
     <div className="flex flex-col gap-2">
-      {showMa && (
-        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+      {(showMa || showProjection) && (
+        <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1.5">
             <span className="h-0.5 w-4 rounded bg-primary" /> Actual
           </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-0.5 w-4 rounded bg-muted-foreground" /> {movingAverageWindow}-pt avg
-          </span>
+          {showMa && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-0.5 w-4 rounded bg-muted-foreground" /> {movingAverageWindow}-pt
+              avg
+            </span>
+          )}
+          {showProjection && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-4 rounded-sm border-t-2 border-dashed border-primary bg-primary/15" />{" "}
+              Projection (~80% band)
+            </span>
+          )}
         </div>
       )}
       <ResponsiveContainer width="100%" height={height} role="img" aria-label={ariaLabel}>
-        <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+        <ComposedChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
           <CartesianGrid stroke="var(--border)" vertical={false} />
           <XAxis
             dataKey="t"
@@ -180,6 +227,31 @@ export function TrendChart({
               }}
             />
           ))}
+          {showProjection && (
+            <Area
+              type="linear"
+              dataKey="band"
+              stroke="none"
+              fill="var(--primary)"
+              fillOpacity={0.15}
+              connectNulls
+              activeDot={false}
+              isAnimationActive={false}
+            />
+          )}
+          {showProjection && (
+            <Line
+              type="linear"
+              dataKey="forecast"
+              stroke="var(--primary)"
+              strokeWidth={2}
+              strokeDasharray="5 4"
+              dot={false}
+              activeDot={{ r: 4, stroke: "var(--background)", strokeWidth: 2 }}
+              connectNulls
+              isAnimationActive={false}
+            />
+          )}
           {showMa && (
             <Line
               type="monotone"
@@ -199,7 +271,7 @@ export function TrendChart({
             activeDot={{ r: 4, stroke: "var(--background)", strokeWidth: 2 }}
             isAnimationActive={false}
           />
-        </LineChart>
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   );

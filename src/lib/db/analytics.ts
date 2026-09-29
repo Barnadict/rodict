@@ -164,6 +164,9 @@ export interface Seasonality {
   needDays?: number;
   byWeekday: { label: string; index: number }[];
   byHour: { key: number; index: number; avgPlaying: number }[];
+  /** UTC weekday (0 = Mon) × UTC hour cells; `n` readings each. Absent on
+   * payloads computed before Task #58. */
+  byWeekdayHour?: { weekday: number; hour: number; index: number; n: number }[];
 }
 export function getSeasonalityForGenre(genreId: string) {
   return getPayload<Seasonality>("seasonality", "genre", genreId);
@@ -179,6 +182,10 @@ export interface Forecast {
   trend?: "up" | "down" | "flat";
   points: { step: number; forecast: number; lower: number; upper: number }[];
   note?: string;
+  /** ISO time of the last point the projection was fitted on (Task #57). */
+  lastAt?: string;
+  /** Length of one projection step, from the recent collection spacing. */
+  stepHours?: number;
 }
 export function getForecastForGenre(genreId: string) {
   return getPayload<Forecast>("forecast", "genre", genreId);

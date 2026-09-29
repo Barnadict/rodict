@@ -23,6 +23,9 @@ HORIZON = 5
 ALPHA = 0.5
 BETA = 0.3
 Z = 1.28  # ~80% band
+# The step length is read from the spacing of the most recent points, so the
+# chart can place the projection on a real time axis (Task #57).
+STEP_SAMPLE = 8
 
 
 def _holt(y: np.ndarray) -> dict | None:
@@ -66,6 +69,21 @@ def _holt(y: np.ndarray) -> dict | None:
     }
 
 
+def _time_anchor(times: pd.Series) -> dict:
+    """When the projection starts (the last point it was fitted on) and how long
+    one step is: the median spacing of the last few points, so an outage gap
+    earlier in the series doesn't stretch the steps."""
+    t = times.sort_values()
+    if t.empty:
+        return {}
+    diffs = t.tail(STEP_SAMPLE + 1).diff().dropna().dt.total_seconds()
+    diffs = diffs[diffs > 0]
+    anchor = {"lastAt": t.iloc[-1].strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"}
+    if not diffs.empty:
+        anchor["stepHours"] = round(float(diffs.median()) / 3600, 2)
+    return anchor
+
+
 def run(con: Connection, data: AnalyticsData) -> dict:
     gensnaps = data.genre_snapshots
     genres = data.genres
@@ -76,6 +94,8 @@ def run(con: Connection, data: AnalyticsData) -> dict:
         payload = _holt(gs["totalPlaying"].to_numpy(dtype=float))
         if payload is None:
             payload = {"status": "insufficient", "method": "holt", "points": []}
+        else:
+            payload.update(_time_anchor(gs["collectedAt"]))
         results.append({"scopeType": "genre", "scopeId": gen.id, "payload": payload})
 
     return write_results(con, KIND, results)

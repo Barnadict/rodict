@@ -48,3 +48,75 @@ export function findSeriesGaps(
 
 /** Genre points covering less than this share of the genre's games are flagged in charts. */
 export const LOW_COVERAGE = 0.8;
+
+export interface ProjectionPoint {
+  /** Epoch ms. */
+  t: number;
+  forecast: number;
+  lower: number;
+  upper: number;
+}
+
+interface ForecastInput {
+  lastAt?: string;
+  stepHours?: number;
+  lastValue?: number;
+  points: { step: number; forecast: number; lower: number; upper: number }[];
+}
+
+const RECENT_STEPS = 8;
+const ANCHOR_SNAP_MS = 60_000;
+
+/**
+ * Places a forecast's steps on the time axis (Task #57). The projection starts at
+ * the last point it was fitted on (`lastAt`, at `lastValue` with no band) and
+ * steps forward by `stepHours`. Payloads from before #57 lack both, so they fall
+ * back to the chart's last point and its recent spacing.
+ *
+ * Collections keep landing between analytics runs, so the chart can already have
+ * real points past the anchor. Steps at or before the last real point are dropped:
+ * the real data has replaced them, and a projection row in among real rows would
+ * break the real line. For the same reason the anchor snaps onto a real point: the
+ * one within a minute of it (normally the exact same GenreSnapshot), or, if it
+ * falls inside the real data without a match, the nearest one.
+ */
+export function buildProjection(
+  forecast: ForecastInput,
+  series: { t: number; value: number }[],
+): ProjectionPoint[] {
+  if (forecast.points.length === 0 || series.length === 0) return [];
+  const last = series[series.length - 1];
+
+  let anchorT = forecast.lastAt ? Date.parse(forecast.lastAt) : last.t;
+  if (Number.isNaN(anchorT)) anchorT = last.t;
+  let near = series.find((p) => Math.abs(p.t - anchorT) <= ANCHOR_SNAP_MS);
+  if (!near && anchorT < last.t) {
+    near = series.reduce((a, b) => (Math.abs(b.t - anchorT) < Math.abs(a.t - anchorT) ? b : a));
+  }
+  if (near) anchorT = near.t;
+  const anchorValue = forecast.lastValue ?? near?.value ?? last.value;
+
+  let stepMs = (forecast.stepHours ?? 0) * 3_600_000;
+  if (!(stepMs > 0)) {
+    const recent = series.slice(-(RECENT_STEPS + 1)).map((p) => p.t);
+    const diffs = recent
+      .slice(1)
+      .map((t, i) => t - recent[i])
+      .filter((d) => d > 0)
+      .sort((a, b) => a - b);
+    if (diffs.length === 0) return [];
+    const mid = Math.floor(diffs.length / 2);
+    stepMs = diffs.length % 2 ? diffs[mid] : (diffs[mid - 1] + diffs[mid]) / 2;
+  }
+
+  const out: ProjectionPoint[] = [
+    { t: anchorT, forecast: anchorValue, lower: anchorValue, upper: anchorValue },
+  ];
+  for (const p of forecast.points) {
+    const t = anchorT + p.step * stepMs;
+    if (t <= last.t) continue;
+    out.push({ t, forecast: p.forecast, lower: p.lower, upper: p.upper });
+  }
+  // Nothing left to project past the real data.
+  return out.length > 1 ? out : [];
+}

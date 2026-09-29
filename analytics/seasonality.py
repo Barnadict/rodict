@@ -45,13 +45,28 @@ def _analyze(series: pd.DataFrame) -> dict:
     s["weekday"] = s["collectedAt"].dt.weekday
     s["hour"] = s["collectedAt"].dt.hour
     overall = s["totalPlaying"].mean()
+    if not overall > 0:
+        # Nobody playing at all: every index would divide by zero.
+        return {"status": "ok", "distinctDays": int(distinct_days), "byWeekday": [],
+                "byHour": [], "byWeekdayHour": []}
 
     wk = s.groupby("weekday")["totalPlaying"].mean()
     by_weekday = [
         {"label": WEEKDAYS[int(k)], "index": round(float(v / overall), 3)} for k, v in wk.items()
     ]
     by_hour = _index_by(s.rename(columns={"hour": "k"}), "k") if distinct_hours >= MIN_DISTINCT_HOURS else []
-    return {"status": "ok", "distinctDays": int(distinct_days), "byWeekday": by_weekday, "byHour": by_hour}
+    # Weekday x hour cells, in UTC (Task #58). The page shifts each cell into the
+    # viewer's timezone, which needs the joint cells: the weekday and hour
+    # marginals above can't be shifted on their own (a local day straddles two
+    # UTC days). `n` lets the page weight cells when it rebuilds marginals.
+    cells = s.groupby(["weekday", "hour"])["totalPlaying"].agg(["mean", "size"])
+    by_weekday_hour = [
+        {"weekday": int(wd), "hour": int(h), "index": round(float(row["mean"] / overall), 3),
+         "n": int(row["size"])}
+        for (wd, h), row in cells.iterrows()
+    ]
+    return {"status": "ok", "distinctDays": int(distinct_days), "byWeekday": by_weekday,
+            "byHour": by_hour, "byWeekdayHour": by_weekday_hour}
 
 
 def run(con: Connection, data: AnalyticsData) -> dict:

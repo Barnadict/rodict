@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
 
-import { movingAverage, formatGrowthPct, findSeriesGaps, SERIES_GAP_DAYS } from "./stats";
+import {
+  movingAverage,
+  formatGrowthPct,
+  findSeriesGaps,
+  SERIES_GAP_DAYS,
+  buildProjection,
+} from "./stats";
 
 describe("movingAverage", () => {
   it("averages the trailing window once enough points exist", () => {
@@ -84,5 +90,58 @@ describe("findSeriesGaps", () => {
   it("handles empty and single-point series", () => {
     expect(findSeriesGaps([])).toEqual([]);
     expect(findSeriesGaps([5])).toEqual([]);
+  });
+});
+
+describe("buildProjection", () => {
+  const H = 3_600_000;
+  const t0 = Date.parse("2026-09-29T00:00:00.000Z");
+  const series = [0, 1, 2, 3].map((i) => ({ t: t0 + i * 3 * H, value: 100 + i }));
+  const points = [1, 2, 3].map((step) => ({
+    step,
+    forecast: 110 + step,
+    lower: 100 + step,
+    upper: 120 + step,
+  }));
+
+  it("starts at the fitted point with no band and steps by stepHours", () => {
+    const out = buildProjection(
+      { lastAt: "2026-09-29T09:00:00.000Z", stepHours: 3, lastValue: 103, points },
+      series,
+    );
+    expect(out.map((p) => (p.t - t0) / H)).toEqual([9, 12, 15, 18]);
+    expect(out[0]).toMatchObject({ forecast: 103, lower: 103, upper: 103 });
+    expect(out[1]).toMatchObject({ forecast: 111, lower: 101, upper: 121 });
+  });
+
+  it("drops steps the real data has already passed", () => {
+    const out = buildProjection(
+      { lastAt: "2026-09-29T03:00:00.000Z", stepHours: 3, lastValue: 101, points },
+      series,
+    );
+    // Anchor at 3h; steps at 6h and 9h are covered by real points; 12h remains.
+    expect(out.map((p) => (p.t - t0) / H)).toEqual([3, 12]);
+  });
+
+  it("snaps an anchor that falls between real points onto the nearest one", () => {
+    const out = buildProjection(
+      { lastAt: "2026-09-29T04:00:00.000Z", stepHours: 6, points },
+      series,
+    );
+    expect((out[0].t - t0) / H).toBe(3);
+  });
+
+  it("falls back to the last point and its spacing for older payloads", () => {
+    const out = buildProjection({ points }, series);
+    expect(out.map((p) => (p.t - t0) / H)).toEqual([9, 12, 15, 18]);
+    expect(out[0].forecast).toBe(103);
+  });
+
+  it("returns nothing when every step is already in the past", () => {
+    const out = buildProjection(
+      { lastAt: "2026-09-29T00:00:00.000Z", stepHours: 1, points },
+      series,
+    );
+    expect(out).toEqual([]);
   });
 });

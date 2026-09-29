@@ -331,8 +331,9 @@ export default function AboutPage() {
                 <TableCell className="text-muted-foreground">
                   Holt&apos;s exponential smoothing extended from the recent trend, with an ~80%
                   uncertainty band that widens the further out it goes. It assumes the recent trend
-                  continues — it cannot anticipate an update, a viral moment, or a shutdown. Always
-                  shown with its band.
+                  continues — it cannot anticipate an update, a viral moment, or a shutdown. It runs
+                  a few collection runs ahead of the last point it was fitted on, and is drawn
+                  dashed after the real data, always with its band.
                 </TableCell>
               </TableRow>
               <TableRow>
@@ -348,7 +349,19 @@ export default function AboutPage() {
                 <TableCell className="text-muted-foreground">
                   Kaplan-Meier survival analysis using the dead rule below. Games still alive are
                   correctly censored rather than counted as dead, and games we started watching
-                  mid-life are left-truncated. Needs games followed to death to mean anything.
+                  mid-life are left-truncated. Needs games followed to death to mean anything. The
+                  genre page draws the full curve (share still alive by age) with the number of
+                  games and deaths it rests on.
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">When players are on (seasonality)</TableCell>
+                <TableCell className="text-muted-foreground">
+                  A genre&apos;s players averaged by weekday and hour, divided by its overall
+                  average, shown in your own timezone. It describes when players were online over
+                  the history collected; a genre that grew during that time also reads busier on
+                  later days. Needs at least 7 distinct days, and hours the collector didn&apos;t
+                  run stay blank.
                 </TableCell>
               </TableRow>
               <TableRow>

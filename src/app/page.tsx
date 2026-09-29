@@ -205,31 +205,62 @@ export default async function Home() {
               <div>
                 <h2 className="font-medium">What&apos;s associated with more players</h2>
                 <p className="text-sm text-muted-foreground">
-                  Rank correlation of each stat with a game&apos;s current player count.
-                  Associational, not causal · n={correlation.n}.
+                  How each stat lines up with a game&apos;s current player count. Associational, not
+                  causal · n={correlation.n}.
                 </p>
               </div>
-              <div className="flex flex-col divide-y rounded-lg border">
-                {correlation.correlations.map((c) => {
-                  const pct = Math.min(100, Math.abs(c.spearman) * 100);
-                  const positive = c.spearman >= 0;
-                  return (
-                    <div key={c.feature} className="flex items-center gap-3 p-3">
-                      <span className="w-32 shrink-0 text-sm font-medium">{c.label}</span>
-                      <div className="flex h-2 flex-1 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className={positive ? "bg-emerald-500" : "bg-red-500"}
-                          style={{ width: `${pct}%` }}
-                        />
+              <div className="grid gap-3 lg:grid-cols-2">
+                <div className="flex flex-col divide-y rounded-lg border">
+                  <div className="p-3 text-sm text-muted-foreground">
+                    Rank correlation (−1 to +1)
+                  </div>
+                  {correlation.correlations.map((c) => {
+                    const pct = Math.min(100, Math.abs(c.spearman) * 100);
+                    const positive = c.spearman >= 0;
+                    return (
+                      <div key={c.feature} className="flex items-center gap-3 p-3">
+                        <span className="w-32 shrink-0 text-sm font-medium">{c.label}</span>
+                        <div className="flex h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className={positive ? "bg-emerald-500" : "bg-red-500"}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <span className="w-14 shrink-0 text-right text-sm tabular-nums text-muted-foreground">
+                          {c.spearman >= 0 ? "+" : "−"}
+                          {Math.abs(c.spearman).toFixed(2)}
+                        </span>
                       </div>
-                      <span className="w-14 shrink-0 text-right text-sm tabular-nums text-muted-foreground">
-                        {c.spearman >= 0 ? "+" : "−"}
-                        {Math.abs(c.spearman).toFixed(2)}
-                      </span>
+                    );
+                  })}
+                </div>
+                {correlation.importances.length > 0 && (
+                  <div className="flex flex-col divide-y rounded-lg border">
+                    <div className="p-3 text-sm text-muted-foreground">
+                      Importance in a random-forest model (shares sum to 100%)
                     </div>
-                  );
-                })}
+                    {correlation.importances.map((imp) => (
+                      <div key={imp.feature} className="flex items-center gap-3 p-3">
+                        <span className="w-32 shrink-0 text-sm font-medium">{imp.label}</span>
+                        <div className="flex h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="bg-primary"
+                            style={{ width: `${Math.min(100, imp.importance * 100)}%` }}
+                          />
+                        </div>
+                        <span className="w-14 shrink-0 text-right text-sm tabular-nums text-muted-foreground">
+                          {Math.round(imp.importance * 100)}%
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
+              <p className="text-xs text-muted-foreground">
+                Correlation says whether a stat rises with player count; importance says how much a
+                model leans on it to predict player count, including non-linear effects. Neither
+                says a stat causes more players.
+              </p>
               {correlation.note && (
                 <p className="text-xs text-muted-foreground">{correlation.note}</p>
               )}

@@ -87,3 +87,24 @@ def test_index_values_are_json_safe_floats():
     out = _analyze(df)
     assert all(isinstance(d["index"], float) for d in out["byWeekday"])
     assert isinstance(out["distinctDays"], int)
+
+
+def test_weekday_hour_cells_are_indexed_in_utc_with_counts():
+    # Two weeks every 3h: 7 weekdays x 8 hours, each cell seen twice. Players are
+    # doubled at 12:00 UTC only, so that hour's cells sit above average.
+    idx = pd.date_range("2026-01-05", periods=14 * 8, freq="3h", tz="UTC")
+    values = [200 if t.hour == 12 else 100 for t in idx]
+    out = _analyze(pd.DataFrame({"collectedAt": idx, "totalPlaying": values}))
+    cells = out["byWeekdayHour"]
+    assert len(cells) == 7 * 8
+    assert all(c["n"] == 2 for c in cells)
+    noon = {c["index"] for c in cells if c["hour"] == 12}
+    other = {c["index"] for c in cells if c["hour"] != 12}
+    assert len(noon) == 1 and len(other) == 1
+    assert noon.pop() == pytest.approx(2 * other.pop())
+
+
+def test_all_zero_series_does_not_divide_by_zero():
+    df = series("2026-01-05", 14, "1D", [0] * 14)
+    out = _analyze(df)
+    assert out["byWeekday"] == [] and out["byWeekdayHour"] == []

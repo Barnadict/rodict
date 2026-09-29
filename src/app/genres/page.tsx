@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cacheLife } from "next/cache";
 
 import { getGenreStats, type GenreStatsSort } from "@/lib/db/genre-stats";
+import { getCohortsGlobal } from "@/lib/db/analytics";
 import { estimateDailyEarningsFromCcu } from "@/lib/earnings/estimate";
 import { formatCompact, formatUsdRange } from "@/lib/format";
 
@@ -15,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { SortableHeader } from "@/components/data-table/sortable-header";
+import { CohortTable } from "@/components/data-table/cohort-table";
 import { WatchlistButton } from "@/components/watchlist/watchlist-button";
 import { PresetLinks } from "@/components/filters/preset-links";
 import {
@@ -49,6 +51,13 @@ async function getGenreRows(range: RangeKey, sort: GenreStatsSort, order: "asc" 
   return { rows: await getGenreStats({ asOf, sort, order }), asOf };
 }
 
+// Not range-dependent: cohorts compare launch quarters at the latest analytics run.
+async function getGlobalCohorts() {
+  "use cache";
+  cacheLife("hours");
+  return getCohortsGlobal();
+}
+
 export default async function GenresPage(props: PageProps<"/genres">) {
   const sp = await props.searchParams;
   const get = (key: string) => {
@@ -61,7 +70,10 @@ export default async function GenresPage(props: PageProps<"/genres">) {
   const order = get("order") === "asc" ? "asc" : "desc";
   const range = parseRangeKey(get("range"));
 
-  const { rows, asOf } = await getGenreRows(range, sort, order);
+  const [{ rows, asOf }, cohorts] = await Promise.all([
+    getGenreRows(range, sort, order),
+    getGlobalCohorts(),
+  ]);
   const baseParams = { sort, order, range: range === RANGE_CLEAR_VALUE ? undefined : range };
   const totalGames = rows.reduce((sum, r) => sum + r.gameCount, 0);
 
@@ -189,6 +201,23 @@ export default async function GenresPage(props: PageProps<"/genres">) {
         {rows.length} genre{rows.length === 1 ? "" : "s"} · {totalGames} game
         {totalGames === 1 ? "" : "s"} total
       </p>
+
+      {cohorts && cohorts.cohorts.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <div>
+            <h2 className="font-medium">Launch cohorts, all genres</h2>
+            <p className="text-sm text-muted-foreground">
+              Every classified game grouped by the quarter it launched, as of the latest analytics
+              run. Comparing cohorts of different ages at the same moment: older cohorts with fewer
+              players today is a cross-sectional decline signal, not a record of each cohort over
+              time. {formatCompact(cohorts.nGames)} games with a known launch date.
+            </p>
+          </div>
+          <div className="max-h-[32rem] overflow-auto rounded-lg border">
+            <CohortTable cohorts={cohorts.cohorts} showDetail />
+          </div>
+        </section>
+      )}
     </div>
   );
 }
