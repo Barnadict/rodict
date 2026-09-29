@@ -1,5 +1,5 @@
 /**
- * Manual collector run (Task #8): `npm run collect [-- --max=N --known-only]`.
+ * Manual collector run (Task #8): `npm run collect [-- --max=N --known-only --all]`.
  *
  * Local scheduling (cron / node-cron) so history accumulates during dev is
  * Task #12; cloud automation (GitHub Actions) is Task #32.
@@ -20,6 +20,8 @@ function arg(name: string): string | undefined {
 async function main() {
   const max = arg("max");
   const knownOnly = process.argv.includes("--known-only");
+  // Ignore the tiered cadence (Task #46) and re-collect every known game.
+  const ignoreCadence = process.argv.includes("--all");
   const startedAt = new Date();
 
   console.log("Starting collection...");
@@ -27,6 +29,7 @@ async function main() {
     const summary = await runCollection({
       maxGames: max ? Number(max) : undefined,
       knownOnly,
+      ignoreCadence,
     });
 
     console.log(JSON.stringify(summary, null, 2));

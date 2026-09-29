@@ -29,6 +29,10 @@ export interface CollectionSummary {
   /** How many of the newly discovered ids came from the explore-api charts. */
   chartsDiscovered: number;
   knownReCollected: number;
+  /** Low-activity known games skipped this run (not yet due, Task #46). */
+  deferredLowActivity: number;
+  /** Deferred games collected anyway because they were on an explore chart. */
+  chartPromoted: number;
   detailsFetched: number;
   rejectedDetails: number;
   rejectedVotes: number;
@@ -141,6 +145,8 @@ export async function runCollection(opts: CollectOptions = {}): Promise<Collecti
     discovered: discovery.discoveredCount,
     chartsDiscovered: discovery.chartCount,
     knownReCollected: discovery.knownCount,
+    deferredLowActivity: discovery.deferredCount,
+    chartPromoted: discovery.chartPromotedCount,
     detailsFetched: detailsFetch.data.length,
     rejectedDetails: details.rejected.length,
     rejectedVotes: votes.rejected.length,
@@ -164,6 +170,8 @@ export function collectionJobSummary(summary: CollectionSummary) {
     discovered: summary.discovered,
     chartsDiscovered: summary.chartsDiscovered,
     knownReCollected: summary.knownReCollected,
+    deferredLowActivity: summary.deferredLowActivity,
+    chartPromoted: summary.chartPromoted,
     persisted: summary.persisted,
     newGames: summary.newGames,
     peaksUpdated: summary.peaksUpdated,

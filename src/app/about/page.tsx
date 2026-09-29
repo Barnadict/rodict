@@ -1,3 +1,4 @@
+import { COLLECTION_CADENCE } from "@/lib/collector/cadence";
 import Link from "next/link";
 
 import { EARNINGS_ASSUMPTIONS } from "@/lib/earnings/estimate";
@@ -137,19 +138,24 @@ export default function AboutPage() {
         <p className="max-w-2xl text-muted-foreground">
           Roblox&apos;s APIs only ever return <strong>right now</strong> — there is no historical
           endpoint. So every trend on this site is built from snapshots rodict recorded itself. A
-          scheduled job runs <strong>every 3 hours</strong>, fetches each tracked game, and writes
-          one timestamped row per game. History therefore only exists from the day collection
-          started, and it cannot be backfilled.
+          scheduled job runs <strong>every {COLLECTION_CADENCE.runIntervalHours} hours</strong> and
+          writes one timestamped row per game it collects. Busy games (at least{" "}
+          {COLLECTION_CADENCE.busyMinPlaying} players, or first seen in the last{" "}
+          {COLLECTION_CADENCE.newGameDays} days) are collected on every run; quieter games about
+          once every {`${COLLECTION_CADENCE.lowIntervalHours} hours`}, which keeps the database
+          inside its hosting plan&apos;s write limits. History therefore only exists from the day
+          collection started, and it cannot be backfilled.
         </p>
         <ul className="max-w-2xl list-disc space-y-2 pl-5 text-muted-foreground">
           <li>
             <strong className="text-foreground">
               Games are followed until they die, not dropped.
             </strong>{" "}
-            Every game already in the database is re-collected on every run, in addition to newly
-            discovered ones. This is deliberate: if we only ever tracked whatever is popular today,
-            games that failed would silently vanish from the dataset and every lifespan and survival
-            statistic would be wrong — a mistake known as <em>survivorship bias</em>.
+            Every game already in the database keeps being re-collected (quiet ones daily), in
+            addition to newly discovered ones. This is deliberate: if we only ever tracked whatever
+            is popular today, games that failed would silently vanish from the dataset and every
+            lifespan and survival statistic would be wrong — a mistake known as{" "}
+            <em>survivorship bias</em>.
           </li>
           <li>
             <strong className="text-foreground">All timestamps are stored in UTC</strong> and

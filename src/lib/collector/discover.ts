@@ -16,11 +16,17 @@
  *
  * Discovery is a wide, tunable net. Its width is what makes the corpus large;
  * the follow-known mechanism is what keeps the survival statistics honest.
+ *
+ * Known games are followed on a tiered cadence (Task #46, see cadence.ts):
+ * low-activity games not yet due are skipped even when keyword search returns
+ * them (search re-finds most of the corpus, which would otherwise undo the
+ * tiering on every discovery run). A deferred game that appears on an explore
+ * CHART is still collected: being charted is itself a sign it's active.
  */
 
 import { searchGames, getExploreSorts, getExploreSortUniverseIds } from "@/lib/roblox/client";
 
-import { getKnownUniverseIds } from "@/lib/db/games";
+import { getKnownGamesForCollection } from "@/lib/db/games";
 
 export const DEFAULT_DISCOVERY_QUERIES = [
   "simulator",
@@ -61,11 +67,18 @@ export interface DiscoverOptions {
   skipCharts?: boolean;
   /** Skip ALL discovery and only re-collect known games. */
   knownOnly?: boolean;
+  /** Collect every known game regardless of its cadence tier. */
+  ignoreCadence?: boolean;
 }
 
 export interface DiscoverResult {
   universeIds: bigint[];
+  /** Known games due this run. */
   knownCount: number;
+  /** Known low-activity games skipped this run (not yet due). */
+  deferredCount: number;
+  /** Deferred games collected anyway because they appeared on an explore chart. */
+  chartPromotedCount: number;
   discoveredCount: number;
   /** How many of the discovered ids came from the explore-api charts. */
   chartCount: number;
@@ -78,15 +91,26 @@ export async function discoverUniverseIds(opts: DiscoverOptions = {}): Promise<D
     chartPages = 5,
     skipCharts,
     knownOnly,
+    ignoreCadence,
   } = opts;
 
-  const known = await getKnownUniverseIds();
-  const all = new Set<bigint>(known);
+  const { due, deferred } = await getKnownGamesForCollection(new Date(), { ignoreCadence });
+  const all = new Set<bigint>(due);
   let discoveredCount = 0;
   let chartCount = 0;
+  let chartPromotedCount = 0;
 
-  const add = (rawId: number): boolean => {
+  /** Add an id to this run; true if it's a brand-new game. Deferred known
+   * games are only added when `promote` (i.e. seen on a chart). */
+  const add = (rawId: number, promote = false): boolean => {
     const id = BigInt(rawId);
+    if (deferred.has(id)) {
+      if (promote && !all.has(id)) {
+        all.add(id);
+        chartPromotedCount++;
+      }
+      return false;
+    }
     const isNew = !all.has(id);
     all.add(id);
     return isNew;
@@ -125,7 +149,7 @@ export async function discoverUniverseIds(opts: DiscoverOptions = {}): Promise<D
         );
         for (const ids of chartResults) {
           for (const rawId of ids) {
-            if (add(rawId)) {
+            if (add(rawId, true)) {
               discoveredCount++;
               chartCount++;
             }
@@ -139,7 +163,9 @@ export async function discoverUniverseIds(opts: DiscoverOptions = {}): Promise<D
 
   return {
     universeIds: [...all],
-    knownCount: known.length,
+    knownCount: due.length,
+    deferredCount: deferred.size - chartPromotedCount,
+    chartPromotedCount,
     discoveredCount,
     chartCount,
   };

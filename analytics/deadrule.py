@@ -16,6 +16,12 @@ import pandas as pd
 
 DEAD_FRACTION = 0.05
 DEAD_DAYS = 7
+# The longest gap between two consecutive snapshots that still counts as
+# "continuously observed". Low-activity games are sampled about daily (Task #46),
+# and a partial run can skip one, so 3 days allows for that. A longer gap (e.g.
+# the 2026-08-20 -> 2026-09-29 collection outage) breaks the run: nobody saw
+# the game in between, so it can't count toward the 7 consecutive days.
+MAX_GAP_DAYS = 3
 
 
 def detect_death(snaps: pd.DataFrame, peak: int) -> pd.Timestamp | None:
@@ -33,7 +39,11 @@ def detect_death(snaps: pd.DataFrame, peak: int) -> pd.Timestamp | None:
     flags = below.to_list()
 
     run_start: pd.Timestamp | None = None
+    prev_t: pd.Timestamp | None = None
     for t, is_below in zip(times, flags):
+        if prev_t is not None and t - prev_t > timedelta(days=MAX_GAP_DAYS):
+            run_start = None  # unobserved stretch — the streak can't span it
+        prev_t = t
         if is_below:
             if run_start is None:
                 run_start = t

@@ -42,6 +42,12 @@ def snaps(points: list[tuple[str, int]]) -> pd.DataFrame:
     )
 
 
+def daily_snaps(start: str, end: str, playing: int) -> pd.DataFrame:
+    """A densely observed series (one snapshot a day), as the dead rule needs."""
+    times = pd.date_range(start, end, freq="D", tz="UTC")
+    return pd.DataFrame({"collectedAt": times, "playing": playing})
+
+
 class TestBuildLifetimes:
     def test_alive_game_is_right_censored(self):
         # Still healthy at last observation -> observed=0. Treating it as a death
@@ -56,7 +62,7 @@ class TestBuildLifetimes:
     def test_dead_game_is_marked_observed(self):
         lt = _build_lifetimes(
             games([game_row()]),
-            {"g1": snaps([("2026-01-01", 10), ("2026-02-01", 10)])},
+            {"g1": daily_snaps("2026-01-01", "2026-02-01", 10)},
         )
         assert lt.iloc[0]["observed"] == 1
 

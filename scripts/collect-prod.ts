@@ -15,6 +15,7 @@
  *
  *   npm run collect:prod                 # full discovery + re-collect known
  *   npm run collect:prod -- --known-only # skip discovery, only refresh known
+ *   npm run collect:prod -- --all        # ignore the tiered cadence (Task #46)
  *   npm run collect:prod -- --max=200    # cap games (a quick smoke run)
  */
 import { config } from "dotenv";
@@ -58,6 +59,8 @@ async function main() {
 
   const max = arg("max");
   const knownOnly = process.argv.includes("--known-only");
+  // Ignore the tiered cadence (Task #46) and re-collect every known game.
+  const ignoreCadence = process.argv.includes("--all");
   const startedAt = new Date();
 
   const host = url.replace(/\?.*$/, "");
@@ -66,6 +69,7 @@ async function main() {
     const summary = await runCollection({
       maxGames: max ? Number(max) : undefined,
       knownOnly,
+      ignoreCadence,
     });
 
     console.log(JSON.stringify(summary, null, 2));

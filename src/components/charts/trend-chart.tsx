@@ -41,7 +41,7 @@ function makeTooltip(unit: string, hasMa: boolean) {
     payload,
     label,
   }: TooltipContentProps<ValueType, NameType>) {
-    if (!active || !payload?.length || typeof label !== "string") return null;
+    if (!active || !payload?.length || typeof label !== "number") return null;
     const point = payload[0]?.payload as (TrendPoint & { ma?: number }) | undefined;
     return (
       <div className="rounded-md border bg-popover px-3 py-2 text-sm shadow-md">
@@ -90,7 +90,15 @@ export function TrendChart({
         movingAverageWindow!,
       )
     : null;
-  const chartData = data.map((d, i) => ({ ...d, ma: ma ? ma[i] : undefined }));
+  // `t` (epoch ms) drives a real time axis, so points sit at their actual
+  // times: games are collected at different cadences (every 3h when busy, daily
+  // when quiet, Task #46), and collection has gaps, which an evenly spaced
+  // category axis would hide.
+  const chartData = data.map((d, i) => ({
+    ...d,
+    t: Date.parse(d.date),
+    ma: ma ? ma[i] : undefined,
+  }));
 
   return (
     <div className="flex flex-col gap-2">
@@ -108,8 +116,11 @@ export function TrendChart({
         <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
           <CartesianGrid stroke="var(--border)" vertical={false} />
           <XAxis
-            dataKey="date"
-            tickFormatter={(v: string) =>
+            dataKey="t"
+            type="number"
+            scale="time"
+            domain={["dataMin", "dataMax"]}
+            tickFormatter={(v: number) =>
               new Date(v).toLocaleDateString(undefined, { month: "short", day: "numeric" })
             }
             stroke="var(--muted-foreground)"

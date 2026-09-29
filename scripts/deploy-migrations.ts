@@ -74,7 +74,9 @@ async function main() {
     deployed++;
   }
 
-  console.log(`\nDone — ${deployed} migration(s) applied, ${migrationDirs.length - deployed} already up to date.`);
+  console.log(
+    `\nDone — ${deployed} migration(s) applied, ${migrationDirs.length - deployed} already up to date.`,
+  );
 }
 
 main().catch((e) => {
