@@ -89,6 +89,7 @@ Survival, momentum, and clustering need weeks/months of accumulated snapshots to
 be meaningful; until then they return `status: "insufficient…"` (correct, not a
 failure). The opportunity score works immediately (it reads current aggregates).
 
-Cloud scheduling is **Task #33** — `.github/workflows/analytics.yml` runs these
-after every successful collect run, so results always reflect the newest
-snapshots.
+Cloud scheduling: `.github/workflows/analytics.yml` runs these twice a day
+(00:50 and 12:50 UTC, between collect runs) plus on manual dispatch. It used to
+run after every collect (8×/day), which bought no useful freshness for
+history-hungry analyses and multiplied reads and writes (Task #45).

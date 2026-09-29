@@ -163,8 +163,8 @@ export default function AboutPage() {
           </li>
           <li>
             <strong className="text-foreground">Heavy statistics are precomputed</strong> by
-            scheduled Python jobs after each successful collection, then stored. Nothing statistical
-            is computed while you load a page.
+            scheduled Python jobs twice a day, then stored. Nothing statistical is computed while
+            you load a page.
           </li>
         </ul>
         <p className="max-w-2xl text-sm text-muted-foreground">

@@ -1,4 +1,3 @@
-# analytics.yml's workflow_run trigger matches this name exactly — rename both together.
 name: Collect
 
 # Runs the data collector against the hosted DB on a schedule, so game/genre
@@ -53,10 +52,13 @@ jobs:
           fi
 
   # Alert on failed runs (Task #34) — these run unattended on a cron, so a red
-  # tab nobody checks isn't a signal.
+  # tab nobody checks isn't a signal. `cancelled()` too (Task #49): a job that
+  # hits `timeout-minutes` ends as "cancelled", not "failure", which is how 229
+  # timed-out analytics runs never raised an alert. (A run cancelled by hand
+  # also alerts; close that issue.)
   alert:
     needs: collect
-    if: failure()
+    if: failure() || cancelled()
     uses: ./.github/workflows/alert-on-failure.yml
     with:
       pipeline: collect

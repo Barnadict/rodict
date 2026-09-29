@@ -3,22 +3,28 @@ name: Analytics
 # Runs the Phase 4 Python analytics jobs against the hosted DB and writes the
 # precomputed results into AnalyticsResult (the frontend only reads them).
 #
-# Triggered by a SUCCESSFUL collect run rather than its own cron: analytics are
-# a pure function of collected data, so running them right after new snapshots
-# land keeps results fresh, avoids racing the collector, and skips pointless
-# recomputation when nothing new arrived (a failed collect writes no new data).
+# Runs on its own twice-daily cron, NOT after every collect (Task #45). It used
+# to chain off each successful collect (8x/day), but survival, cohorts,
+# seasonality and forecasts need days to weeks of history, so 3-hour freshness
+# bought nothing while every run re-read the whole snapshot table (rows-read
+# quota) and rewrote results (rows-written quota). 2x/day keeps the anomaly feed
+# and momentum reasonably fresh. Scheduled at :50 past 00:00/12:00 UTC, so it
+# lands between collect runs (every 3h on the hour, ~25 min each) rather than
+# racing one. Manual runs still work via workflow_dispatch.
 
 on:
-  workflow_run:
-    workflows: ["Collect"]
-    types: [completed]
+  schedule:
+    - cron: "50 0,12 * * *"
   workflow_dispatch:
+
+# Never two analytics runs at once: overlapping runs would both diff against the
+# same stored rows and double the reads. A new run waits for the current one.
+concurrency:
+  group: analytics
+  cancel-in-progress: false
 
 jobs:
   analytics:
-    # Skip when the triggering collect run failed — there'd be no new data, and
-    # the previous results are still the correct ones to serve.
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -41,7 +47,7 @@ jobs:
   # Alert on failed runs (Task #34) — see the note in collect.yml.
   alert:
     needs: analytics
-    if: failure()
+    if: failure() || cancelled()
     uses: ./.github/workflows/alert-on-failure.yml
     with:
       pipeline: analytics
