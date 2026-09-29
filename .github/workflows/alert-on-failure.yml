@@ -15,7 +15,7 @@ on:
   workflow_call:
     inputs:
       pipeline:
-        description: 'Which pipeline failed ("collect" | "analytics")'
+        description: 'Which pipeline failed ("collect" | "analytics" | "backup" | "keepalive")'
         type: string
         required: true
       run-url:

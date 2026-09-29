@@ -1,0 +1,91 @@
+name: Backup
+
+# Weekly off-site backup of the hosted Turso DB (Task #50). The snapshot history
+# is irreplaceable (Roblox's APIs only return "now"), and nothing else backs up
+# Turso. Each run copies the DB into a verified SQLite file
+# (scripts/backup-prod.ts), gzips it (~70 MB as of 2026-09), and uploads it as a
+# release in a PRIVATE repo. This repo is public, and Actions artifacts expire,
+# so neither is a safe home for it.
+#
+# Setup (one-time, see PROJECT_PLAN Task #50):
+#   - a private repo with at least one commit (default Barnadict/rodict-backups;
+#     override with the BACKUP_REPO repository variable);
+#   - a fine-grained token with Contents: read and write on that repo only,
+#     saved here as the BACKUP_REPO_TOKEN secret.
+#
+# Restore: download the .db.gz from the release, gunzip, and point
+# DATABASE_URL at file:./<name>.db.
+#
+# Cost: read-only against Turso, ~1 read per row (~1.2M), ~1% of the monthly
+# read cap at weekly runs. No writes.
+
+on:
+  schedule:
+    # Sunday 04:20 UTC: after the 03:00 collect finishes and well before the
+    # 06:00 one, so no run writes while tables are being copied.
+    - cron: "20 4 * * 0"
+  workflow_dispatch:
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+env:
+  BACKUP_REPO: ${{ vars.BACKUP_REPO || 'Barnadict/rodict-backups' }}
+  KEEP_BACKUPS: 12 # ~3 months of weekly backups, ~850 MB
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Copy and verify the production DB
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: npm run db:backup:prod -- --out=backup
+
+      - name: Upload to the private backup repo
+        env:
+          GH_TOKEN: ${{ secrets.BACKUP_REPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          FILE=$(ls backup/*.db.gz)
+          TAG="$(basename "$FILE" .db.gz)"
+          gh release create "$TAG" "$FILE" backup/manifest.json \
+            --repo "$BACKUP_REPO" \
+            --title "$TAG" \
+            --notes "Automated weekly backup of the rodict production DB. Source run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - name: Prune old backups
+        env:
+          GH_TOKEN: ${{ secrets.BACKUP_REPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Newest first; delete everything past the newest $KEEP_BACKUPS.
+          gh release list --repo "$BACKUP_REPO" --limit 200 \
+            --json tagName,createdAt --jq 'sort_by(.createdAt) | reverse | .[].tagName' \
+            | tail -n +$((KEEP_BACKUPS + 1)) \
+            | while read -r tag; do
+                echo "Deleting old backup $tag"
+                gh release delete "$tag" --repo "$BACKUP_REPO" --yes --cleanup-tag
+              done
+
+  alert:
+    needs: backup
+    if: failure() || cancelled()
+    uses: ./.github/workflows/alert-on-failure.yml
+    with:
+      pipeline: backup
+      run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    permissions:
+      issues: write

@@ -1,0 +1,40 @@
+name: Keepalive
+
+# GitHub disables scheduled workflows in a public repo after 60 days with no
+# repository activity. Collection would then stop silently: no failed run, no
+# alert, just a growing hole in the history (Task #51). Re-enabling a workflow
+# through the API resets that 60-day timer, so this does that monthly for every
+# scheduled workflow, itself included. It makes no commits.
+
+on:
+  schedule:
+    - cron: "30 6 1 * *" # 06:30 UTC on the 1st: never more than ~31 days apart
+  workflow_dispatch:
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Re-enable the scheduled workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          for wf in collect.yml analytics.yml backup.yml keepalive.yml; do
+            gh api --method PUT "repos/${GH_REPO}/actions/workflows/${wf}/enable"
+            echo "Re-enabled ${wf}"
+          done
+
+  alert:
+    needs: keepalive
+    if: failure() || cancelled()
+    uses: ./.github/workflows/alert-on-failure.yml
+    with:
+      pipeline: keepalive
+      run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    permissions:
+      issues: write
