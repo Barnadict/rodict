@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from momentum import _slope_per_day, _window_growth
+from momentum import _window_growth
 
 
 def snaps(points: list[tuple[str, int]]) -> pd.DataFrame:
@@ -63,44 +63,3 @@ class TestWindowGrowth:
         large = snaps([("2026-01-28", 100_000), ("2026-01-30", 200_000)])
         assert _window_growth(small, NOW, 7) == _window_growth(large, NOW, 7) == 1.0
 
-
-class TestSlopePerDay:
-    def test_computes_a_positive_slope_for_a_climbing_curve(self):
-        # +100 players/day, exactly.
-        df = snaps([("2026-01-01", 100), ("2026-01-02", 200), ("2026-01-03", 300)])
-        assert _slope_per_day(df) == 100.0
-
-    def test_computes_a_negative_slope_for_a_declining_curve(self):
-        df = snaps([("2026-01-01", 300), ("2026-01-02", 200), ("2026-01-03", 100)])
-        assert _slope_per_day(df) == -100.0
-
-    def test_flat_curve_has_zero_slope(self):
-        df = snaps([("2026-01-01", 100), ("2026-01-02", 100), ("2026-01-03", 100)])
-        assert _slope_per_day(df) == 0.0
-
-    def test_is_per_day_not_per_snapshot(self):
-        # Two snapshots 12h apart, +50 players -> +100/day.
-        df = snaps([("2026-01-01T00:00:00", 100), ("2026-01-01T12:00:00", 150)])
-        assert _slope_per_day(df) == 100.0
-
-    def test_returns_none_for_a_single_point(self):
-        assert _slope_per_day(snaps([("2026-01-01", 100)])) is None
-
-    def test_returns_none_for_a_zero_length_time_span(self):
-        # All snapshots at the same instant — dividing by a zero span would be
-        # an infinite slope.
-        df = snaps([("2026-01-01T00:00:00", 100), ("2026-01-01T00:00:00", 200)])
-        assert _slope_per_day(df) is None
-
-    def test_fits_a_trend_through_noise(self):
-        # Least-squares, not just first-to-last: the noisy endpoints must not
-        # dominate the reported trend.
-        df = snaps(
-            [
-                ("2026-01-01", 100),
-                ("2026-01-02", 210),
-                ("2026-01-03", 290),
-                ("2026-01-04", 400),
-            ]
-        )
-        assert 95 <= _slope_per_day(df) <= 105

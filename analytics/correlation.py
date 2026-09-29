@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 
-from db import connect, load_games, load_game_snapshots, write_results
+from db import AnalyticsData, Connection, run_standalone, write_results
 
 KIND = "correlation"
 WEEK_SECONDS = 7 * 86400
@@ -37,64 +37,59 @@ LABELS = {
 TARGET = "currentPlaying"
 
 
-def run() -> int:
-    con = connect()
-    try:
-        games = load_games(con)
-        snaps = load_game_snapshots(con)
-        now = snaps["collectedAt"].max() if not snaps.empty else pd.Timestamp.utcnow()
+def run(con: Connection, data: AnalyticsData) -> dict:
+    games = data.games
+    now = data.now
 
-        df = games.copy()
-        df["votesTotal"] = df["currentUpVotes"] + df["currentDownVotes"]
-        df["likeRatio"] = np.where(df["votesTotal"] > 0, df["currentUpVotes"] / df["votesTotal"], np.nan)
-        df["ageWeeks"] = (now - df["robloxCreatedAt"]).dt.total_seconds() / WEEK_SECONDS
-        df["visits"] = df["currentVisits"].astype(float)
-        df["favorites"] = df["currentFavorites"].astype(float)
+    df = games.copy()
+    df["votesTotal"] = df["currentUpVotes"] + df["currentDownVotes"]
+    df["likeRatio"] = np.where(df["votesTotal"] > 0, df["currentUpVotes"] / df["votesTotal"], np.nan)
+    df["ageWeeks"] = (now - df["robloxCreatedAt"]).dt.total_seconds() / WEEK_SECONDS
+    df["visits"] = df["currentVisits"].astype(float)
+    df["favorites"] = df["currentFavorites"].astype(float)
 
-        data = df[[*PREDICTORS, TARGET]].dropna()
-        n = len(data)
-        if n < MIN_GAMES:
-            payload = {"status": "insufficient", "n": n,
-                       "target": "currentPlaying", "correlations": [], "importances": []}
-            return write_results(con, KIND, [{"scopeType": "global", "scopeId": None, "payload": payload}])
-
-        # Spearman rank correlation (robust to heavy tails), predictor vs target
-        corr = data.corr(method="spearman")[TARGET]
-        pearson = data.corr(method="pearson")[TARGET]
-        correlations = [
-            {
-                "feature": f,
-                "label": LABELS[f],
-                "spearman": round(float(corr[f]), 3),
-                "pearson": round(float(pearson[f]), 3),
-            }
-            for f in PREDICTORS
-        ]
-        correlations.sort(key=lambda c: abs(c["spearman"]), reverse=True)
-
-        # Tree-based importance (captures non-linearities/interactions)
-        rf = RandomForestRegressor(n_estimators=300, random_state=42)
-        rf.fit(data[PREDICTORS], data[TARGET])
-        importances = sorted(
-            [{"feature": f, "label": LABELS[f], "importance": round(float(imp), 3)}
-             for f, imp in zip(PREDICTORS, rf.feature_importances_)],
-            key=lambda x: x["importance"],
-            reverse=True,
-        )
-
-        payload = {
-            "status": "ok",
-            "n": n,
-            "target": "currentPlaying",
-            "targetLabel": "current player count",
-            "note": "Associational, not causal. Current-snapshot proxy for 'sustained players' until more history accrues.",
-            "correlations": correlations,
-            "importances": importances,
-        }
+    sample = df[[*PREDICTORS, TARGET]].dropna()
+    n = len(sample)
+    if n < MIN_GAMES:
+        payload = {"status": "insufficient", "n": n,
+                   "target": "currentPlaying", "correlations": [], "importances": []}
         return write_results(con, KIND, [{"scopeType": "global", "scopeId": None, "payload": payload}])
-    finally:
-        con.close()
+
+    # Spearman rank correlation (robust to heavy tails), predictor vs target
+    corr = sample.corr(method="spearman")[TARGET]
+    pearson = sample.corr(method="pearson")[TARGET]
+    correlations = [
+        {
+            "feature": f,
+            "label": LABELS[f],
+            "spearman": round(float(corr[f]), 3),
+            "pearson": round(float(pearson[f]), 3),
+        }
+        for f in PREDICTORS
+    ]
+    correlations.sort(key=lambda c: abs(c["spearman"]), reverse=True)
+
+    # Tree-based importance (captures non-linearities/interactions)
+    rf = RandomForestRegressor(n_estimators=300, random_state=42)
+    rf.fit(sample[PREDICTORS], sample[TARGET])
+    importances = sorted(
+        [{"feature": f, "label": LABELS[f], "importance": round(float(imp), 3)}
+         for f, imp in zip(PREDICTORS, rf.feature_importances_)],
+        key=lambda x: x["importance"],
+        reverse=True,
+    )
+
+    payload = {
+        "status": "ok",
+        "n": n,
+        "target": "currentPlaying",
+        "targetLabel": "current player count",
+        "note": "Associational, not causal. Current-snapshot proxy for 'sustained players' until more history accrues.",
+        "correlations": correlations,
+        "importances": importances,
+    }
+    return write_results(con, KIND, [{"scopeType": "global", "scopeId": None, "payload": payload}])
 
 
 if __name__ == "__main__":
-    print(f"correlation: wrote {run()} results")
+    print(f"correlation: {run_standalone(run)}")

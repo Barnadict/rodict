@@ -18,6 +18,7 @@
     "db:deploy": "tsx scripts/deploy-migrations.ts",
     "db:backup": "tsx scripts/backup.ts",
     "db:retention": "tsx scripts/retention.ts",
+    "db:write-budget": "tsx scripts/write-budget.ts",
     "collect": "tsx scripts/collect.ts",
     "collect:prod": "tsx scripts/collect-prod.ts",
     "analytics": "analytics\\.venv\\Scripts\\python analytics/run.py",

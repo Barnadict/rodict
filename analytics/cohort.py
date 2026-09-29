@@ -15,7 +15,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from db import connect, load_games, load_game_snapshots, load_genres, write_results
+from db import AnalyticsData, Connection, run_standalone, write_results
 
 KIND = "cohort"
 WEEK_SECONDS = 7 * 86400
@@ -45,38 +45,33 @@ def _cohorts(df: pd.DataFrame) -> list[dict]:
     return out
 
 
-def run() -> int:
-    con = connect()
-    try:
-        games = load_games(con)
-        snaps = load_game_snapshots(con)
-        now = snaps["collectedAt"].max() if not snaps.empty else pd.Timestamp.utcnow()
+def run(con: Connection, data: AnalyticsData) -> dict:
+    games = data.games
+    now = data.now
 
-        df = games[games["robloxCreatedAt"].notna()].copy()
-        df["ageWeeks"] = (now - df["robloxCreatedAt"]).dt.total_seconds() / WEEK_SECONDS
-        df["cohort"] = df["robloxCreatedAt"].map(_cohort_key)
+    df = games[games["robloxCreatedAt"].notna()].copy()
+    df["ageWeeks"] = (now - df["robloxCreatedAt"]).dt.total_seconds() / WEEK_SECONDS
+    df["cohort"] = df["robloxCreatedAt"].map(_cohort_key)
 
-        results = []
-        classified = df[df["currentGenreId"].notna()]
+    results = []
+    classified = df[df["currentGenreId"].notna()]
+    results.append(
+        {"scopeType": "global", "scopeId": None,
+         "payload": {"cohorts": _cohorts(classified), "nGames": int(len(classified))}}
+    )
+
+    genres = data.genres
+    for gen in genres.itertuples():
+        gg = df[df["currentGenreId"] == gen.id]
+        if len(gg) == 0:
+            continue
         results.append(
-            {"scopeType": "global", "scopeId": None,
-             "payload": {"cohorts": _cohorts(classified), "nGames": int(len(classified))}}
+            {"scopeType": "genre", "scopeId": gen.id,
+             "payload": {"cohorts": _cohorts(gg), "nGames": int(len(gg))}}
         )
 
-        genres = load_genres(con)
-        for gen in genres.itertuples():
-            gg = df[df["currentGenreId"] == gen.id]
-            if len(gg) == 0:
-                continue
-            results.append(
-                {"scopeType": "genre", "scopeId": gen.id,
-                 "payload": {"cohorts": _cohorts(gg), "nGames": int(len(gg))}}
-            )
-
-        return write_results(con, KIND, results)
-    finally:
-        con.close()
+    return write_results(con, KIND, results)
 
 
 if __name__ == "__main__":
-    print(f"cohort: wrote {run()} results")
+    print(f"cohort: {run_standalone(run)}")

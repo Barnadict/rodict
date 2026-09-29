@@ -16,6 +16,9 @@ function median(values: number[]): number | null {
  * Only classified games contribute (GenreSnapshot.genreId is a required FK).
  */
 export async function persistGenreSnapshots(collectedAt: Date): Promise<number> {
+  // Each upsert is one row written; with a fresh `collectedAt` per run it's
+  // always an insert, so the caller counts the return value as GenreSnapshot
+  // inserts (Task #42).
   const games = await prisma.game.findMany({
     where: { currentGenreId: { not: null } },
     select: {

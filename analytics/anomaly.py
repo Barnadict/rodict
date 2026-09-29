@@ -24,7 +24,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from db import connect, load_games, load_game_snapshots, load_genres, load_genre_snapshots, write_results
+from db import AnalyticsData, Connection, run_standalone, write_results
 
 KIND = "change_point"
 MIN_POINTS = 4
@@ -66,43 +66,38 @@ def _anomalies(times: list, values: np.ndarray) -> list[dict]:
     return out
 
 
-def run() -> int:
-    con = connect()
-    try:
-        games = load_games(con)
-        gname = dict(zip(games["id"], games["name"]))
-        gsnaps = load_game_snapshots(con)
-        genres = load_genres(con)
-        genre_name = dict(zip(genres["id"], genres["name"]))
-        gensnaps = load_genre_snapshots(con)
+def run(con: Connection, data: AnalyticsData) -> dict:
+    games = data.games
+    gname = dict(zip(games["id"], games["name"]))
+    genres = data.genres
+    genre_name = dict(zip(genres["id"], genres["name"]))
+    gensnaps = data.genre_snapshots
 
-        results = []
-        recent = []  # global feed of the most notable changes
+    results = []
+    recent = []  # global feed of the most notable changes
 
-        for gid, gs in gsnaps.groupby("gameId"):
-            an = _anomalies(gs["collectedAt"].to_list(), gs["playing"].to_numpy(dtype=float))
-            if an:
-                results.append({"scopeType": "game", "scopeId": gid,
-                                "payload": {"nAnomalies": len(an), "anomalies": an}})
-                for a in an:
-                    recent.append({"scope": "game", "id": gid, "name": gname.get(gid, ""), **a})
+    for gid, gs in data.snaps_by_game().items():
+        an = _anomalies(gs["collectedAt"].to_list(), gs["playing"].to_numpy(dtype=float))
+        if an:
+            results.append({"scopeType": "game", "scopeId": gid,
+                            "payload": {"nAnomalies": len(an), "anomalies": an}})
+            for a in an:
+                recent.append({"scope": "game", "id": gid, "name": gname.get(gid, ""), **a})
 
-        for genid, gg in gensnaps.groupby("genreId"):
-            an = _anomalies(gg["collectedAt"].to_list(), gg["totalPlaying"].to_numpy(dtype=float))
-            if an:
-                results.append({"scopeType": "genre", "scopeId": genid,
-                                "payload": {"nAnomalies": len(an), "anomalies": an}})
-                for a in an:
-                    recent.append({"scope": "genre", "id": genid, "name": genre_name.get(genid, ""), **a})
+    for genid, gg in gensnaps.groupby("genreId"):
+        an = _anomalies(gg["collectedAt"].to_list(), gg["totalPlaying"].to_numpy(dtype=float))
+        if an:
+            results.append({"scopeType": "genre", "scopeId": genid,
+                            "payload": {"nAnomalies": len(an), "anomalies": an}})
+            for a in an:
+                recent.append({"scope": "genre", "id": genid, "name": genre_name.get(genid, ""), **a})
 
-        recent.sort(key=lambda a: a["score"], reverse=True)
-        results.append({"scopeType": "global", "scopeId": None,
-                        "payload": {"recent": recent[:20], "nTotal": len(recent)}})
+    recent.sort(key=lambda a: a["score"], reverse=True)
+    results.append({"scopeType": "global", "scopeId": None,
+                    "payload": {"recent": recent[:20], "nTotal": len(recent)}})
 
-        return write_results(con, KIND, results)
-    finally:
-        con.close()
+    return write_results(con, KIND, results)
 
 
 if __name__ == "__main__":
-    print(f"change_point: wrote {run()} results")
+    print(f"change_point: {run_standalone(run)}")

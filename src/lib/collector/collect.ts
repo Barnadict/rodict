@@ -17,6 +17,7 @@ import { getGenreIdMap } from "@/lib/db/genres";
 import { getThemeIdMap } from "@/lib/db/themes";
 import { persistCollectedGames, type PersistInput } from "@/lib/db/games";
 import { persistGenreSnapshots } from "@/lib/db/genre-snapshots";
+import { addWrites, totalWrites, type WriteCounts } from "@/lib/db/write-counts";
 
 import { discoverUniverseIds, type DiscoverOptions } from "./discover";
 
@@ -38,6 +39,8 @@ export interface CollectionSummary {
   genreChanges: number;
   unresolvedGenre: number;
   genreSnapshots: number;
+  /** Rows written per table this run (Task #42), excluding the JobRun row itself. */
+  writes: WriteCounts;
   errors: string[];
 }
 
@@ -109,12 +112,14 @@ export async function runCollection(opts: CollectOptions = {}): Promise<Collecti
   let newGames = 0;
   let peaksUpdated = 0;
   let genreChanges = 0;
+  let writes: WriteCounts = {};
   try {
     const result = await persistCollectedGames(toPersist);
     persisted = result.persisted;
     newGames = result.newGames;
     peaksUpdated = result.peaksUpdated;
     genreChanges = result.genreChanges;
+    writes = result.writes;
   } catch (err) {
     errors.push(`bulk persist: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -123,6 +128,7 @@ export async function runCollection(opts: CollectOptions = {}): Promise<Collecti
   let genreSnapshots = 0;
   try {
     genreSnapshots = await persistGenreSnapshots(collectedAt);
+    addWrites(writes, "GenreSnapshot", { inserted: genreSnapshots });
   } catch (err) {
     errors.push(`genre snapshots: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -145,6 +151,25 @@ export async function runCollection(opts: CollectOptions = {}): Promise<Collecti
     genreChanges,
     unresolvedGenre,
     genreSnapshots,
+    writes,
     errors,
+  };
+}
+
+/** The `JobRun.summary` recorded for a collection run — shared by `npm run
+ * collect` and `npm run collect:prod` so both log the same fields. `writes` and
+ * `writesTotal` feed the write-budget report (scripts/write-budget.ts). */
+export function collectionJobSummary(summary: CollectionSummary) {
+  return {
+    discovered: summary.discovered,
+    chartsDiscovered: summary.chartsDiscovered,
+    knownReCollected: summary.knownReCollected,
+    persisted: summary.persisted,
+    newGames: summary.newGames,
+    peaksUpdated: summary.peaksUpdated,
+    genreSnapshots: summary.genreSnapshots,
+    errorCount: summary.errors.length,
+    writes: summary.writes,
+    writesTotal: totalWrites(summary.writes),
   };
 }

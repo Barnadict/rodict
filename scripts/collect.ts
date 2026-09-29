@@ -9,7 +9,7 @@
  */
 import "dotenv/config";
 
-import { runCollection } from "../src/lib/collector/collect";
+import { collectionJobSummary, runCollection } from "../src/lib/collector/collect";
 import { recordJobRun, type JobStatus } from "../src/lib/db/job-runs";
 
 function arg(name: string): string | undefined {
@@ -42,15 +42,7 @@ async function main() {
       status,
       startedAt: summary.startedAt,
       finishedAt: summary.finishedAt,
-      summary: {
-        discovered: summary.discovered,
-        knownReCollected: summary.knownReCollected,
-        persisted: summary.persisted,
-        newGames: summary.newGames,
-        peaksUpdated: summary.peaksUpdated,
-        genreSnapshots: summary.genreSnapshots,
-        errorCount: summary.errors.length,
-      },
+      summary: collectionJobSummary(summary),
       error: summary.errors.length ? summary.errors.join("\n") : null,
     });
 

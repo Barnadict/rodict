@@ -1,6 +1,7 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { CleanGame } from "@/lib/validation/sanitize";
+import { addWrites, type WriteCounts } from "@/lib/db/write-counts";
 
 // ---------------------------------------------------------------------------
 // Write path (used by the collector, Task #8)
@@ -23,6 +24,8 @@ export interface BulkPersistSummary {
   newGames: number;
   peaksUpdated: number;
   genreChanges: number;
+  /** Rows written per table (Task #42 write-budget accounting). */
+  writes: WriteCounts;
 }
 
 /** The subset of an existing Game row the write planner needs to decide what
@@ -90,8 +93,9 @@ const TX_BATCH = 50;
  */
 export async function persistCollectedGames(inputs: PersistInput[]): Promise<BulkPersistSummary> {
   if (inputs.length === 0) {
-    return { persisted: 0, newGames: 0, peaksUpdated: 0, genreChanges: 0 };
+    return { persisted: 0, newGames: 0, peaksUpdated: 0, genreChanges: 0, writes: {} };
   }
+  const writes: WriteCounts = {};
 
   // --- Phase 0: one pre-read of every game we're about to touch ---------------
   const universeIds = inputs.map((i) => i.game.universeId);
@@ -156,7 +160,8 @@ export async function persistCollectedGames(inputs: PersistInput[]): Promise<Bul
 
   // --- Phase 2: write the games (createMany for new, batched updates for old) --
   for (const group of chunk(creates, CREATE_CHUNK)) {
-    await prisma.game.createMany({ data: group });
+    const { count } = await prisma.game.createMany({ data: group });
+    addWrites(writes, "Game", { inserted: count });
   }
   for (const batch of chunk(updates, TX_BATCH)) {
     await prisma.$transaction(
@@ -164,6 +169,7 @@ export async function persistCollectedGames(inputs: PersistInput[]): Promise<Bul
         prisma.game.update({ where: { id: u.id }, data: u.data, select: { id: true } }),
       ),
     );
+    addWrites(writes, "Game", { updated: batch.length });
   }
 
   // --- Phase 3: resolve every game's id (new rows only need re-reading) -------
@@ -194,7 +200,8 @@ export async function persistCollectedGames(inputs: PersistInput[]): Promise<Bul
     // needed — every run stamps a fresh `collectedAt`, and universe ids are
     // deduped upstream, so the @@unique([gameId, collectedAt]) guard is never
     // actually hit within or across runs.
-    await prisma.gameSnapshot.createMany({ data: group });
+    const { count } = await prisma.gameSnapshot.createMany({ data: group });
+    addWrites(writes, "GameSnapshot", { inserted: count });
   }
 
   // --- Phase 5: genre history (close-then-open on change; open for new) -------
@@ -217,14 +224,16 @@ export async function persistCollectedGames(inputs: PersistInput[]): Promise<Bul
   if (genreCloses.length) {
     const closedAt = inputs[0].collectedAt; // one timestamp per run
     for (const ids of chunk(genreCloses, IN_CHUNK)) {
-      await prisma.gameGenreHistory.updateMany({
+      const { count } = await prisma.gameGenreHistory.updateMany({
         where: { gameId: { in: ids }, endedAt: null },
         data: { endedAt: closedAt },
       });
+      addWrites(writes, "GameGenreHistory", { updated: count });
     }
   }
   for (const group of chunk(genreOpens, CREATE_CHUNK)) {
-    await prisma.gameGenreHistory.createMany({ data: group });
+    const { count } = await prisma.gameGenreHistory.createMany({ data: group });
+    addWrites(writes, "GameGenreHistory", { inserted: count });
   }
 
   // --- Phase 6: sync the theme set per game (adds + removes) ------------------
@@ -256,17 +265,19 @@ export async function persistCollectedGames(inputs: PersistInput[]): Promise<Bul
     // Adds are already diffed against the current set above, so no row here
     // duplicates an existing (gameId, themeId) — no skipDuplicates needed
     // (SQLite's createMany wouldn't accept it anyway).
-    await prisma.gameTheme.createMany({ data: group });
+    const { count } = await prisma.gameTheme.createMany({ data: group });
+    addWrites(writes, "GameTheme", { inserted: count });
   }
   for (const batch of chunk(themeRemovals, TX_BATCH)) {
-    await prisma.$transaction(
+    const results = await prisma.$transaction(
       batch.map((r) =>
         prisma.gameTheme.deleteMany({ where: { gameId: r.gameId, themeId: { in: r.themeIds } } }),
       ),
     );
+    addWrites(writes, "GameTheme", { deleted: results.reduce((n, r) => n + r.count, 0) });
   }
 
-  return { persisted: inputs.length, newGames, peaksUpdated, genreChanges };
+  return { persisted: inputs.length, newGames, peaksUpdated, genreChanges, writes };
 }
 
 /** Universe ids of every game we already track — so the collector keeps

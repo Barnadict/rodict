@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getLastSuccessfulRun } from "@/lib/db/job-runs";
 
 /**
  * Read side for the precomputed Phase 4 analytics (AnalyticsResult table,
@@ -183,8 +184,15 @@ export function getForecastForGenre(genreId: string) {
   return getPayload<Forecast>("forecast", "genre", genreId);
 }
 
-/** When any analytics job last ran (max computedAt), for a freshness note. */
+/** When the analytics last ran, for a freshness note.
+ *
+ * Read from the last successful analytics JobRun: since Task #43 a result that
+ * didn't change is left untouched (no write), so max(computedAt) now means
+ * "last time something changed", not "last time it was computed". Falls back to
+ * computedAt when no run has been recorded (e.g. a fresh local DB). */
 export async function getAnalyticsComputedAt(): Promise<Date | null> {
+  const lastRun = await getLastSuccessfulRun("analytics");
+  if (lastRun) return lastRun.finishedAt;
   const row = await prisma.analyticsResult.findFirst({
     orderBy: { computedAt: "desc" },
     select: { computedAt: true },

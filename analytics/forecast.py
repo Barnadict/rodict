@@ -15,7 +15,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from db import connect, load_genres, load_genre_snapshots, write_results
+from db import AnalyticsData, Connection, run_standalone, write_results
 
 KIND = "forecast"
 MIN_POINTS = 5
@@ -66,24 +66,20 @@ def _holt(y: np.ndarray) -> dict | None:
     }
 
 
-def run() -> int:
-    con = connect()
-    try:
-        gensnaps = load_genre_snapshots(con)
-        genres = load_genres(con)
+def run(con: Connection, data: AnalyticsData) -> dict:
+    gensnaps = data.genre_snapshots
+    genres = data.genres
 
-        results = []
-        for gen in genres.itertuples():
-            gs = gensnaps[gensnaps["genreId"] == gen.id].sort_values("collectedAt")
-            payload = _holt(gs["totalPlaying"].to_numpy(dtype=float))
-            if payload is None:
-                payload = {"status": "insufficient", "method": "holt", "points": []}
-            results.append({"scopeType": "genre", "scopeId": gen.id, "payload": payload})
+    results = []
+    for gen in genres.itertuples():
+        gs = gensnaps[gensnaps["genreId"] == gen.id].sort_values("collectedAt")
+        payload = _holt(gs["totalPlaying"].to_numpy(dtype=float))
+        if payload is None:
+            payload = {"status": "insufficient", "method": "holt", "points": []}
+        results.append({"scopeType": "genre", "scopeId": gen.id, "payload": payload})
 
-        return write_results(con, KIND, results)
-    finally:
-        con.close()
+    return write_results(con, KIND, results)
 
 
 if __name__ == "__main__":
-    print(f"forecast: wrote {run()} results")
+    print(f"forecast: {run_standalone(run)}")

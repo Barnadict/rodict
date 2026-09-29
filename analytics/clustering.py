@@ -16,7 +16,7 @@ import pandas as pd
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 
-from db import connect, load_games, load_game_snapshots, load_genres, write_results
+from db import AnalyticsData, Connection, run_standalone, write_results
 
 KIND = "trajectory_cluster"
 MIN_POINTS = 3
@@ -56,74 +56,63 @@ def _insufficient(n_games: int) -> list:
              "payload": {"status": "insufficient", "nGames": n_games, "archetypes": []}}]
 
 
-def run() -> int:
-    con = connect()
-    try:
-        games = load_games(con)
-        snaps = load_game_snapshots(con)
-        ggenre = dict(zip(games["id"], games["currentGenreId"]))
+def run(con: Connection, data: AnalyticsData) -> dict:
+    ggenre = dict(zip(data.games["id"], data.games["currentGenreId"]))
 
-        feats, ids = [], []
-        for gid, gs in snaps.groupby("gameId"):
-            if len(gs) < MIN_POINTS:
-                continue
-            f = _features(gs["playing"].to_numpy(dtype=float))
-            if f:
-                feats.append(f)
-                ids.append(gid)
+    feats, ids = [], []
+    for gid, gs in data.snaps_by_game().items():
+        if len(gs) < MIN_POINTS:
+            continue
+        f = _features(gs["playing"].to_numpy(dtype=float))
+        if f:
+            feats.append(f)
+            ids.append(gid)
 
-        if len(ids) < MIN_GAMES:
-            return write_results(con, KIND, _insufficient(len(ids)))
+    if len(ids) < MIN_GAMES:
+        return write_results(con, KIND, _insufficient(len(ids)))
 
-        cols = ["slopeNorm", "cv", "peakPos", "lastVsMax", "meanNorm"]
-        X = np.array([[f[c] for c in cols] for f in feats])
-        Xs = StandardScaler().fit_transform(X)
-        k = min(4, len(ids))
-        km = KMeans(n_clusters=k, n_init=10, random_state=42).fit(Xs)
+    cols = ["slopeNorm", "cv", "peakPos", "lastVsMax", "meanNorm"]
+    X = np.array([[f[c] for c in cols] for f in feats])
+    Xs = StandardScaler().fit_transform(X)
+    k = min(4, len(ids))
+    km = KMeans(n_clusters=k, n_init=10, random_state=42).fit(Xs)
 
-        # label each cluster from its mean (original-space) centroid
-        labels = {}
-        for c in range(k):
-            members = X[km.labels_ == c]
-            centroid = {col: float(members[:, i].mean()) for i, col in enumerate(cols)}
-            labels[c] = _label(centroid)
+    # label each cluster from its mean (original-space) centroid
+    labels = {}
+    for c in range(k):
+        members = X[km.labels_ == c]
+        centroid = {col: float(members[:, i].mean()) for i, col in enumerate(cols)}
+        labels[c] = _label(centroid)
 
-        results = []
-        per_game_archetype = {}
-        for gid, f, cl in zip(ids, feats, km.labels_):
-            archetype = labels[int(cl)]
-            per_game_archetype[gid] = archetype
+    # Per-game archetypes are only aggregated, never stored: no page reads a
+    # per-game row, and ~5.3K of them rewritten every run was pure write-budget
+    # cost (Task #43).
+    per_game_archetype = {gid: labels[int(cl)] for gid, cl in zip(ids, km.labels_)}
+
+    # per-genre archetype distribution
+    results = []
+    for gen in data.genres.itertuples():
+        counts: dict[str, int] = {}
+        for gid, arch in per_game_archetype.items():
+            if ggenre.get(gid) == gen.id:
+                counts[arch] = counts.get(arch, 0) + 1
+        if counts:
             results.append(
-                {"scopeType": "game", "scopeId": gid,
-                 "payload": {"archetype": archetype, "features": {c: round(f[c], 4) for c in cols}}}
+                {"scopeType": "genre", "scopeId": gen.id,
+                 "payload": {"nGames": sum(counts.values()), "archetypeCounts": counts}}
             )
 
-        # per-genre archetype distribution
-        genres = load_genres(con)
-        for gen in genres.itertuples():
-            counts: dict[str, int] = {}
-            for gid, arch in per_game_archetype.items():
-                if ggenre.get(gid) == gen.id:
-                    counts[arch] = counts.get(arch, 0) + 1
-            if counts:
-                results.append(
-                    {"scopeType": "genre", "scopeId": gen.id,
-                     "payload": {"nGames": sum(counts.values()), "archetypeCounts": counts}}
-                )
+    # global summary
+    global_counts: dict[str, int] = {}
+    for arch in per_game_archetype.values():
+        global_counts[arch] = global_counts.get(arch, 0) + 1
+    results.append(
+        {"scopeType": "global", "scopeId": None,
+         "payload": {"status": "ok", "nGames": len(ids), "archetypeCounts": global_counts}}
+    )
 
-        # global summary
-        global_counts: dict[str, int] = {}
-        for arch in per_game_archetype.values():
-            global_counts[arch] = global_counts.get(arch, 0) + 1
-        results.append(
-            {"scopeType": "global", "scopeId": None,
-             "payload": {"status": "ok", "nGames": len(ids), "archetypeCounts": global_counts}}
-        )
-
-        return write_results(con, KIND, results)
-    finally:
-        con.close()
+    return write_results(con, KIND, results)
 
 
 if __name__ == "__main__":
-    print(f"trajectory_cluster: wrote {run()} results")
+    print(f"trajectory_cluster: {run_standalone(run)}")

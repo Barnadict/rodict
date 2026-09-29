@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 from lifelines import KaplanMeierFitter
 
-from db import connect, load_games, load_game_snapshots, load_genres, write_results
+from db import AnalyticsData, Connection, run_standalone, write_results
 from deadrule import detect_death
 
 WEEK_SECONDS = 7 * 86400
@@ -101,31 +101,25 @@ def _fit(lifetimes: pd.DataFrame) -> dict:
     }
 
 
-def run() -> int:
-    con = connect()
-    try:
-        games = load_games(con)
-        snaps = load_game_snapshots(con)
-        genres = load_genres(con)
-        snaps_by_game = {gid: df for gid, df in snaps.groupby("gameId")}
+def run(con: Connection, data: AnalyticsData) -> dict:
+    games = data.games
+    snaps_by_game = data.snaps_by_game()
 
-        results = []
-        # per genre
-        for gen in genres.itertuples():
-            gg = games[games["currentGenreId"] == gen.id]
-            payload = _fit(_build_lifetimes(gg, snaps_by_game))
-            results.append({"scopeType": "genre", "scopeId": gen.id, "payload": payload})
+    results = []
+    # per genre
+    for gen in data.genres.itertuples():
+        gg = games[games["currentGenreId"] == gen.id]
+        payload = _fit(_build_lifetimes(gg, snaps_by_game))
+        results.append({"scopeType": "genre", "scopeId": gen.id, "payload": payload})
 
-        # global (all classified games)
-        classified = games[games["currentGenreId"].notna()]
-        results.append(
-            {"scopeType": "global", "scopeId": None, "payload": _fit(_build_lifetimes(classified, snaps_by_game))}
-        )
+    # global (all classified games)
+    classified = games[games["currentGenreId"].notna()]
+    results.append(
+        {"scopeType": "global", "scopeId": None, "payload": _fit(_build_lifetimes(classified, snaps_by_game))}
+    )
 
-        return write_results(con, KIND, results)
-    finally:
-        con.close()
+    return write_results(con, KIND, results)
 
 
 if __name__ == "__main__":
-    print(f"survival_km: wrote {run()} results")
+    print(f"survival_km: {run_standalone(run)}")

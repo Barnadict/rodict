@@ -9,7 +9,7 @@ reads the results — nothing statistical runs in the browser or a request.
 | Job | Task | Output (`AnalyticsResult.kind`) |
 | --- | --- | --- |
 | `survival.py` | #21 | `survival_km` — Kaplan-Meier genre lifespan (dead-rule, censored, left-truncated) |
-| `momentum.py` | #22 | `trend_momentum` — growth rate, moving average, curve slope per game/genre |
+| `momentum.py` | #22 | `trend_momentum` — per-genre 7-day growth + top movers |
 | `clustering.py` | #23 | `trajectory_cluster` — k-means player-curve archetypes |
 | `opportunity.py` | #24 | `opportunity_score` — composite demand-vs-supply score per genre |
 | `anomaly.py` | #25 | `change_point` — spikes/drops on game + genre curves (robust z-score) |
@@ -18,8 +18,17 @@ reads the results — nothing statistical runs in the browser or a request.
 | `seasonality.py` | #28 | `seasonality` — day-of-week / hour indices on genre popularity |
 | `forecast.py` | #29 | `forecast` — Holt exponential-smoothing projection + uncertainty band |
 
-Each job replaces its own rows (delete-by-`kind` then insert), so re-running is
-idempotent.
+`run.py` loads the data **once** (`db.load_all`) and hands it to every job as
+`run(con, data)`; no job reads the snapshot tables itself (Task #44). Each job
+then syncs its own rows with `db.write_results`, which **writes only what
+changed**: unchanged results are skipped, changed ones updated in place, vanished
+scopes deleted (Task #43). Re-running is idempotent, and an unchanged re-run
+writes nothing. That matters because every insert, update and delete counts
+against Turso's monthly write cap. Only store rows that a page reads.
+
+`run.py` records per-job counts (`inserted/updated/deleted/unchanged`), per-table
+`writes` and `rowsLoaded` in the `JobRun` summary. `npm run db:write-budget`
+sums them into a month-to-date report (Task #42).
 
 ## Setup
 
@@ -62,7 +71,8 @@ Covers the pure statistical helpers (Task #37) — no DB, no network:
 | --- | --- |
 | `test_deadrule.py` | the locked "dead" rule: threshold, 7-day span, recovery resets |
 | `test_anomaly.py` | robust z-score + materiality bar; false-positive regressions |
-| `test_momentum.py` | window growth + least-squares slope, and their `None` guards |
+| `test_momentum.py` | window growth and its `None` guards |
+| `test_write_results.py` | the diff-based writer: skip unchanged, update, delete vanished, dedupe |
 | `test_opportunity.py` | min-max normalization, weight signs, per-genre growth |
 | `test_survival.py` | censoring + left truncation of lifetime rows |
 | `test_seasonality.py` | weekday indices and the cold-start guard |

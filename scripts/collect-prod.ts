@@ -53,7 +53,7 @@ async function main() {
   }
 
   // Import AFTER the env is set, so the Prisma client constructs against Turso.
-  const { runCollection } = await import("../src/lib/collector/collect");
+  const { collectionJobSummary, runCollection } = await import("../src/lib/collector/collect");
   const { recordJobRun } = await import("../src/lib/db/job-runs");
 
   const max = arg("max");
@@ -81,16 +81,7 @@ async function main() {
       status,
       startedAt: summary.startedAt,
       finishedAt: summary.finishedAt,
-      summary: {
-        discovered: summary.discovered,
-        chartsDiscovered: summary.chartsDiscovered,
-        knownReCollected: summary.knownReCollected,
-        persisted: summary.persisted,
-        newGames: summary.newGames,
-        peaksUpdated: summary.peaksUpdated,
-        genreSnapshots: summary.genreSnapshots,
-        errorCount: summary.errors.length,
-      },
+      summary: collectionJobSummary(summary),
       error: summary.errors.length ? summary.errors.join("\n") : null,
     });
 

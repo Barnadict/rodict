@@ -14,7 +14,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from db import connect, load_genres, load_genre_snapshots, write_results
+from db import AnalyticsData, Connection, run_standalone, write_results
 
 KIND = "seasonality"
 MIN_DISTINCT_DAYS = 7
@@ -54,28 +54,24 @@ def _analyze(series: pd.DataFrame) -> dict:
     return {"status": "ok", "distinctDays": int(distinct_days), "byWeekday": by_weekday, "byHour": by_hour}
 
 
-def run() -> int:
-    con = connect()
-    try:
-        gensnaps = load_genre_snapshots(con)
-        genres = load_genres(con)
+def run(con: Connection, data: AnalyticsData) -> dict:
+    gensnaps = data.genre_snapshots
+    genres = data.genres
 
-        results = []
-        for gen in genres.itertuples():
-            gs = gensnaps[gensnaps["genreId"] == gen.id]
-            if gs.empty:
-                continue
-            results.append({"scopeType": "genre", "scopeId": gen.id, "payload": _analyze(gs)})
+    results = []
+    for gen in genres.itertuples():
+        gs = gensnaps[gensnaps["genreId"] == gen.id]
+        if gs.empty:
+            continue
+        results.append({"scopeType": "genre", "scopeId": gen.id, "payload": _analyze(gs)})
 
-        # global: total players across all genres per timestamp
-        if not gensnaps.empty:
-            glob = gensnaps.groupby("collectedAt", as_index=False)["totalPlaying"].sum()
-            results.append({"scopeType": "global", "scopeId": None, "payload": _analyze(glob)})
+    # global: total players across all genres per timestamp
+    if not gensnaps.empty:
+        glob = gensnaps.groupby("collectedAt", as_index=False)["totalPlaying"].sum()
+        results.append({"scopeType": "global", "scopeId": None, "payload": _analyze(glob)})
 
-        return write_results(con, KIND, results)
-    finally:
-        con.close()
+    return write_results(con, KIND, results)
 
 
 if __name__ == "__main__":
-    print(f"seasonality: wrote {run()} results")
+    print(f"seasonality: {run_standalone(run)}")
