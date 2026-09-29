@@ -1,9 +1,9 @@
 import { COLLECTION_CADENCE } from "@/lib/collector/cadence";
+import { BUDGET_GUARD } from "@/lib/collector/budget-guard";
 import Link from "next/link";
 
 import { EARNINGS_ASSUMPTIONS } from "@/lib/earnings/estimate";
 import { DEVEX_SCHEDULES } from "@/lib/earnings/devex";
-import { DEFAULT_RETENTION_POLICY } from "@/lib/retention/policy";
 import { GENRES } from "@/lib/taxonomy/genres";
 import { THEMES } from "@/lib/taxonomy/themes";
 
@@ -28,7 +28,7 @@ export const metadata = {
  * the DB, so the route prerenders into the static shell with no per-request
  * work. That also means the constants below are the SAME ones the app computes
  * with — the page can't drift from the real assumptions the way hardcoded prose
- * would. (The DevEx schedule, earnings assumptions, retention policy, and genre
+ * would. (The DevEx schedule, earnings assumptions, collection cadence, and genre
  * taxonomy are all imported, not retyped.)
  */
 
@@ -156,6 +156,13 @@ export default function AboutPage() {
             is popular today, games that failed would silently vanish from the dataset and every
             lifespan and survival statistic would be wrong — a mistake known as{" "}
             <em>survivorship bias</em>.
+          </li>
+          <li>
+            <strong className="text-foreground">Collection slows down rather than stopping.</strong>{" "}
+            If a month&apos;s database writes are on course to pass {BUDGET_GUARD.reduceAt * 100}%
+            of the hosting plan&apos;s limit, only busy games are collected (no quiet games, no new
+            discoveries) until the month resets; past {BUDGET_GUARD.pauseAt * 100}% already used,
+            collection pauses. Quiet games can have longer gaps in such a month.
           </li>
           <li>
             <strong className="text-foreground">All timestamps are stored in UTC</strong> and
@@ -442,42 +449,12 @@ export default function AboutPage() {
 
       <Section id="retention" title="How long data is kept">
         <p className="max-w-2xl text-muted-foreground">
-          Snapshots accumulate forever, so older data is thinned to stay within a free-tier
-          database. Within each period the most recent snapshot is kept, and a game&apos;s all-time
-          peak is stored separately — so thinning never breaks the dead rule.
+          Every snapshot is kept at full collection resolution — nothing is thinned or deleted. The
+          database is on a free tier where storage is far from its limit but every deleted row
+          counts against a monthly write limit, so pruning old data would cost more than keeping it.
+          A game&apos;s all-time peak is stored separately in any case, so the dead rule never
+          depends on old snapshots surviving.
         </p>
-        <div className="overflow-x-auto rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Age of data</TableHead>
-                <TableHead>Resolution kept</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow>
-                <TableCell className="font-medium tabular-nums">
-                  Up to {DEFAULT_RETENTION_POLICY.hourlyDays} days
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  Everything — full collection resolution
-                </TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell className="font-medium tabular-nums">
-                  {DEFAULT_RETENTION_POLICY.hourlyDays}–{DEFAULT_RETENTION_POLICY.dailyDays} days
-                </TableCell>
-                <TableCell className="text-muted-foreground">One snapshot per day</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell className="font-medium tabular-nums">
-                  Over {DEFAULT_RETENTION_POLICY.dailyDays} days
-                </TableCell>
-                <TableCell className="text-muted-foreground">One snapshot per week</TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </div>
       </Section>
 
       <Section id="limitations" title="Limitations worth knowing">

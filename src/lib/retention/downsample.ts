@@ -28,6 +28,7 @@ export interface DownsampleResult {
 export async function downsampleSnapshots(
   now: Date = new Date(),
   policy: RetentionPolicy = DEFAULT_RETENTION_POLICY,
+  opts: { dryRun?: boolean } = {},
 ): Promise<DownsampleResult> {
   const startedAt = Date.now();
   const hourlyCutoff = new Date(now.getTime() - policy.hourlyDays * DAY_MS);
@@ -53,7 +54,17 @@ export async function downsampleSnapshots(
     toRemove.push(...plan.remove);
   }
 
+  // A dry run reports what WOULD be deleted — each deleted row is a billed
+  // write on Turso (Task #48), so check the cost before paying it.
   let deleted = 0;
+  if (opts.dryRun) {
+    return {
+      gamesProcessed: byGame.size,
+      snapshotsScanned: rows.length,
+      snapshotsDeleted: toRemove.length,
+      durationMs: Date.now() - startedAt,
+    };
+  }
   for (let i = 0; i < toRemove.length; i += DELETE_CHUNK) {
     const chunk = toRemove.slice(i, i + DELETE_CHUNK);
     const res = await prisma.gameSnapshot.deleteMany({ where: { id: { in: chunk } } });

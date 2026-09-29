@@ -69,6 +69,8 @@ export interface DiscoverOptions {
   knownOnly?: boolean;
   /** Collect every known game regardless of its cadence tier. */
   ignoreCadence?: boolean;
+  /** Collect only busy-tier known games (the write-budget guard, Task #47). */
+  busyOnly?: boolean;
 }
 
 export interface DiscoverResult {
@@ -92,9 +94,13 @@ export async function discoverUniverseIds(opts: DiscoverOptions = {}): Promise<D
     skipCharts,
     knownOnly,
     ignoreCadence,
+    busyOnly,
   } = opts;
 
-  const { due, deferred } = await getKnownGamesForCollection(new Date(), { ignoreCadence });
+  const { due, deferred } = await getKnownGamesForCollection(new Date(), {
+    ignoreCadence,
+    busyOnly,
+  });
   const all = new Set<bigint>(due);
   let discoveredCount = 0;
   let chartCount = 0;

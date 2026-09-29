@@ -188,8 +188,9 @@ model GameSnapshot {
 
   game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
 
+  // The unique index also serves every (gameId, collectedAt) lookup — a separate
+  // @@index on the same columns duplicated ~21% of the DB's bytes (Task #48).
   @@unique([gameId, collectedAt]) // guards against duplicate rows for the same run
-  @@index([gameId, collectedAt])
   @@index([collectedAt])
 }
 
@@ -209,8 +210,7 @@ model GenreSnapshot {
 
   genre Genre @relation(fields: [genreId], references: [id], onDelete: Cascade)
 
-  @@unique([genreId, collectedAt])
-  @@index([genreId, collectedAt])
+  @@unique([genreId, collectedAt]) // also serves (genreId, collectedAt) lookups
   @@index([collectedAt])
 }
 

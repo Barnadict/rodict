@@ -17,11 +17,9 @@
  *   npm run collect:prod -- --known-only # skip discovery, only refresh known
  *   npm run collect:prod -- --all        # ignore the tiered cadence (Task #46)
  *   npm run collect:prod -- --max=200    # cap games (a quick smoke run)
+ *   npm run collect:prod -- --ignore-budget  # skip the write-budget guard (Task #47)
  */
 import { config } from "dotenv";
-// Type-only import: erased at runtime, so it does NOT construct the Prisma
-// client before the production env is loaded below.
-import type { JobStatus } from "../src/lib/db/job-runs";
 
 // Load the PRODUCTION env before anything imports the Prisma client (which reads
 // process.env at construction time). `override: true` makes it win over any
@@ -54,13 +52,16 @@ async function main() {
   }
 
   // Import AFTER the env is set, so the Prisma client constructs against Turso.
-  const { collectionJobSummary, runCollection } = await import("../src/lib/collector/collect");
+  const { collectionJobError, collectionJobStatus, collectionJobSummary, runCollection } =
+    await import("../src/lib/collector/collect");
   const { recordJobRun } = await import("../src/lib/db/job-runs");
 
   const max = arg("max");
   const knownOnly = process.argv.includes("--known-only");
   // Ignore the tiered cadence (Task #46) and re-collect every known game.
   const ignoreCadence = process.argv.includes("--all");
+  // Skip the write-budget guard (Task #47). Only for a deliberate manual run.
+  const ignoreBudget = process.argv.includes("--ignore-budget");
   const startedAt = new Date();
 
   const host = url.replace(/\?.*$/, "");
@@ -70,23 +71,25 @@ async function main() {
       maxGames: max ? Number(max) : undefined,
       knownOnly,
       ignoreCadence,
+      ignoreBudget,
     });
 
     console.log(JSON.stringify(summary, null, 2));
+    if (summary.budgetGuard?.reason) console.warn(`::warning::${summary.budgetGuard.reason}`);
     if (summary.errors.length) {
       console.error(`\n${summary.errors.length} per-game error(s).`);
     }
 
-    // Per-game failures don't abort the run, but a run with skipped batches is
-    // "partial" rather than a clean success, so monitoring can tell them apart.
-    const status: JobStatus = summary.errors.length > 0 ? "partial" : "success";
+    // Per-game failures don't abort the run, but a run with skipped batches (or
+    // one the write-budget guard reduced, Task #47) is "partial" rather than a
+    // clean success, so monitoring can tell them apart.
     await recordJobRun({
       job: "collect",
-      status,
+      status: collectionJobStatus(summary),
       startedAt: summary.startedAt,
       finishedAt: summary.finishedAt,
       summary: collectionJobSummary(summary),
-      error: summary.errors.length ? summary.errors.join("\n") : null,
+      error: collectionJobError(summary),
     });
 
     console.log(

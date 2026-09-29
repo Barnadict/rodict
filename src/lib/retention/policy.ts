@@ -10,6 +10,13 @@
  * All-time peak lives on Game (not recomputed from snapshots), so downsampling
  * never loses a game's peak — the "dead" rule stays intact. The job is
  * idempotent: re-running converges to the same kept set.
+ *
+ * NOT RUN IN PRODUCTION (Task #48). On Turso's free plan every deleted row is a
+ * billed write, and storage is far from its cap (see `npm run db:write-budget`),
+ * so all snapshots are kept. Before this is ever run against the hosted DB, fix
+ * the bucket choice: keeping the last snapshot of each day is always the same
+ * UTC hour — a biased sample of a strongly daily CCU cycle. Keep daily avg/peak/
+ * min instead (e.g. a write-once GameDailyStat row per game per closed day).
  */
 
 export interface RetentionPolicy {

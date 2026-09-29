@@ -2,7 +2,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { CleanGame } from "@/lib/validation/sanitize";
 import { addWrites, type WriteCounts } from "@/lib/db/write-counts";
-import { isDueForCollection } from "@/lib/collector/cadence";
+import { collectionTier, isDueForCollection } from "@/lib/collector/cadence";
 
 // ---------------------------------------------------------------------------
 // Write path (used by the collector, Task #8)
@@ -296,10 +296,11 @@ export async function persistCollectedGames(inputs: PersistInput[]): Promise<Bul
  * Split by collection cadence (Task #46): `due` games are collected this run;
  * `deferred` are low-activity games collected within the last day, which wait
  * for their next daily slot (still followed, just less often). With
- * `ignoreCadence`, every known game is due. */
+ * `ignoreCadence`, every known game is due. With `busyOnly` (the write-budget
+ * guard, Task #47), every low-activity game is deferred, due or not. */
 export async function getKnownGamesForCollection(
   now: Date,
-  opts: { ignoreCadence?: boolean } = {},
+  opts: { ignoreCadence?: boolean; busyOnly?: boolean } = {},
 ): Promise<{ due: bigint[]; deferred: Set<bigint> }> {
   const rows = await prisma.game.findMany({
     select: { universeId: true, currentPlaying: true, firstSeenAt: true, lastCollectedAt: true },
@@ -308,7 +309,8 @@ export async function getKnownGamesForCollection(
   const due: bigint[] = [];
   const deferred = new Set<bigint>();
   for (const r of rows) {
-    if (opts.ignoreCadence || isDueForCollection(r, now)) due.push(r.universeId);
+    if (opts.busyOnly && collectionTier(r, now) === "low") deferred.add(r.universeId);
+    else if (opts.ignoreCadence || isDueForCollection(r, now)) due.push(r.universeId);
     else deferred.add(r.universeId);
   }
   return { due, deferred };

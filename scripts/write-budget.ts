@@ -8,6 +8,9 @@
  *   npm run db:write-budget -- --prod            # hosted Turso (.env.production.local)
  *   npm run db:write-budget -- --collect-per-day=8 --analytics-per-day=2
  *
+ * Also reports database storage against the plan's cap — the number that
+ * decides whether snapshot retention/pruning is worth its writes (Task #48).
+ *
  * Read-only: it never writes, so it costs no write budget (reads are a few
  * thousand rows — the month's JobRuns plus one scan of Game).
  *
@@ -39,34 +42,20 @@ async function main() {
     process.exit(1);
   }
   const { prisma } = await import("../src/lib/prisma");
-  const { summarizeBudget, TURSO_FREE_PLAN } = await import("../src/lib/db/write-counts");
+  const { TURSO_FREE_PLAN } = await import("../src/lib/db/write-counts");
+  const { getDatabaseSizeBytes, getMonthWriteBudget, PRODUCTION_SCHEDULE } =
+    await import("../src/lib/db/write-budget");
+  const { BUDGET_GUARD } = await import("../src/lib/collector/budget-guard");
 
-  // Default schedule = what the workflows run today: collect every 3h (8/day)
-  // and analytics after each successful collect (up to 8/day).
+  // Default schedule = what the workflows run today (collect every 3h,
+  // analytics twice a day).
   const runsPerDay = {
-    collect: numArg("collect-per-day", 8),
-    analytics: numArg("analytics-per-day", 8),
+    collect: numArg("collect-per-day", PRODUCTION_SCHEDULE.collect),
+    analytics: numArg("analytics-per-day", PRODUCTION_SCHEDULE.analytics),
   };
 
   const now = new Date();
-  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const rows = await prisma.jobRun.findMany({
-    where: { startedAt: { gte: monthStart } },
-    select: { job: true, startedAt: true, summary: true },
-  });
-  const report = summarizeBudget(
-    rows.map((r) => {
-      let summary = null;
-      try {
-        summary = r.summary ? JSON.parse(r.summary) : null;
-      } catch {
-        // an unparseable summary just counts as unmeasured
-      }
-      return { job: r.job, startedAt: r.startedAt, summary };
-    }),
-    now,
-    runsPerDay,
-  );
+  const report = await getMonthWriteBudget(now, runsPerDay);
 
   const cap = TURSO_FREE_PLAN.rowsWrittenPerMonth;
   const readCap = TURSO_FREE_PLAN.rowsReadPerMonth;
@@ -115,6 +104,10 @@ async function main() {
         `(${pct(report.fullMonthWritesAtSchedule!, cap)} of cap)`,
     );
   }
+  console.log(
+    `Collector budget guard (Task #47): busy-tier only above ${BUDGET_GUARD.reduceAt * 100}% ` +
+      `projected, paused above ${BUDGET_GUARD.pauseAt * 100}% written.`,
+  );
   if (report.fullMonthAnalyticsReadsAtSchedule !== null) {
     console.log(
       `Analytics reads, full month on this schedule (Est.): ${fmt(report.fullMonthAnalyticsReadsAtSchedule)} ` +
@@ -134,6 +127,28 @@ async function main() {
     console.log(`  below ${LOW_CCU} CCU: ${fmt(low)} (${pct(low, total)})`);
     console.log(`  at 0 CCU:       ${fmt(zero)} (${pct(zero, total)})`);
     console.log(`  status "dead":  ${fmt(dead)} (${pct(dead, total)})`);
+  }
+
+  // Storage (Task #48): pruning snapshots costs one write per deleted row, so
+  // it's only worth it when storage, not writes, is the closer limit.
+  const bytes = await getDatabaseSizeBytes();
+  const snapshots = await prisma.gameSnapshot.count();
+  const storageCap = TURSO_FREE_PLAN.storageBytes;
+  const mb = (n: number) => `${(n / 1024 ** 2).toFixed(0)} MB`;
+  console.log(`\nStorage: ${mb(bytes)} of ${mb(storageCap)} (${pct(bytes, storageCap)} of cap)`);
+  const collectPerRun = report.jobs.collect?.avgWritesPerRun;
+  if (snapshots && collectPerRun && runsPerDay.collect > 0) {
+    // Growth ≈ snapshot inserts per month × bytes per snapshot. About half of
+    // collect writes are GameSnapshot inserts (one per game; the other half are
+    // the matching Game updates). bytesPerRow spreads every table's bytes over
+    // the snapshots, so this leans high (Est.).
+    const bytesPerRow = bytes / snapshots;
+    const growthPerMonth = (collectPerRun / 2) * runsPerDay.collect * 30 * bytesPerRow;
+    const months = (storageCap - bytes) / growthPerMonth;
+    console.log(
+      `  ~${fmt(bytesPerRow)} bytes per snapshot incl. indexes; growth ~${mb(growthPerMonth)}/month ` +
+        `→ cap in ~${months.toFixed(0)} months (Est.)`,
+    );
   }
 }
 

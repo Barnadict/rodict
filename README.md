@@ -82,21 +82,21 @@ build — and so without needing `DATABASE_URL`.
 
 ## Scripts
 
-| Script                 | What it does                                               |
-| ---------------------- | ---------------------------------------------------------- |
-| `npm run dev`          | Start the dev server                                       |
-| `npm run build`        | Production build                                           |
-| `npm run lint`         | ESLint                                                     |
-| `npm run typecheck`    | `next typegen && tsc --noEmit` — use this, not bare `tsc`  |
-| `npm test`             | Run the Vitest suite (`npm run test:watch` to watch)       |
-| `npm run test:py`      | Run the Python analytics tests (pytest)                    |
-| `npm run collect`      | Run the data collector once (`-- --max=N`, `--known-only`) |
-| `npm run analytics`    | Run all 9 Python analytics jobs                            |
-| `npm run db:migrate`   | Create/apply a local migration                             |
-| `npm run db:deploy`    | Apply pending migrations to the hosted Turso DB            |
-| `npm run db:seed`      | Seed the genre/theme taxonomy                              |
-| `npm run db:backup`    | Back up the local SQLite file                              |
-| `npm run db:retention` | Downsample/prune old snapshots                             |
+| Script                 | What it does                                                |
+| ---------------------- | ----------------------------------------------------------- |
+| `npm run dev`          | Start the dev server                                        |
+| `npm run build`        | Production build                                            |
+| `npm run lint`         | ESLint                                                      |
+| `npm run typecheck`    | `next typegen && tsc --noEmit` — use this, not bare `tsc`   |
+| `npm test`             | Run the Vitest suite (`npm run test:watch` to watch)        |
+| `npm run test:py`      | Run the Python analytics tests (pytest)                     |
+| `npm run collect`      | Run the data collector once (`-- --max=N`, `--known-only`)  |
+| `npm run analytics`    | Run all 9 Python analytics jobs                             |
+| `npm run db:migrate`   | Create/apply a local migration                              |
+| `npm run db:deploy`    | Apply pending migrations to the hosted Turso DB             |
+| `npm run db:seed`      | Seed the genre/theme taxonomy                               |
+| `npm run db:backup`    | Back up the local SQLite file                               |
+| `npm run db:retention` | Downsample old snapshots (local only; `--dry-run` for cost) |
 
 ## Deployment
 
