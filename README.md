@@ -107,15 +107,15 @@ build — and so without needing `DATABASE_URL`.
 - **DB:** hosted on Turso; `DATABASE_URL`/`DATABASE_AUTH_TOKEN` live **only** in GitHub Actions secrets and Vercel's env vars — never in a local `.env`, never committed.
 - **Migrations:** `npm run db:migrate` only touches your local SQLite file. To apply a migration to Turso, run the **"Deploy migrations"** workflow ([`migrate.yml`](.github/workflows/migrate.yml)) from the Actions tab — manual trigger, idempotent, and the credentials never leave GitHub. Running `npm run db:deploy` locally fails by design (`DATABASE_URL must point at the hosted Turso DB`), because a dev machine has no Turso URL. (`prisma migrate deploy` can't be used against a `libsql://` URL at all — see the comment atop `scripts/deploy-migrations.ts`.)
 - **Collector:** runs on a schedule via [`.github/workflows/collect.yml`](.github/workflows/collect.yml).
-- **Discovery (new games):** scheduled collect runs are known-only. New games come from discovery runs; see [Weekly discovery](#weekly-discovery).
+- **Discovery (new games):** scheduled collect runs discover from the explore charts only (`--charts-only`); keyword search runs weekly from a PC. See [Weekly discovery](#weekly-discovery).
 - **Game passes:** refreshed daily, one seventh of the games per run, via [`.github/workflows/gamepasses.yml`](.github/workflows/gamepasses.yml).
 - **Frontend:** deployed on Vercel from this repo.
 
 ## Weekly discovery
 
-Roblox throttles some discovery sources on GitHub's datacenter IPs. To see which ones still work from Actions, run the **"Discovery probe"** workflow ([`discovery-probe.yml`](.github/workflows/discovery-probe.yml)). It records pages, new games and 429s per source and saves no games.
+Roblox throttles some discovery sources on GitHub's datacenter IPs. The **"Discovery probe"** workflow ([`discovery-probe.yml`](.github/workflows/discovery-probe.yml)) measures which sources still work from Actions: it records pages, new games and 429s per source and saves no games. On 2026-09-30 every omni-search query got 429s while all five explore charts worked, so the scheduled collect runs use the charts (`--charts-only`) every 3 hours. Re-run the probe if that seems to have changed.
 
-For sources that stay blocked there, a Windows scheduled task runs `npm run collect:prod` weekly from your PC (residential IP). It needs `.env.production.local`. If the PC is off at the start time, the task runs as soon as it's back on.
+For keyword search, a Windows scheduled task runs `npm run collect:prod` weekly from your PC (residential IP). It needs `.env.production.local`. If the PC is off at the start time, the task runs as soon as it's back on.
 
 ```powershell
 # register (default: Sundays 10:00; -Day / -At to change)

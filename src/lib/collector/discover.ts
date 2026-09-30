@@ -65,6 +65,10 @@ export interface DiscoverOptions {
   chartPages?: number;
   /** Skip the explore-api charts and only use keyword search. */
   skipCharts?: boolean;
+  /** Skip keyword search and only use the explore-api charts. Scheduled
+   * Actions runs do this: the 2026-09-30 discovery probe (Task #94) got a 429
+   * on every omni-search query from GitHub's IP, and none on the charts. */
+  skipSearch?: boolean;
   /** Skip ALL discovery and only re-collect known games. */
   knownOnly?: boolean;
   /** Collect every known game regardless of its cadence tier. */
@@ -95,6 +99,7 @@ export async function discoverUniverseIds(opts: DiscoverOptions = {}): Promise<D
     pagesPerQuery = 10,
     chartPages = 5,
     skipCharts,
+    skipSearch,
     knownOnly,
     ignoreCadence,
     busyOnly,
@@ -129,7 +134,7 @@ export async function discoverUniverseIds(opts: DiscoverOptions = {}): Promise<D
     // 1. Keyword search, several pages deep, all queries in parallel. A single
     //    failed query (or failed page) must not abort the rest.
     const searches = await Promise.all(
-      queries.map(async (query) => {
+      (skipSearch ? [] : queries).map(async (query) => {
         try {
           return await searchGames(query, { maxPages: pagesPerQuery });
         } catch {

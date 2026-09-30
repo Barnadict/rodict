@@ -1,5 +1,8 @@
 /**
- * Manual collector run (Task #8): `npm run collect [-- --max=N --known-only --all --ignore-budget --pace]`.
+ * Manual collector run (Task #8): `npm run collect [-- --max=N --known-only --charts-only --all --ignore-budget --pace]`.
+ *
+ * `--charts-only` discovers from the explore-api charts but skips keyword
+ * search, which is 429'd on GitHub's datacenter IP (Task #94 probe).
  *
  * `--pace` (the scheduled collect.yml runs) skips the run when the month's
  * writes are ahead of the even-pace line (Task #79).
@@ -28,6 +31,7 @@ function arg(name: string): string | undefined {
 async function main() {
   const max = arg("max");
   const knownOnly = process.argv.includes("--known-only");
+  const skipSearch = process.argv.includes("--charts-only");
   // Ignore the tiered cadence (Task #46) and re-collect every known game.
   const ignoreCadence = process.argv.includes("--all");
   // Skip the write-budget guard (Task #47). Only for a deliberate manual run.
@@ -41,6 +45,7 @@ async function main() {
     const summary = await runCollection({
       maxGames: max ? Number(max) : undefined,
       knownOnly,
+      skipSearch,
       ignoreCadence,
       ignoreBudget,
       pace,

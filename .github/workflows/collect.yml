@@ -11,9 +11,13 @@ on:
   workflow_dispatch:
     inputs:
       knownOnly:
-        description: "Skip keyword discovery, only re-collect known games"
+        description: "Skip all discovery, only re-collect known games"
         type: boolean
         default: false
+      chartsOnly:
+        description: "Discover from the explore charts only (keyword search is 429'd here)"
+        type: boolean
+        default: true
 
 jobs:
   collect:
@@ -38,19 +42,20 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
         run: |
-          # Scheduled runs stay in maintenance mode (--known-only). Discovery is
-          # throttled to ~nothing on GitHub's datacenter IP, so the cron spends its
-          # whole budget RE-COLLECTING known games (stalest first — see
-          # getKnownUniverseIds) rather than wasting it on discovery it can't do.
-          # Corpus GROWTH comes from manual `npm run collect:prod` on a residential
-          # IP. A manual workflow_dispatch can still force a full-discovery run by
-          # leaving knownOnly unchecked.
-          # Scheduled runs --pace (Task #79): a run ahead of the month's even
-          # write line is skipped, so collection spreads across the whole month.
+          # Scheduled runs discover from the explore-api charts only
+          # (--charts-only). The 2026-09-30 discovery probe (Task #94) got a 429
+          # on every omni-search query from GitHub's datacenter IP but none on
+          # the charts (~5 requests a run, a few new games each, Up-and-Coming
+          # included). Keyword-search growth comes from the weekly residential
+          # `npm run collect:prod` task (README, "Weekly discovery").
+          # Scheduled runs also --pace (Task #79): a run ahead of the month's
+          # even write line is skipped, so collection spreads across the month.
           if [ "${{ github.event_name }}" = "schedule" ]; then
-            npm run collect -- --known-only --pace
+            npm run collect -- --charts-only --pace
           elif [ "${{ inputs.knownOnly }}" = "true" ]; then
             npm run collect -- --known-only
+          elif [ "${{ inputs.chartsOnly }}" = "true" ]; then
+            npm run collect -- --charts-only
           else
             npm run collect
           fi
