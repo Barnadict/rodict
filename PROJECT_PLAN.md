@@ -3,8 +3,7 @@
 ## ▶️ SESSION START — copy/paste this at the beginning of every new session
 
 ```
-Read PROJECT_PLAN.md. Tasks #1–#91 and #94 are DONE (Phase 9a and 9b complete). Next: the
-9c features (#92–#93), one at a time.
+Read PROJECT_PLAN.md. Tasks #1–#94 are DONE (Phase 9 complete).
 REMIND ME before #81: it needs a Turso *Platform* API token + org slug as GitHub secrets
 (the existing DATABASE_URL / DATABASE_AUTH_TOKEN are database tokens and can't read usage). Measured: ≤~2.8M of the 10M monthly writes on the current schedule. Live pipeline
 health is on /status.
@@ -346,8 +345,8 @@ The #47 guard already stops collection at 95% of the monthly cap and resumes on 
 
 #### 9c — Growth & sharing
 
-- [ ] **92.** 🟢 **Weekly recap (`/weekly`) + RSS.** Auto-generated: top risers, new entrants, deaths, biggest spikes in the last 7 days, using existing queries. Also an Atom feed like #68. **Writes:** none.
-- [ ] **93.** 🟢 **Embeddable live badge.** `/badge/<universeId>.svg` shows current CCU or rank and links back to the game page, for developers to put on their own pages. Cached, with no DB work beyond one `Game` read. **Writes:** none.
+- [x] **92.** 🟢 **Weekly recap (`/weekly`) + RSS.** ✅ Done. `/weekly` (sidebar, sitemap) lists the last 7 days, 10 rows per section: **top rising games and genres** (`getRisingGames`/`getRisingGenres`, the /trending rule with a 7-day cutoff), **biggest spikes** (the global `change_point` payload's spikes in the window, biggest jump first; their game ids are mapped to universe ids with one ≤10-id read), **new entrants** (created on Roblox or first tracked this week, as on /new, without its snapshot read) and **went dead** (`status = dead`, `deadSince` in the window, biggest peak first), each with a total. One cached loader, `getWeeklyRecap` in `cached-queries.ts` (`use cache` + `cacheLife("hours")`, clock read inside), feeds both the page and **`/weekly/feed`**: Atom with **one entry per ISO week** (`urn:rodict:weekly:2026-W40`), so readers see a new recap weekly and rebuilds update it in place; the entry carries the recap as HTML `<content>`. `renderAtom` now takes title/subtitle/alternate link and optional content (the #68 feed passes its old values). The page advertises the feed via `alternates.types`. Pure helpers in `src/lib/weekly.ts` (tested: window/ordering, ISO weeks at year edges, stable ids, escaping). /about documents it. **Writes:** none. _Original spec:_ Auto-generated: top risers, new entrants, deaths, biggest spikes in the last 7 days, using existing queries. Also an Atom feed like #68. **Writes:** none.
+- [x] **93.** 🟢 **Embeddable live badge.** ✅ Done. `GET /badge/<universeId>.svg` (the route is `src/app/badge/[file]/route.ts`, since a segment can't be `[id].svg`) draws a shields-style flat SVG: **"playing now | 87.5K"** by default, or `?metric=rank` for **"rank by players | #12"** (1 + games with more players now; nobody playing → "unranked"). One statement per game (`getBadgeGame` in `src/lib/db/badge.ts`); with rank, the count is a scalar subquery on the `currentPlaying` index in that same statement, so a game ranked #N reads ~N index entries. Cached per game + metric (`use cache`, `cacheLife("hours")`) and `Cache-Control: public, max-age=1800`, so image proxies (GitHub camo) refresh within the hour. Unknown ids get a grey "not tracked" badge with a 404, never a broken image. The SVG wraps itself in a link to the game page (works when opened directly or via `<object>`); since `<img>` can't carry a link, the game page's new **"Embed a live badge"** section (`#badge`, `BadgeEmbed` client component) previews both metrics and copies Markdown/HTML snippets that wrap the image in a link, using the canonical `SITE_URL`. Box widths come from approximate Verdana widths and the text uses `textLength`, so it fits whatever font renders it. Pure helpers in `src/lib/badge.ts` (tested). /about documents it. **Writes:** none. _Original spec:_ `/badge/<universeId>.svg` shows current CCU or rank and links back to the game page, for developers to put on their own pages. Cached, with no DB work beyond one `Game` read. **Writes:** none.
 
 ### Later (out of scope for now)
 

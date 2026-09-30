@@ -121,11 +121,35 @@ describe("renderAtom", () => {
         },
       ],
       updated: NOW,
-      watching: 2,
+      title: "t",
+      subtitle: "s",
+      alternatePath: "/watchlist",
     });
     expect(doc).toContain("<title>&lt;b&gt;&quot;Tom &amp; Jerry&apos;s&quot;&lt;/b&gt;</title>");
     expect(doc).toContain('<link href="https://example.com/games/1"/>');
     expect(doc).toContain('href="https://example.com/feed?games=1&amp;genres=rpg"');
     expect(doc).not.toMatch(/&(?!amp;|lt;|gt;|quot;|apos;)/);
+  });
+
+  it("escapes HTML content", () => {
+    const doc = renderAtom({
+      origin: "https://example.com",
+      selfPath: "/weekly/feed",
+      entries: [
+        {
+          id: "urn:y",
+          title: "t",
+          summary: "s",
+          path: "/weekly",
+          updated: NOW,
+          content: "<p>A & B</p>",
+        },
+      ],
+      updated: NOW,
+      title: "t",
+      subtitle: "s",
+      alternatePath: "/weekly",
+    });
+    expect(doc).toContain('<content type="html">&lt;p&gt;A &amp; B&lt;/p&gt;</content>');
   });
 });

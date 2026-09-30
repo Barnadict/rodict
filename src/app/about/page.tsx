@@ -646,6 +646,26 @@ export default function AboutPage() {
             </dd>
           </div>
           <div>
+            <dt className="font-medium">Weekly recap</dt>
+            <dd className="text-muted-foreground">
+              <Link href="/weekly" className="underline underline-offset-4">
+                /weekly
+              </Link>{" "}
+              sums up the last 7 days with the same rules as the rest of the site: rising games and
+              genres as on /trending, flagged spikes, new entrants as on /new and games that went
+              dead. Its Atom feed at /weekly/feed adds one entry per ISO week.
+            </dd>
+          </div>
+          <div>
+            <dt className="font-medium">Live badge</dt>
+            <dd className="text-muted-foreground">
+              Every game page offers an embeddable SVG badge (
+              <code>/badge/&lt;universe id&gt;.svg</code>) showing players now, or with{" "}
+              <code>?metric=rank</code> the game&apos;s rank by players now among every tracked
+              game. It&apos;s cached and refreshes within the hour.
+            </dd>
+          </div>
+          <div>
             <dt className="font-medium">Est. earnings</dt>
             <dd className="text-muted-foreground">
               A derived range, never real revenue. See{" "}

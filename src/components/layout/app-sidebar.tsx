@@ -15,6 +15,7 @@ import {
   Skull,
   Users,
   RefreshCw,
+  CalendarDays,
 } from "lucide-react";
 
 import {
@@ -35,6 +36,7 @@ const browseItems = [
   { title: "Genres", href: "/genres", icon: Shapes, color: "text-amber-500" },
   { title: "Themes", href: "/themes", icon: Palette, color: "text-fuchsia-500" },
   { title: "Trending", href: "/trending", icon: TrendingUp, color: "text-emerald-500" },
+  { title: "Weekly recap", href: "/weekly", icon: CalendarDays, color: "text-orange-500" },
   { title: "New releases", href: "/new", icon: Sparkles, color: "text-sky-500" },
   { title: "Saturation", href: "/saturation", icon: Scale, color: "text-rose-500" },
   { title: "Creators", href: "/creators", icon: Users, color: "text-indigo-500" },

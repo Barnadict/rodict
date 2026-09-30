@@ -41,7 +41,9 @@ export async function GET(request: NextRequest) {
     selfPath: `/feed${query}`,
     entries,
     updated: entries[0]?.updated ?? now,
-    watching,
+    title: "rodict watchlist",
+    subtitle: `Flagged changes and big weekly moves for ${watching} watched ${watching === 1 ? "game or genre" : "games and genres"}.`,
+    alternatePath: "/watchlist",
   });
   return new Response(body, {
     headers: {

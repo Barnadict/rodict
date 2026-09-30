@@ -19,6 +19,7 @@ const STATIC_PATHS = [
   "/genres",
   "/themes",
   "/trending",
+  "/weekly",
   "/new",
   "/saturation",
   "/records",

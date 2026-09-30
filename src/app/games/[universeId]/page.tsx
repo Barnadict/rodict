@@ -55,6 +55,7 @@ import { GrowthBadge } from "@/components/data-table/growth-badge";
 import { ExportLinks } from "@/components/data-table/export-links";
 import { WatchlistButton } from "@/components/watchlist/watchlist-button";
 import { CompareButton } from "@/components/compare/compare-button";
+import { BadgeEmbed } from "@/components/badge/badge-embed";
 import {
   RANGE_OPTIONS,
   RANGE_CLEAR_VALUE,
@@ -63,7 +64,7 @@ import {
   type RangeKey,
 } from "@/lib/date-range";
 
-import { pageMetadata } from "@/lib/site";
+import { SITE_URL, pageMetadata } from "@/lib/site";
 
 import { getGameShare } from "./share";
 
@@ -743,6 +744,15 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
           </div>
         </section>
       )}
+
+      <section id="badge" className="flex flex-col gap-2">
+        <h2 className="font-medium">Embed a live badge</h2>
+        <p className="text-sm text-muted-foreground">
+          Show this game&apos;s players now or its rank on your own page or README. It links back
+          here and refreshes within the hour.
+        </p>
+        <BadgeEmbed universeId={game.universeId.toString()} origin={SITE_URL} />
+      </section>
     </div>
   );
 }

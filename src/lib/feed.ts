@@ -76,6 +76,8 @@ export interface FeedEntry {
   /** Site-relative page path. */
   path: string;
   updated: Date;
+  /** Optional HTML body, shown by readers in place of the summary. */
+  content?: string;
 }
 
 /** A week-over-week change big enough to report, or null. */
@@ -160,9 +162,12 @@ export function renderAtom(opts: {
   selfPath: string;
   entries: FeedEntry[];
   updated: Date;
-  watching: number;
+  title: string;
+  subtitle: string;
+  /** The page the feed mirrors. */
+  alternatePath: string;
 }): string {
-  const { origin, selfPath, entries, updated, watching } = opts;
+  const { origin, selfPath, entries, updated, title, subtitle, alternatePath } = opts;
   const body = entries
     .map(
       (e) => `  <entry>
@@ -170,19 +175,22 @@ export function renderAtom(opts: {
     <title>${xml(e.title)}</title>
     <link href="${xml(origin + e.path)}"/>
     <updated>${e.updated.toISOString()}</updated>
-    <summary>${xml(e.summary)}</summary>
+    <summary>${xml(e.summary)}</summary>${
+      e.content
+        ? `
+    <content type="html">${xml(e.content)}</content>`
+        : ""
+    }
   </entry>`,
     )
     .join("\n");
   return `<?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
   <id>${xml(origin + selfPath)}</id>
-  <title>rodict watchlist</title>
-  <subtitle>${xml(
-    `Flagged changes and big weekly moves for ${watching} watched ${watching === 1 ? "game or genre" : "games and genres"}.`,
-  )}</subtitle>
+  <title>${xml(title)}</title>
+  <subtitle>${xml(subtitle)}</subtitle>
   <link rel="self" href="${xml(origin + selfPath)}"/>
-  <link href="${xml(origin + "/watchlist")}"/>
+  <link href="${xml(origin + alternatePath)}"/>
   <author><name>rodict</name></author>
   <updated>${updated.toISOString()}</updated>
 ${body}
