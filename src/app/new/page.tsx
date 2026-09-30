@@ -3,6 +3,7 @@ import { cacheLife } from "next/cache";
 
 import { getEarlyReadings, getGenreEarlyLifecycle, getNewReleases } from "@/lib/db/new-releases";
 import { getLastDiscoveryRun } from "@/lib/db/job-runs";
+import { getSmallIcons } from "@/lib/game-icons";
 import { formatCompact, formatRelativeTime } from "@/lib/format";
 import {
   EARLY_CURVE_DAYS,
@@ -30,6 +31,10 @@ import { GrowthBadge } from "@/components/data-table/growth-badge";
 import { StatTile } from "@/components/data-table/stat-tile";
 import { LocalTime } from "@/components/local-time";
 import { EarlyCurveChart } from "@/components/charts/early-curve-chart";
+import { GameIcon } from "@/components/game-icon";
+import { GenreDot } from "@/components/genre-badge";
+import { PageHeader } from "@/components/page-header";
+import { MobileCards } from "@/components/data-table/mobile-cards";
 
 export const metadata = { title: "New releases — rodict" };
 
@@ -54,8 +59,10 @@ async function getNewReleasesData() {
     getNewReleases(cutoff, now),
     getLastDiscoveryRun(),
   ]);
+  const icons = await getSmallIcons(games.map((g) => g.universeId));
   const rows = games.map(({ recent, ...g }) => ({
     ...g,
+    icon: icons.get(String(g.universeId)) ?? null,
     kind: releaseKind(g.robloxCreatedAt, cutoff),
     change: weekOverWeek(recent),
   }));
@@ -103,13 +110,10 @@ export default async function NewReleasesPage(props: PageProps<"/new">) {
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">New releases</h1>
-        <p className="text-muted-foreground">
-          Games created on Roblox or first tracked here in the last {NEW_RELEASE_DAYS} days, and how
-          their first days compare with others in their genre.
-        </p>
-      </div>
+      <PageHeader
+        title="New releases"
+        description={`Games created on Roblox or first tracked here in the last ${NEW_RELEASE_DAYS} days, and how their first days compare with others in their genre.`}
+      />
 
       <div className="rounded-lg border p-3 text-sm">
         <p>
@@ -204,7 +208,32 @@ export default async function NewReleasesPage(props: PageProps<"/new">) {
             baseParams={{ game: get("game") }}
           />
         </div>
-        <div className="overflow-x-auto rounded-lg border">
+        <MobileCards
+          empty={`No games created or first tracked in the last ${NEW_RELEASE_DAYS} days.`}
+          items={sorted.map((g, i) => ({
+            key: g.id,
+            href: `/games/${g.universeId}`,
+            title: g.name,
+            icon: g.icon,
+            rank: i + 1,
+            subtitle: (
+              <>
+                {g.currentGenre && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <GenreDot genre={g.currentGenre.slug} className="size-2" />
+                    {g.currentGenre.name}
+                  </span>
+                )}
+                <span>{g.kind === "new-on-roblox" ? "New on Roblox" : "Newly tracked"}</span>
+              </>
+            ),
+            stats: [
+              { label: "Players", value: formatCompact(g.currentPlaying) },
+              { label: "7-day", value: <GrowthBadge growth={g.change?.pct ?? null} /> },
+            ],
+          }))}
+        />
+        <div className="hidden overflow-x-auto rounded-lg border sm:block xl:overflow-visible">
           <Table>
             <TableHeader>
               <TableRow>
@@ -231,8 +260,9 @@ export default async function NewReleasesPage(props: PageProps<"/new">) {
               {sorted.map((g, i) => (
                 <TableRow key={g.id} className={g.id === chosen?.id ? "bg-muted/50" : undefined}>
                   <TableCell className="text-muted-foreground tabular-nums">{i + 1}</TableCell>
-                  <TableCell>
+                  <TableCell className="min-w-56 whitespace-normal">
                     <div className="flex flex-wrap items-center gap-1.5">
+                      <GameIcon src={g.icon} className="mr-1" />
                       <Link href={`/games/${g.universeId}`} className="font-medium hover:underline">
                         {g.name}
                       </Link>
@@ -246,7 +276,11 @@ export default async function NewReleasesPage(props: PageProps<"/new">) {
                   </TableCell>
                   <TableCell>
                     {g.currentGenre ? (
-                      <Link href={`/genres/${g.currentGenre.slug}`} className="hover:underline">
+                      <Link
+                        href={`/genres/${g.currentGenre.slug}`}
+                        className="inline-flex items-center gap-1.5 hover:underline"
+                      >
+                        <GenreDot genre={g.currentGenre.slug} className="size-2" />
                         {g.currentGenre.name}
                       </Link>
                     ) : (

@@ -49,6 +49,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TrendChart, type TrendPoint } from "@/components/charts/trend-chart";
+import { genreColor } from "@/lib/genre-colors";
+import { GenreDot } from "@/components/genre-badge";
+import { PageHeader } from "@/components/page-header";
 import { LocalTime } from "@/components/local-time";
 import { LifecycleChart } from "@/components/charts/lifecycle-chart";
 import { DailyLinesChart } from "@/components/charts/daily-lines-chart";
@@ -228,19 +231,23 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex min-w-0 flex-col gap-1.5">
-          <Link href="/genres" className="text-sm text-muted-foreground hover:text-foreground">
-            ← All genres
-          </Link>
-          <h1 className="text-2xl font-semibold tracking-tight">{genre.name}</h1>
-          {genre.description && <p className="text-muted-foreground">{genre.description}</p>}
-        </div>
-        <div className="flex items-center gap-2">
-          <CompareButton kind="genre" id={genre.slug} name={genre.name} />
-          <WatchlistButton kind="genre" id={genre.slug} name={genre.name} />
-        </div>
-      </div>
+      <PageHeader
+        breadcrumbs={[{ label: "Genres", href: "/genres" }]}
+        crumb={genre.name}
+        title={
+          <span className="inline-flex items-center gap-2.5">
+            <GenreDot genre={genre.slug} className="size-3.5" />
+            {genre.name}
+          </span>
+        }
+        description={genre.description}
+        actions={
+          <>
+            <CompareButton kind="genre" id={genre.slug} name={genre.name} />
+            <WatchlistButton kind="genre" id={genre.slug} name={genre.name} />
+          </>
+        }
+      />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label="Games" value={formatCompact(stat?.gameCount ?? 0)} />
@@ -505,6 +512,7 @@ async function PlayersSection({
           <TrendChart
             data={trendData}
             unit="players"
+            color={genreColor(genre.slug)}
             movingAverageWindow={5}
             projection={projection}
             emptyMessage="No genre snapshots yet — the collector has only just started."
@@ -724,7 +732,7 @@ async function AnalyticsSections({ head }: { head: GenreHead }) {
               players is a cross-sectional decline signal.
             </p>
           </div>
-          <div className="overflow-x-auto rounded-lg border">
+          <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
             <CohortTable cohorts={cohorts.cohorts} />
           </div>
         </section>
@@ -1002,7 +1010,7 @@ async function TopGamesSection({
           <h2 className="font-medium">Top games</h2>
           <ExportLinks dataset="games" params={{ genre: slug }} label="Export all games in genre" />
         </div>
-        <div className="overflow-x-auto rounded-lg border">
+        <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
           <Table>
             <TableHeader>
               <TableRow>

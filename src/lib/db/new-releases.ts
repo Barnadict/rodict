@@ -10,6 +10,26 @@ const DAY_MS = 86_400_000;
  * reads: the games (robloxCreatedAt / firstSeenAt), then one snapshot range on
  * the (gameId, collectedAt) index. Capped at NEW_RELEASES_LIMIT games.
  */
+/**
+ * The most-played games created on Roblox since `cutoff`, without the week of
+ * readings getNewReleases adds: the dashboard's "New on Roblox" row (Task #105).
+ */
+export function getTopNewOnRoblox(cutoff: Date, limit: number) {
+  return prisma.game.findMany({
+    where: { robloxCreatedAt: { gte: cutoff } },
+    orderBy: { currentPlaying: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      universeId: true,
+      name: true,
+      robloxCreatedAt: true,
+      currentPlaying: true,
+      currentGenre: { select: { slug: true, name: true } },
+    },
+  });
+}
+
 export async function getNewReleases(cutoff: Date, now: Date) {
   const games = await prisma.game.findMany({
     where: { OR: [{ robloxCreatedAt: { gte: cutoff } }, { firstSeenAt: { gte: cutoff } }] },

@@ -14,6 +14,15 @@ const nextConfig: NextConfig = {
    * Cached loaders (`cacheLife("hours")`) live next to the pages that own them.
    */
   cacheComponents: true,
+  experimental: {
+    /**
+     * React's <ViewTransition> tied into navigations (Task #107): route changes
+     * are transitions, so the page area cross-fades instead of swapping. The
+     * layout wraps the page in one boundary; globals.css holds the animation and
+     * turns it off under prefers-reduced-motion.
+     */
+    viewTransition: true,
+  },
   images: {
     remotePatterns: [
       {

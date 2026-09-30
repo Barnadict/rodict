@@ -18,6 +18,8 @@ import {
 import { StatTile } from "@/components/data-table/stat-tile";
 import { GrowthBadge } from "@/components/data-table/growth-badge";
 import { LocalTime } from "@/components/local-time";
+import { GenreDot } from "@/components/genre-badge";
+import { PageHeader } from "@/components/page-header";
 
 export const metadata = {
   title: "Update cadence — rodict",
@@ -53,14 +55,10 @@ export default async function UpdatesPage() {
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Update cadence</h1>
-        <p className="max-w-2xl text-muted-foreground">
-          How often games change on Roblox, by genre, and which games change most. An
-          &ldquo;update&rdquo; is a change in Roblox&apos;s last-updated time: a publish, or some
-          settings edits.
-        </p>
-      </div>
+      <PageHeader
+        title="Update cadence"
+        description="How often games change on Roblox, by genre, and which games change most. An “update” is a change in Roblox's last-updated time: a publish, or some settings edits."
+      />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile
@@ -82,7 +80,7 @@ export default async function UpdatesPage() {
 
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">By genre</h2>
-        <div className="overflow-x-auto rounded-lg border">
+        <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
           <Table>
             <TableHeader>
               <TableRow>
@@ -126,7 +124,7 @@ export default async function UpdatesPage() {
             No updates recorded in the last {recentDays} days yet.
           </p>
         ) : (
-          <div className="overflow-x-auto rounded-lg border">
+          <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -152,8 +150,9 @@ export default async function UpdatesPage() {
                         {genre ? (
                           <Link
                             href={`/genres/${genre.slug}#updates`}
-                            className="text-muted-foreground hover:underline"
+                            className="inline-flex items-center gap-1.5 text-muted-foreground hover:underline"
                           >
+                            <GenreDot genre={genre.slug} className="size-2" />
                             {genre.name}
                           </Link>
                         ) : (
@@ -188,7 +187,7 @@ export default async function UpdatesPage() {
             growing get more attention from their developers, and live games update more.
           </p>
         </div>
-        <div className="overflow-x-auto rounded-lg border">
+        <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
           <Table>
             <TableHeader>
               <TableRow>
@@ -232,7 +231,11 @@ function GenreRow({ row }: { row: GenreCadence & { slug: string; name: string } 
   return (
     <TableRow>
       <TableCell className="font-medium">
-        <Link href={`/genres/${row.slug}#updates`} className="hover:underline">
+        <Link
+          href={`/genres/${row.slug}#updates`}
+          className="inline-flex items-center gap-2 hover:underline"
+        >
+          <GenreDot genre={row.slug} />
           {row.name}
         </Link>
       </TableCell>

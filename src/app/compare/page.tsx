@@ -8,6 +8,7 @@ import { RISING } from "@/lib/db/trends";
 import { estimateDailyEarningsFromCcu } from "@/lib/earnings/estimate";
 import { formatCompact, formatUsdRange } from "@/lib/format";
 import { SERIES_GAP_DAYS } from "@/lib/stats";
+import { genreColor } from "@/lib/genre-colors";
 import {
   COMPARE_MAX,
   compareHref,
@@ -34,6 +35,8 @@ import { Badge } from "@/components/ui/badge";
 import { PresetLinks } from "@/components/filters/preset-links";
 import { GrowthBadge } from "@/components/data-table/growth-badge";
 import { CompareChart } from "@/components/charts/compare-chart";
+import { GenreBadge } from "@/components/genre-badge";
+import { PageHeader } from "@/components/page-header";
 import { CompareSync } from "./_components/compare-sync";
 import { CompareSuggestions } from "./_components/compare-suggestions";
 
@@ -96,12 +99,15 @@ export default async function ComparePage(props: PageProps<"/compare">) {
   const empty = gameRows.length === 0 && genreRows.length === 0;
   const now = new Date();
 
+  // Genres wear their own color (Task #106); games take the series slots.
+  const colorFor = (kind: CompareKind, id: string, i: number) =>
+    kind === "genre" ? genreColor(id) : seriesColor(i);
   const chip = (kind: CompareKind, id: string, name: string, i: number) => (
     <span
       key={`${kind}:${id}`}
       className="inline-flex items-center gap-1.5 rounded-full border py-0.5 pr-1 pl-2.5 text-sm"
     >
-      <span className="size-2.5 rounded-full" style={{ background: seriesColor(i) }} />
+      <span className="size-2.5 rounded-full" style={{ background: colorFor(kind, id, i) }} />
       <Link
         href={kind === "game" ? `/games/${id}` : `/genres/${id}`}
         className="max-w-56 truncate hover:underline"
@@ -121,14 +127,10 @@ export default async function ComparePage(props: PageProps<"/compare">) {
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
       <CompareSync selection={selection} />
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Compare</h1>
-        <p className="text-muted-foreground">
-          Up to {COMPARE_MAX} games and {COMPARE_MAX} genres side by side. The link holds the
-          comparison, so it can be shared. Add more with the Compare button on any game or genre
-          page.
-        </p>
-      </div>
+      <PageHeader
+        title="Compare"
+        description={`Up to ${COMPARE_MAX} games and ${COMPARE_MAX} genres side by side. The link holds the comparison, so it can be shared. Add more with the Compare button on any game or genre page.`}
+      />
 
       <div className="flex flex-col gap-3">
         {!empty && (
@@ -207,10 +209,16 @@ export default async function ComparePage(props: PageProps<"/compare">) {
               return (
                 <EntityCard
                   key={game.id}
-                  index={i}
+                  color={seriesColor(i)}
                   title={game.name}
                   href={`/games/${game.universeId}`}
-                  subtitle={game.currentGenre?.name ?? "No genre"}
+                  subtitle={
+                    game.currentGenre ? (
+                      <GenreBadge name={game.currentGenre.name} slug={game.currentGenre.slug} />
+                    ) : (
+                      "No genre"
+                    )
+                  }
                   stats={[
                     ["Players now", formatCompact(game.currentPlaying)],
                     ["All-time peak", formatCompact(game.allTimePeakPlayers)],
@@ -250,6 +258,7 @@ export default async function ComparePage(props: PageProps<"/compare">) {
               series={genreRows.map(({ genre, points }, i) => ({
                 key: `s${i}`,
                 name: genre.name,
+                color: genreColor(genre.slug),
                 points: scaled(points, scale),
               }))}
               scale={scale}
@@ -260,13 +269,13 @@ export default async function ComparePage(props: PageProps<"/compare">) {
             />
           </div>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(18rem,1fr))] gap-3">
-            {genreRows.map(({ genre, stat, points }, i) => {
+            {genreRows.map(({ genre, stat, points }) => {
               const change = windowAverageChange(points, AVG_WINDOW_MS);
               const earnings = estimateDailyEarningsFromCcu(stat?.totalPlaying ?? 0, now);
               return (
                 <EntityCard
                   key={genre.id}
-                  index={i}
+                  color={genreColor(genre.slug)}
                   title={genre.name}
                   href={`/genres/${genre.slug}`}
                   subtitle="Genre"
@@ -310,27 +319,24 @@ export default async function ComparePage(props: PageProps<"/compare">) {
 }
 
 function EntityCard({
-  index,
+  color,
   title,
   href,
   subtitle,
   stats,
   status,
 }: {
-  index: number;
+  color: string;
   title: string;
   href: string;
-  subtitle: string;
+  subtitle: ReactNode;
   stats: [string, ReactNode][];
   status?: string;
 }) {
   return (
     <div className="flex flex-col gap-2 rounded-lg border p-3">
       <div className="flex items-start gap-2">
-        <span
-          className="mt-1.5 size-2.5 shrink-0 rounded-full"
-          style={{ background: seriesColor(index) }}
-        />
+        <span className="mt-1.5 size-2.5 shrink-0 rounded-full" style={{ background: color }} />
         <div className="min-w-0">
           <Link href={href} className="block truncate font-medium hover:underline">
             {title}

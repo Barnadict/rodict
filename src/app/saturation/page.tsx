@@ -24,6 +24,8 @@ import {
 import { SaturationScatter, type SaturationPoint } from "@/components/charts/saturation-scatter";
 import { PresetLinks } from "@/components/filters/preset-links";
 import { LocalTime } from "@/components/local-time";
+import { GenreDot } from "@/components/genre-badge";
+import { PageHeader } from "@/components/page-header";
 import {
   RANGE_OPTIONS,
   RANGE_CLEAR_VALUE,
@@ -94,14 +96,10 @@ export default async function SaturationPage(props: PageProps<"/saturation">) {
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Genre saturation</h1>
-        <p className="max-w-2xl text-muted-foreground">
-          Supply vs. demand by genre. Genres high on the chart but far left have many players spread
-          across few games — potentially under-served. Genres to the right are crowded. High
-          players-per-game is a signal, not advice.
-        </p>
-      </div>
+      <PageHeader
+        title="Genre saturation"
+        description="Supply vs. demand by genre. Genres high on the chart but far left have many players spread across few games — potentially under-served. Genres to the right are crowded. High players-per-game is a signal, not advice."
+      />
 
       <PresetLinks
         param="range"
@@ -129,7 +127,7 @@ export default async function SaturationPage(props: PageProps<"/saturation">) {
             <SaturationScatter data={points} />
           </div>
 
-          <div className="overflow-x-auto rounded-lg border">
+          <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -144,7 +142,11 @@ export default async function SaturationPage(props: PageProps<"/saturation">) {
                 {points.map((p) => (
                   <TableRow key={p.slug}>
                     <TableCell className="font-medium">
-                      <Link href={`/genres/${p.slug}`} className="hover:underline">
+                      <Link
+                        href={`/genres/${p.slug}`}
+                        className="inline-flex items-center gap-2 hover:underline"
+                      >
+                        <GenreDot genre={p.slug} />
                         {p.name}
                       </Link>
                     </TableCell>
@@ -202,7 +204,7 @@ export default async function SaturationPage(props: PageProps<"/saturation">) {
               concentrated first; the day&apos;s date is in each genre&apos;s row.
             </p>
           </div>
-          <div className="overflow-x-auto rounded-lg border">
+          <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -223,9 +225,10 @@ export default async function SaturationPage(props: PageProps<"/saturation">) {
                     <TableCell className="font-medium">
                       <Link
                         href={`/genres/${r.slug}#concentration`}
-                        className="hover:underline"
+                        className="inline-flex items-center gap-2 hover:underline"
                         title={`Latest day: ${r.latest.day}`}
                       >
+                        <GenreDot genre={r.slug} />
                         {r.name}
                       </Link>
                     </TableCell>

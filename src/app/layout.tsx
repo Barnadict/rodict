@@ -1,3 +1,4 @@
+import { ViewTransition } from "react";
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -55,7 +56,13 @@ export default function RootLayout({
               <AppSidebar />
               <SidebarInset>
                 <SiteHeader />
-                <main className="flex flex-1 flex-col">{children}</main>
+                <main className="flex flex-1 flex-col">
+                  {/* Page changes fade and rise in (Task #107). Only updates
+                      animate; the sidebar and header sit outside and stay put. */}
+                  <ViewTransition update="page" default="none">
+                    <div className="flex flex-1 flex-col">{children}</div>
+                  </ViewTransition>
+                </main>
                 <SiteFooter />
               </SidebarInset>
             </SidebarProvider>

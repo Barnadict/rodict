@@ -6,7 +6,10 @@ import { cn } from "@/lib/utils";
 
 function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (
-    <div data-slot="table-container" className="relative w-full overflow-x-auto">
+    <div
+      data-slot="table-container"
+      className="relative w-full overflow-x-auto xl:overflow-visible"
+    >
       <table
         data-slot="table"
         className={cn("w-full caption-bottom text-sm", className)}
@@ -17,7 +20,19 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
 }
 
 function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
-  return <thead data-slot="table-header" className={cn("[&_tr]:border-b", className)} {...props} />;
+  // Sticky under the site header on wide screens (Task #104). Every wrapper
+  // around a table drops its overflow at xl too, since a scroll container would
+  // otherwise capture the sticky position.
+  return (
+    <thead
+      data-slot="table-header"
+      className={cn(
+        "[&_tr]:border-b xl:sticky xl:top-14 xl:z-[5] xl:bg-background xl:shadow-[0_1px_0_var(--border)]",
+        className,
+      )}
+      {...props}
+    />
+  );
 }
 
 function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {

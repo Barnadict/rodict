@@ -59,6 +59,8 @@ import { ExportLinks } from "@/components/data-table/export-links";
 import { WatchlistButton } from "@/components/watchlist/watchlist-button";
 import { CompareButton } from "@/components/compare/compare-button";
 import { BadgeEmbed } from "@/components/badge/badge-embed";
+import { GenreBadge } from "@/components/genre-badge";
+import { PageHeader } from "@/components/page-header";
 import {
   RANGE_OPTIONS,
   RANGE_CLEAR_VALUE,
@@ -313,79 +315,90 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex min-w-0 items-start gap-4">
-          {iconUrl ? (
+      <PageHeader
+        breadcrumbs={
+          game.currentGenre
+            ? [
+                { label: "Genres", href: "/genres" },
+                { label: game.currentGenre.name, href: `/genres/${game.currentGenre.slug}` },
+              ]
+            : [{ label: "Games", href: "/games" }]
+        }
+        title={game.name}
+        icon={
+          iconUrl ? (
             <Image
               src={iconUrl}
               alt=""
               width={64}
               height={64}
-              className="glow-primary rounded-lg border"
+              className="glow-primary shrink-0 rounded-lg border"
               unoptimized
             />
           ) : (
-            <div className="size-16 rounded-lg border bg-muted" />
-          )}
-          <div className="flex flex-col gap-1.5">
-            <h1 className="text-2xl font-semibold tracking-tight">{game.name}</h1>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {game.currentGenre && <Badge variant="secondary">{game.currentGenre.name}</Badge>}
-              {game.themes.map((t) => (
-                <Badge
-                  key={t.themeId}
-                  variant="outline"
-                  render={<Link href={`/themes/${t.theme.slug}`} />}
-                >
-                  {t.theme.name}
-                </Badge>
-              ))}
-              {game.status === "dead" && <Badge variant="destructive">Dead</Badge>}
-            </div>
-            {game.creatorName && (
-              <p className="text-sm text-muted-foreground">
-                by{" "}
-                {creatorPage ? (
-                  <Link
-                    href={creatorPage}
-                    className="underline-offset-4 hover:text-foreground hover:underline"
-                  >
-                    {game.creatorName}
-                  </Link>
-                ) : (
-                  game.creatorName
-                )}
-                {creatorUrl && (
-                  <a
-                    href={creatorUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="ml-1 inline-flex align-middle hover:text-foreground"
-                    title="Creator on Roblox"
-                  >
-                    <ExternalLink className="size-3" aria-hidden />
-                    <span className="sr-only">Creator on Roblox</span>
-                  </a>
-                )}
-              </p>
+            <div className="size-16 shrink-0 rounded-lg border bg-muted" />
+          )
+        }
+        actions={
+          <>
+            {gameUrl && (
+              <a
+                href={gameUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors hover:bg-muted"
+              >
+                Open on Roblox <ExternalLink className="size-3.5" aria-hidden />
+              </a>
             )}
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {gameUrl && (
-            <a
-              href={gameUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors hover:bg-muted"
-            >
-              Open on Roblox <ExternalLink className="size-3.5" aria-hidden />
-            </a>
+            <CompareButton kind="game" id={game.universeId.toString()} name={game.name} />
+            <WatchlistButton kind="game" id={game.universeId.toString()} name={game.name} />
+          </>
+        }
+      >
+        <div className="flex flex-wrap items-center gap-1.5">
+          {game.currentGenre && (
+            <GenreBadge name={game.currentGenre.name} slug={game.currentGenre.slug} link />
           )}
-          <CompareButton kind="game" id={game.universeId.toString()} name={game.name} />
-          <WatchlistButton kind="game" id={game.universeId.toString()} name={game.name} />
+          {game.themes.map((t) => (
+            <Badge
+              key={t.themeId}
+              variant="outline"
+              render={<Link href={`/themes/${t.theme.slug}`} />}
+            >
+              {t.theme.name}
+            </Badge>
+          ))}
+          {game.status === "dead" && <Badge variant="destructive">Dead</Badge>}
         </div>
-      </div>
+        {game.creatorName && (
+          <p className="text-sm text-muted-foreground">
+            by{" "}
+            {creatorPage ? (
+              <Link
+                href={creatorPage}
+                className="underline-offset-4 hover:text-foreground hover:underline"
+              >
+                {game.creatorName}
+              </Link>
+            ) : (
+              game.creatorName
+            )}
+            {creatorUrl && (
+              <a
+                href={creatorUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-1 inline-flex align-middle hover:text-foreground"
+                title="Creator on Roblox"
+              >
+                <ExternalLink className="size-3" aria-hidden />
+                <span className="sr-only">Creator on Roblox</span>
+              </a>
+            )}
+          </p>
+        )}
+      </PageHeader>
 
       <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
         {lifecycle.map(({ label, at }) => (
@@ -529,7 +542,7 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
             ). List last changed <LocalTime value={passCatalog.changedAt} />; checked weekly.
           </p>
           {passCatalog.passes.length > 0 && (
-            <div className="overflow-x-auto rounded-lg border">
+            <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
               <table className="w-full text-sm">
                 <thead className="bg-muted/50">
                   <tr>
@@ -689,6 +702,7 @@ async function GameSeriesSections({
                 ? "Needs two collections close together to derive visits per day."
                 : "No snapshots in this range yet."
             }
+            emptyHint="Busy games are collected every 3 hours and quiet ones about once a day, so a newly found game's line fills in over a day or two. A longer range may help: nothing was collected from 20 Aug to 29 Sep 2026."
             ariaLabel={`Line chart of ${game.name}: ${chart.title.toLowerCase()}`}
           />
         </div>
@@ -795,7 +809,7 @@ async function GameUpdatesSection({ universeIdParam }: { universeIdParam: string
         earlier updates weren&apos;t kept.
         {total > impacts.length && ` Showing the latest ${impacts.length} of ${total}.`}
       </p>
-      <div className="overflow-x-auto rounded-lg border">
+      <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
         <table className="w-full text-sm">
           <thead className="bg-muted/50">
             <tr>

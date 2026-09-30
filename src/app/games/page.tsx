@@ -8,6 +8,9 @@ import { getGrowthForGames, RISING } from "@/lib/db/trends";
 import { getGrowthById, getSessionById } from "@/lib/cached-queries";
 import { SESSION_ESTIMATE, formatSessionMinutes } from "@/lib/engagement";
 import { ICON_SIZE, getGameIcons } from "@/lib/roblox/client";
+import { getSmallIcons } from "@/lib/game-icons";
+import { getGameSparklines } from "@/lib/db/sparklines";
+import { SPARK_DAYS } from "@/lib/sparkline";
 import { estimateDailyEarningsFromCcu } from "@/lib/earnings/estimate";
 import { formatCompact, formatUsdRange } from "@/lib/format";
 import { creatorPath } from "@/lib/creators";
@@ -22,6 +25,11 @@ import {
 } from "@/lib/games-list";
 
 import { Badge } from "@/components/ui/badge";
+import { GenreBadge } from "@/components/genre-badge";
+import { GameIcon } from "@/components/game-icon";
+import { Sparkline } from "@/components/sparkline";
+import { PageHeader } from "@/components/page-header";
+import { MobileCards } from "@/components/data-table/mobile-cards";
 import {
   Table,
   TableBody,
@@ -141,17 +149,24 @@ async function getGamesPageData(q: GamesQuery) {
     growthByGame = new Map(games.map((g) => [g.id, growth.get(g.id)?.growthPct ?? null]));
   }
 
-  // Icons are a live Roblox API call, so only fetch them for the grid view —
-  // the table view stays icon-free and doesn't pay for it. Being inside
-  // "use cache" keeps this to one call per page per cache window rather than
-  // one per page view.
+  // Icons are a live Roblox API call. The grid wants the big size; the table
+  // uses the small one (shared with other lists) for its row and phone-card
+  // thumbnails. Being inside "use cache" keeps this to one call per page per
+  // cache window rather than one per page view.
   let icons: Map<string, string | null> | null = null;
+  let sparks: Record<string, (number | null)[]> | null = null;
   if (q.view === "grid" && games.length > 0) {
     const fetched = await getGameIcons(
       games.map((g) => g.universeId),
       { size: ICON_SIZE.grid },
     );
     icons = new Map(fetched.map((icon) => [String(icon.universeId), icon.imageUrl]));
+  } else if (games.length > 0) {
+    // The table's 7-day sparklines (Task #102): one grouped query, visible rows only.
+    [icons, sparks] = await Promise.all([
+      getSmallIcons(games.map((g) => g.universeId)),
+      getGameSparklines(games.map((g) => g.id)),
+    ]);
   }
 
   // Sorted by session length, the table shows the estimate it ranked on.
@@ -159,7 +174,7 @@ async function getGamesPageData(q: GamesQuery) {
     ? new Map(games.map((g) => [g.id, sessionById.get(g.id) ?? null]))
     : null;
 
-  return { games, total, genres, themes, growthByGame, sessionByGame, icons };
+  return { games, total, genres, themes, growthByGame, sessionByGame, icons, sparks };
 }
 
 export default async function GamesPage(props: PageProps<"/games">) {
@@ -186,7 +201,7 @@ export default async function GamesPage(props: PageProps<"/games">) {
   // browsing is the primary experience; the table is opt-in.
   const view: ViewMode = get("view") === "table" ? "table" : "grid";
 
-  const { games, total, genres, themes, growthByGame, sessionByGame, icons } =
+  const { games, total, genres, themes, growthByGame, sessionByGame, icons, sparks } =
     await getGamesPageData({
       page,
       sort,
@@ -218,12 +233,10 @@ export default async function GamesPage(props: PageProps<"/games">) {
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Games</h1>
-        <p className="text-muted-foreground">
-          {total.toLocaleString()} tracked game{total === 1 ? "" : "s"} — sortable by players,
-          visits, favorites, like ratio, growth and est. session length.
-        </p>
+      <PageHeader
+        title="Games"
+        description={`${total.toLocaleString()} tracked game${total === 1 ? "" : "s"} — sortable by players, visits, favorites, like ratio, growth and est. session length.`}
+      >
         {sort === "likeRatio" && (
           <p className="mt-1 text-sm text-muted-foreground">
             Sorted by like ratio: only games with at least {LIKE_RATIO_MIN_VOTES} votes are ranked.
@@ -251,7 +264,7 @@ export default async function GamesPage(props: PageProps<"/games">) {
             </Link>
           </p>
         )}
-      </div>
+      </PageHeader>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <GamesFilters genres={genres} themes={themes} hasRange={range !== RANGE_CLEAR_VALUE} />
@@ -286,158 +299,191 @@ export default async function GamesPage(props: PageProps<"/games">) {
       {view === "grid" ? (
         <GamesGrid games={games} icons={icons} />
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-8">
-                  <span className="sr-only">Watch</span>
-                </TableHead>
-                <TableHead className="w-10">#</TableHead>
-                <TableHead>Game</TableHead>
-                <TableHead>Genre</TableHead>
-                <TableHead className="text-right">
-                  <SortableHeader
-                    field="currentPlaying"
-                    label="Players"
-                    currentSort={sort}
-                    currentOrder={order}
-                    baseParams={headerParams}
-                  />
-                </TableHead>
-                <TableHead className="text-right">
-                  <SortableHeader
-                    field="currentVisits"
-                    label="Visits"
-                    currentSort={sort}
-                    currentOrder={order}
-                    baseParams={headerParams}
-                  />
-                </TableHead>
-                <TableHead className="text-right">
-                  <SortableHeader
-                    field="currentFavorites"
-                    label="Favorites"
-                    currentSort={sort}
-                    currentOrder={order}
-                    baseParams={headerParams}
-                  />
-                </TableHead>
-                <TableHead className="text-right">
-                  <SortableHeader
-                    field="likeRatio"
-                    label="Likes"
-                    currentSort={sort}
-                    currentOrder={order}
-                    baseParams={headerParams}
-                  />
-                </TableHead>
-                <TableHead className="text-right">Est. earnings/day</TableHead>
-                {sessionByGame && (
-                  <TableHead className="text-right">
-                    <SortableHeader
-                      field="session"
-                      label="Est. session"
-                      currentSort={sort}
-                      currentOrder={order}
-                      baseParams={headerParams}
-                    />
-                  </TableHead>
-                )}
-                {growthByGame && (
-                  <TableHead className="text-right">
-                    <SortableHeader
-                      field="growth"
-                      label="Δ"
-                      currentSort={sort}
-                      currentOrder={order}
-                      baseParams={headerParams}
-                    />
-                  </TableHead>
-                )}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {games.length === 0 && (
+        <>
+          <MobileCards
+            empty="No games match these filters."
+            items={games.map((game, i) => {
+              const growth = growthByGame?.get(game.id) ?? null;
+              return {
+                key: game.id,
+                href: `/games/${game.universeId}`,
+                title: game.name,
+                icon: icons?.get(String(game.universeId)) ?? null,
+                rank: (page - 1) * PAGE_SIZE + i + 1,
+                subtitle: game.currentGenre ? (
+                  <GenreBadge name={game.currentGenre.name} slug={game.currentGenre.slug} />
+                ) : undefined,
+                stats: [
+                  { label: "Players", value: formatCompact(game.currentPlaying) },
+                  { label: "Visits", value: formatCompact(game.currentVisits) },
+                  ...(growthByGame ? [{ label: "Δ", value: <GrowthBadge growth={growth} /> }] : []),
+                ],
+                aside: sparks ? <Sparkline values={sparks[game.id] ?? []} width={64} /> : undefined,
+              };
+            })}
+          />
+          <div className="hidden overflow-x-auto rounded-lg border sm:block xl:overflow-visible">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell
-                    colSpan={9 + (growthByGame ? 1 : 0) + (sessionByGame ? 1 : 0)}
-                    className="h-24 text-center text-muted-foreground"
-                  >
-                    No games match these filters.
-                  </TableCell>
-                </TableRow>
-              )}
-              {games.map((game, i) => {
-                const earnings = estimateDailyEarningsFromCcu(
-                  game.currentPlaying,
-                  undefined,
-                  game.passCatalog,
-                );
-                const growth = growthByGame?.get(game.id) ?? null;
-                const votes = game.currentUpVotes + game.currentDownVotes;
-                return (
-                  <TableRow key={game.id}>
-                    <TableCell>
-                      <WatchlistButton
-                        kind="game"
-                        id={game.universeId.toString()}
-                        name={game.name}
-                        size="icon"
+                  <TableHead className="w-8">
+                    <span className="sr-only">Watch</span>
+                  </TableHead>
+                  <TableHead className="w-10">#</TableHead>
+                  <TableHead>Game</TableHead>
+                  <TableHead>Genre</TableHead>
+                  <TableHead>Last {SPARK_DAYS}d</TableHead>
+                  <TableHead className="text-right">
+                    <SortableHeader
+                      field="currentPlaying"
+                      label="Players"
+                      currentSort={sort}
+                      currentOrder={order}
+                      baseParams={headerParams}
+                    />
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <SortableHeader
+                      field="currentVisits"
+                      label="Visits"
+                      currentSort={sort}
+                      currentOrder={order}
+                      baseParams={headerParams}
+                    />
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <SortableHeader
+                      field="currentFavorites"
+                      label="Favorites"
+                      currentSort={sort}
+                      currentOrder={order}
+                      baseParams={headerParams}
+                    />
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <SortableHeader
+                      field="likeRatio"
+                      label="Likes"
+                      currentSort={sort}
+                      currentOrder={order}
+                      baseParams={headerParams}
+                    />
+                  </TableHead>
+                  <TableHead className="text-right">Est. earnings/day</TableHead>
+                  {sessionByGame && (
+                    <TableHead className="text-right">
+                      <SortableHeader
+                        field="session"
+                        label="Est. session"
+                        currentSort={sort}
+                        currentOrder={order}
+                        baseParams={headerParams}
                       />
+                    </TableHead>
+                  )}
+                  {growthByGame && (
+                    <TableHead className="text-right">
+                      <SortableHeader
+                        field="growth"
+                        label="Δ"
+                        currentSort={sort}
+                        currentOrder={order}
+                        baseParams={headerParams}
+                      />
+                    </TableHead>
+                  )}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {games.length === 0 && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={10 + (growthByGame ? 1 : 0) + (sessionByGame ? 1 : 0)}
+                      className="h-24 text-center text-muted-foreground"
+                    >
+                      No games match these filters.
                     </TableCell>
-                    <TableCell className="text-muted-foreground tabular-nums">
-                      {(page - 1) * PAGE_SIZE + i + 1}
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      <Link href={`/games/${game.universeId}`} className="hover:underline">
-                        {game.name}
-                      </Link>
-                      {game.creatorName && <CreatorLine game={game} />}
-                    </TableCell>
-                    <TableCell>
-                      {game.currentGenre ? (
-                        <Badge variant="secondary">{game.currentGenre.name}</Badge>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatCompact(game.currentPlaying)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatCompact(game.currentVisits)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatCompact(game.currentFavorites)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {votes > 0 ? `${Math.round((game.currentUpVotes / votes) * 100)}%` : "—"}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      <span className="inline-flex items-center gap-1.5">
-                        {formatUsdRange(earnings.low, earnings.high)}
-                        <Badge variant="outline" className="text-[10px]">
-                          Est.
-                        </Badge>
-                      </span>
-                    </TableCell>
-                    {sessionByGame && (
-                      <TableCell className="text-right tabular-nums">
-                        {formatSessionMinutes(sessionByGame.get(game.id) ?? null)}
-                      </TableCell>
-                    )}
-                    {growthByGame && (
-                      <TableCell className="text-right tabular-nums">
-                        <GrowthBadge growth={growth} />
-                      </TableCell>
-                    )}
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+                )}
+                {games.map((game, i) => {
+                  const earnings = estimateDailyEarningsFromCcu(
+                    game.currentPlaying,
+                    undefined,
+                    game.passCatalog,
+                  );
+                  const growth = growthByGame?.get(game.id) ?? null;
+                  const votes = game.currentUpVotes + game.currentDownVotes;
+                  return (
+                    <TableRow key={game.id}>
+                      <TableCell>
+                        <WatchlistButton
+                          kind="game"
+                          id={game.universeId.toString()}
+                          name={game.name}
+                          size="icon"
+                        />
+                      </TableCell>
+                      <TableCell className="text-muted-foreground tabular-nums">
+                        {(page - 1) * PAGE_SIZE + i + 1}
+                      </TableCell>
+                      <TableCell className="min-w-48 font-medium whitespace-normal">
+                        <div className="flex items-center gap-2.5">
+                          <GameIcon src={icons?.get(String(game.universeId))} />
+                          <div className="min-w-0">
+                            <Link href={`/games/${game.universeId}`} className="hover:underline">
+                              {game.name}
+                            </Link>
+                            {game.creatorName && <CreatorLine game={game} />}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {game.currentGenre ? (
+                          <GenreBadge name={game.currentGenre.name} slug={game.currentGenre.slug} />
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Sparkline values={sparks?.[game.id] ?? []} />
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatCompact(game.currentPlaying)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatCompact(game.currentVisits)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatCompact(game.currentFavorites)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {votes > 0 ? `${Math.round((game.currentUpVotes / votes) * 100)}%` : "—"}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        <span className="inline-flex items-center gap-1.5">
+                          {formatUsdRange(earnings.low, earnings.high)}
+                          <Badge variant="outline" className="text-[10px]">
+                            Est.
+                          </Badge>
+                        </span>
+                      </TableCell>
+                      {sessionByGame && (
+                        <TableCell className="text-right tabular-nums">
+                          {formatSessionMinutes(sessionByGame.get(game.id) ?? null)}
+                        </TableCell>
+                      )}
+                      {growthByGame && (
+                        <TableCell className="text-right tabular-nums">
+                          <GrowthBadge growth={growth} />
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </>
       )}
 
       <GamesPagination page={page} totalPages={totalPages} baseParams={baseParams} />

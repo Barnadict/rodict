@@ -12,6 +12,7 @@ import {
   summarizeGraves,
 } from "@/lib/graveyard";
 import { formatDays } from "@/lib/records";
+import { getListIcons } from "@/lib/game-icons";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -26,6 +27,10 @@ import { PresetLinks } from "@/components/filters/preset-links";
 import { StatTile } from "@/components/data-table/stat-tile";
 import { LocalTime } from "@/components/local-time";
 import { cn } from "@/lib/utils";
+import { GameIcon } from "@/components/game-icon";
+import { GenreDot } from "@/components/genre-badge";
+import { PageHeader } from "@/components/page-header";
+import { MobileCards } from "@/components/data-table/mobile-cards";
 
 export const metadata = {
   title: "Graveyard — rodict",
@@ -67,28 +72,34 @@ export default async function GraveyardPage(props: PageProps<"/graveyard">) {
   const summary = summarizeGraves(filtered);
   const rows = sortGraves(filtered, sort).slice(0, GRAVEYARD_LIMIT);
   const sortParam = sort === "recent" ? undefined : sort;
+  const icons = await getListIcons(rows.map((g) => g.universeId.toString()));
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Graveyard</h1>
-        <p className="text-muted-foreground">
-          Games that are dead by our rule: below 5% of their own all-time peak for 7+ days in a row,
-          still true at their latest reading. They&apos;re still online and playable; the rule is
-          ours, not Roblox&apos;s. A game that recovers leaves the graveyard.{" "}
-          <Link href="/about#definitions" className="underline underline-offset-2">
-            The dead rule
-          </Link>{" "}
-          ·{" "}
-          {genre ? (
-            <Link href={`/genres/${genre.slug}#survival`} className="underline underline-offset-2">
-              {genre.name} survival curve
-            </Link>
-          ) : (
-            <span>each genre&apos;s survival curve is on its genre page</span>
-          )}
-        </p>
-      </div>
+      <PageHeader
+        title="Graveyard"
+        description={
+          <>
+            Games that are dead by our rule: below 5% of their own all-time peak for 7+ days in a
+            row, still true at their latest reading. They&apos;re still online and playable; the
+            rule is ours, not Roblox&apos;s. A game that recovers leaves the graveyard.{" "}
+            <Link href="/about#definitions" className="underline underline-offset-2">
+              The dead rule
+            </Link>{" "}
+            ·{" "}
+            {genre ? (
+              <Link
+                href={`/genres/${genre.slug}#survival`}
+                className="underline underline-offset-2"
+              >
+                {genre.name} survival curve
+              </Link>
+            ) : (
+              <span>each genre&apos;s survival curve is on its genre page</span>
+            )}
+          </>
+        }
+      />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatTile
@@ -117,6 +128,7 @@ export default async function GraveyardPage(props: PageProps<"/graveyard">) {
             if (sortParam) params.set("sort", sortParam);
             return (
               <GenreChip key={g.slug} href={`?${params}`} active={genre?.slug === g.slug}>
+                <GenreDot genre={g.slug} className="size-2" />
                 {g.name} · {formatCompact(g.count)}
               </GenreChip>
             );
@@ -138,7 +150,30 @@ export default async function GraveyardPage(props: PageProps<"/graveyard">) {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border">
+      <MobileCards
+        empty={`No dead games ${genre ? `in ${genre.name} ` : ""}yet.`}
+        items={rows.map((g) => ({
+          key: g.id,
+          href: `/games/${g.universeId}`,
+          title: g.name,
+          icon: icons[g.universeId.toString()] ?? null,
+          subtitle: g.currentGenre ? (
+            <span className="inline-flex items-center gap-1.5">
+              <GenreDot genre={g.currentGenre.slug} className="size-2" />
+              {g.currentGenre.name}
+            </span>
+          ) : undefined,
+          stats: [
+            { label: "Peak", value: formatCompact(g.allTimePeakPlayers) },
+            { label: "Lifespan", value: fmtDays(g.lifespanDays) },
+            {
+              label: "Died",
+              value: <LocalTime value={g.deadSince} options={{ dateStyle: "medium" }} />,
+            },
+          ],
+        }))}
+      />
+      <div className="hidden overflow-x-auto rounded-lg border sm:block xl:overflow-visible">
         <Table>
           <TableHeader>
             <TableRow>
@@ -162,17 +197,21 @@ export default async function GraveyardPage(props: PageProps<"/graveyard">) {
             )}
             {rows.map((g) => (
               <TableRow key={g.id}>
-                <TableCell className="font-medium">
-                  <Link href={`/games/${g.universeId}`} className="hover:underline">
-                    {g.name}
-                  </Link>
+                <TableCell className="min-w-48 font-medium whitespace-normal">
+                  <span className="flex items-center gap-2.5">
+                    <GameIcon src={icons[g.universeId.toString()]} />
+                    <Link href={`/games/${g.universeId}`} className="hover:underline">
+                      {g.name}
+                    </Link>
+                  </span>
                 </TableCell>
                 <TableCell>
                   {g.currentGenre ? (
                     <Link
                       href={`/genres/${g.currentGenre.slug}#survival`}
-                      className="hover:underline"
+                      className="inline-flex items-center gap-1.5 hover:underline"
                     >
+                      <GenreDot genre={g.currentGenre.slug} className="size-2" />
                       {g.currentGenre.name}
                     </Link>
                   ) : (

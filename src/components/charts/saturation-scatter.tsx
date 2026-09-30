@@ -9,11 +9,13 @@ import {
   CartesianGrid,
   Tooltip,
   LabelList,
+  Cell,
   type TooltipContentProps,
 } from "recharts";
 import type { NameType, ValueType } from "recharts/types/component/DefaultTooltipContent";
 
 import { formatCompact } from "@/lib/format";
+import { genreColor } from "@/lib/genre-colors";
 
 export interface SaturationPoint {
   slug: string;
@@ -95,7 +97,11 @@ export function SaturationScatter({
           }}
         />
         <Tooltip content={SaturationTooltip} cursor={{ strokeDasharray: "3 3" }} />
-        <Scatter data={data} fill="var(--primary)">
+        <Scatter data={data} fill="var(--primary)" stroke="var(--background)" strokeWidth={2}>
+          {/* Each genre in its own color (Task #106); the label names it. */}
+          {data.map((d) => (
+            <Cell key={d.slug} fill={genreColor(d.slug)} />
+          ))}
           <LabelList
             dataKey="name"
             position="top"

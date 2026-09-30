@@ -16,6 +16,9 @@ import { formatCompact, formatUsdRange } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { GameIcon } from "@/components/game-icon";
+import { GenreBadge, GenreDot } from "@/components/genre-badge";
+import { Sparkline } from "@/components/sparkline";
 
 type LoadState =
   | { status: "loading" }
@@ -117,6 +120,7 @@ export function WatchlistView() {
               const data = gameById.get(entry.id);
               return (
                 <div key={entry.id} className="flex items-center justify-between gap-3 p-3">
+                  <GameIcon src={data?.icon} size={40} />
                   {data ? (
                     <Link
                       href={`/games/${entry.id}`}
@@ -124,11 +128,7 @@ export function WatchlistView() {
                     >
                       <span className="flex flex-wrap items-center gap-1.5">
                         <span className="truncate font-medium">{data.name}</span>
-                        {data.genreName && (
-                          <Badge variant="secondary" className="text-[10px]">
-                            {data.genreName}
-                          </Badge>
-                        )}
+                        {data.genreName && <GenreBadge name={data.genreName} />}
                         {data.status === "dead" && (
                           <Badge variant="destructive" className="text-[10px]">
                             Dead
@@ -141,7 +141,9 @@ export function WatchlistView() {
                         {formatUsdRange(data.estLow, data.estHigh)} est./day
                       </span>
                     </Link>
-                  ) : (
+                  ) : null}
+                  {data && <Sparkline values={data.spark} className="hidden sm:inline-block" />}
+                  {data ? null : (
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span className="truncate font-medium text-muted-foreground">
                         {entry.name}
@@ -183,13 +185,18 @@ export function WatchlistView() {
                       href={`/genres/${entry.id}`}
                       className="flex min-w-0 flex-1 flex-col gap-0.5 hover:underline"
                     >
-                      <span className="truncate font-medium">{data.name}</span>
+                      <span className="inline-flex items-center gap-1.5 truncate font-medium">
+                        <GenreDot genre={data.slug} />
+                        {data.name}
+                      </span>
                       <span className="text-sm text-muted-foreground tabular-nums">
                         {formatCompact(data.gameCount)} games · {formatCompact(data.totalPlaying)}{" "}
                         players · {formatUsdRange(data.estLow, data.estHigh)} est./day
                       </span>
                     </Link>
-                  ) : (
+                  ) : null}
+                  {data && <Sparkline values={data.spark} className="hidden sm:inline-block" />}
+                  {data ? null : (
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span className="truncate font-medium text-muted-foreground">
                         {entry.name}

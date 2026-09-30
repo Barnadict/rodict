@@ -13,6 +13,9 @@ import { Badge } from "@/components/ui/badge";
 import { GrowthBadge } from "@/components/data-table/growth-badge";
 import { StatTile } from "@/components/data-table/stat-tile";
 import { LocalTime } from "@/components/local-time";
+import { GameIcon } from "@/components/game-icon";
+import { GenreBadge, GenreDot } from "@/components/genre-badge";
+import { PageHeader } from "@/components/page-header";
 
 export const metadata = {
   ...pageMetadata({
@@ -28,27 +31,30 @@ export const metadata = {
 };
 
 export default async function WeeklyPage() {
-  const { data, now } = await getWeeklyRecap();
+  const { data, now, icons } = await getWeeklyRecap();
+  const icon = (universeId: string | null) => (universeId ? (icons[universeId] ?? null) : null);
   const { risingGames, risingGenres, spikes, entrants, deaths } = data;
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Weekly recap</h1>
-          <p className="text-muted-foreground">
+      <PageHeader
+        title="Weekly recap"
+        description={
+          <>
             The last {WEEKLY_DAYS} days, week {isoWeek(now).split("-W")[1]}. Built{" "}
             <LocalTime value={now} />.
-          </p>
-        </div>
-        <a
-          href="/weekly/feed"
-          className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm hover:bg-muted"
-        >
-          <Rss className="size-4 text-orange-500" aria-hidden="true" />
-          Atom feed
-        </a>
-      </div>
+          </>
+        }
+        actions={
+          <a
+            href="/weekly/feed"
+            className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm hover:bg-muted"
+          >
+            <Rss className="size-4 text-orange-500" aria-hidden="true" />
+            Atom feed
+          </a>
+        }
+      />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label="Rising games" value={risingGames.length} hint="top by 7-day growth" />
@@ -69,7 +75,8 @@ export default async function WeeklyPage() {
                 {g.name}
               </Link>
             ),
-            tag: g.genreName,
+            icon: icon(g.universeId),
+            genre: g.genreName,
             value: (
               <>
                 <span className="text-muted-foreground">
@@ -87,7 +94,11 @@ export default async function WeeklyPage() {
           rows={risingGenres.map((g) => ({
             key: g.slug,
             name: (
-              <Link href={`/genres/${g.slug}`} className="hover:underline">
+              <Link
+                href={`/genres/${g.slug}`}
+                className="inline-flex items-center gap-1.5 hover:underline"
+              >
+                <GenreDot genre={g.slug} className="size-2" />
                 {g.name}
               </Link>
             ),
@@ -114,6 +125,7 @@ export default async function WeeklyPage() {
             ) : (
               a.name
             ),
+            icon: a.scope === "game" ? icon(a.universeId) : undefined,
             tag: a.scope === "genre" ? "genre" : null,
             value: (
               <>
@@ -137,6 +149,7 @@ export default async function WeeklyPage() {
                 {g.name}
               </Link>
             ),
+            icon: icon(g.universeId),
             tag: g.newOnRoblox ? "new on Roblox" : "newly tracked",
             value: `${formatCompact(g.currentPlaying)} playing`,
           }))}
@@ -153,7 +166,8 @@ export default async function WeeklyPage() {
                 {g.name}
               </Link>
             ),
-            tag: g.genreName,
+            icon: icon(g.universeId),
+            genre: g.genreName,
             value: `peak ${formatCompact(g.allTimePeakPlayers)}`,
           }))}
         />
@@ -183,7 +197,15 @@ function RecapList({
 }: {
   title: string;
   href: string;
-  rows: { key: string; name: ReactNode; tag?: string | null; value: ReactNode }[];
+  rows: {
+    key: string;
+    name: ReactNode;
+    /** Icon URL; undefined leaves the slot out (genres). */
+    icon?: string | null;
+    genre?: string | null;
+    tag?: string | null;
+    value: ReactNode;
+  }[];
   empty: string;
   total?: number;
 }) {
@@ -203,7 +225,11 @@ function RecapList({
             <li key={r.key} className="flex items-center justify-between gap-3 p-3 text-sm">
               <span className="flex min-w-0 items-center gap-2">
                 <span className="w-5 shrink-0 text-muted-foreground tabular-nums">{i + 1}</span>
+                {r.icon !== undefined && <GameIcon src={r.icon} size={28} />}
                 <span className="truncate font-medium">{r.name}</span>
+                {r.genre && (
+                  <GenreBadge name={r.genre} className="hidden shrink-0 sm:inline-flex" />
+                )}
                 {r.tag && (
                   <Badge variant="outline" className="shrink-0 text-[10px]">
                     {r.tag}

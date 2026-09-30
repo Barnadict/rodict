@@ -29,9 +29,9 @@ export function getCreatorGames(creator: CreatorRef) {
 
 /**
  * Every creator with a tracked game (Task #86), with their game counts, current
- * players and hits. One grouped scan of Game. The name is the one on their most
- * recently collected game: SQLite fills a bare column from the row that won the
- * query's single MAX().
+ * players and hits. One grouped scan of Game. The name and top game come from
+ * their most-played game: SQLite fills bare columns from the row that won the
+ * query's single MAX(). That game is collected every run, so its name is fresh.
  */
 export async function getCreatorLeaderboard(): Promise<CreatorRow[]> {
   const rows = await prisma.$queryRaw<
@@ -39,6 +39,7 @@ export async function getCreatorLeaderboard(): Promise<CreatorRow[]> {
       type: string;
       id: bigint;
       name: string | null;
+      topUniverseId: bigint | null;
       games: number | bigint;
       active: number | bigint;
       totalPlaying: number | bigint;
@@ -46,7 +47,8 @@ export async function getCreatorLeaderboard(): Promise<CreatorRow[]> {
     }[]
   >`
     SELECT "creatorType" AS "type", "creatorId" AS "id", "creatorName" AS "name",
-      MAX("lastCollectedAt") AS "lastAt",
+      "universeId" AS "topUniverseId",
+      MAX("currentPlaying") AS "topPlaying",
       COUNT(*) AS "games",
       SUM(CASE WHEN status = 'dead' THEN 0 ELSE 1 END) AS "active",
       SUM("currentPlaying") AS "totalPlaying",
@@ -59,6 +61,7 @@ export async function getCreatorLeaderboard(): Promise<CreatorRow[]> {
     type: r.type as CreatorType,
     id: BigInt(r.id),
     name: r.name,
+    topUniverseId: r.topUniverseId === null ? null : BigInt(r.topUniverseId),
     games: Number(r.games),
     active: Number(r.active),
     totalPlaying: Number(r.totalPlaying),

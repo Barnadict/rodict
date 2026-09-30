@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 
-import { Badge } from "@/components/ui/badge";
+import { GenreBadge } from "@/components/genre-badge";
 import { WatchlistButton } from "@/components/watchlist/watchlist-button";
 import { formatCompact } from "@/lib/format";
 
@@ -10,7 +10,7 @@ interface GridGame {
   universeId: bigint;
   name: string;
   currentPlaying: number;
-  currentGenre: { name: string } | null;
+  currentGenre: { name: string; slug: string } | null;
 }
 
 interface GamesGridProps {
@@ -67,9 +67,11 @@ export function GamesGrid({ games, icons }: GamesGridProps) {
                 />
               </div>
               {game.currentGenre && (
-                <Badge variant="secondary" className="absolute bottom-2 left-2 text-[10px] shadow">
-                  {game.currentGenre.name}
-                </Badge>
+                <GenreBadge
+                  name={game.currentGenre.name}
+                  slug={game.currentGenre.slug}
+                  className="absolute bottom-2 left-2 shadow"
+                />
               )}
             </div>
             <div className="flex flex-col gap-0.5 p-3">

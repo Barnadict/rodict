@@ -3,7 +3,7 @@
 ## ▶️ SESSION START — paste this at the beginning of every new session
 
 ```
-Read PROJECT_PLAN.md. Tasks #1–#101 are done. Phase 10 continues with 10b (#102–#109), then 10c.
+Read PROJECT_PLAN.md. Tasks #1–#109 are done. Phase 10 continues with 10c (#110–#115).
 The Turso free plan's monthly WRITE limit is a hard constraint on every task (see "Rules").
 Ask me which task to start. Remind me before any task that needs something only I can provide.
 ```
@@ -126,14 +126,14 @@ Full notes for each task are in git history (this file before 2026-10-01) and in
 
 #### 10b — UI & visual polish
 
-- [ ] **102.** 🟡 **Sparklines in tables.** 7-day mini charts in the games, trending and watchlist tables. Get them from one grouped query per page (daily averages for the visible rows only), inside the page's cached loader. Draw them as small inline SVGs, not Recharts, so the tables don't pull in the chart bundle.
-- [ ] **103.** 🟢 **Thumbnails in more lists.** Show the game icon in trending, records, graveyard, creators, new, weekly and the watchlist. Right now only the games grid has it. Use the small size from #100.
-- [ ] **104.** 🟡 **Tables on mobile.** Below `sm`, show wide tables as stacked cards (thumbnail, name, 2–3 key stats) instead of scrolling sideways. Make table headers sticky on desktop.
-- [ ] **105.** 🟡 **Redesign the home page.** A headline stat (tracked players now) with an animated number, top movers as cards with thumbnails and sparklines, and a clearer order: happening now → rising → new. Keep the static shell.
-- [ ] **106.** 🟢 **One color per genre.** A color token per genre that works in light and dark mode, used on genre chips, chart lines (compare, genre trend, saturation scatter) and badges, so a genre looks the same everywhere.
-- [ ] **107.** 🟢 **Page transitions.** Smooth transitions between pages using React's View Transitions. Check how Next 16 supports them in the docs first. Turn them off under `prefers-reduced-motion`.
-- [ ] **108.** 🟢 **Breadcrumbs and consistent page headers.** One `PageHeader` component (title, description, actions, breadcrumbs) on every page. Detail pages get a trail like Genres → Simulator → Game.
-- [ ] **109.** 🟡 **Chart polish.** Tooltips that follow one crosshair across charts on the same page, a shaded "no data collected" band for 2026-08-20 → 2026-09-29 on every time chart, and a better empty state when a game has too little history to draw a line.
+- [x] **102.** 7-day sparklines (inline SVG `Sparkline`) in the games table, trending and watchlist, plus the dashboard. One grouped daily-average query per page for the visible rows (`db/sparklines.ts`), inside each cached loader.
+- [x] **103.** Small game icons (`GameIcon`, `ICON_SIZE.small`) in trending, records, graveyard, creators (most-played game), new, weekly, watchlist and the games table. Per-request lists use the cached `getListIcons`.
+- [x] **104.** Below `sm`, list tables render as stacked cards (`MobileCards`); table headers stick under the site header at `xl`.
+- [x] **105.** Dashboard: headline "playing tracked games now" with a count-up number (`AnimatedNumber`, off under reduced motion), then happening now → rising (cards with icons and sparklines) → new on Roblox. Still a full static shell.
+- [x] **106.** A color per genre (`--genre-<slug>`, light and dark steps; `genreColor`, `GenreBadge`, `GenreDot`) on chips, genre links, the genre trend line, compare genre lines and the saturation scatter. Color always travels with the name.
+- [x] **107.** Page transitions with React `<ViewTransition>` (`experimental.viewTransition`): the page area fades out and rises in; off under `prefers-reduced-motion`.
+- [x] **108.** `PageHeader` (breadcrumbs, title, description, actions) on every page. Game pages: Genres → Genre → Game; genre, theme and creator pages get their list as the parent.
+- [x] **109.** Time charts share one crosshair (`syncId` + nearest-time `syncByTime`), shade 2026-08-20 → 09-29 as "No data collected", and show a clearer empty state (`ChartEmpty`), including for a single reading.
 
 #### 10c — New features
 
@@ -163,3 +163,4 @@ One line per session or phase. Details are in git history.
 - **2026-09-30:** Phase 9 (#79–#94): pacing, analytics guard, Turso usage check, weekly discovery, new stats pages, `/weekly`, badge.
 - **2026-10-01:** Plan cleaned up (done tasks cut to one line each; lessons moved to "Things to remember"). Phase 10 (#95–#115) planned: page speed, UI polish, new features. Discord webhooks moved to Later.
 - **2026-10-01:** 10a page speed (#95–#101): Tokyo region, prerendered game/genre/theme pages, streamed detail sections, remote cache for shared loaders, right-sized icons, `npm run speed`.
+- **2026-10-01:** 10b UI polish (#102–#109): sparklines, list thumbnails, phone cards and sticky headers, dashboard redesign, genre colors, page transitions, `PageHeader` with breadcrumbs, synced chart crosshairs and the outage band. Writes: none.

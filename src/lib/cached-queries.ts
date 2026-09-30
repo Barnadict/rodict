@@ -8,6 +8,7 @@ import { getConcentrationAll, getRankLadders, getRecentAnomalies } from "@/lib/d
 import { getPassPricingIndex } from "@/lib/db/pass-pricing";
 import { getUpdateCadenceIndex } from "@/lib/db/update-cadence";
 import { rangeToCutoff, type RangeKey } from "@/lib/date-range";
+import { getSmallIcons } from "@/lib/game-icons";
 import { WEEKLY_DAYS, WEEKLY_LIMIT, weeklySpikes, type WeeklyData } from "@/lib/weekly";
 
 /**
@@ -85,7 +86,12 @@ export async function getPassPricing() {
  * games and genres use the /trending rule over 7 days; the spikes' game ids
  * are mapped to universe ids with one small read (≤ WEEKLY_LIMIT ids).
  */
-export async function getWeeklyRecap(): Promise<{ data: WeeklyData; now: Date }> {
+export async function getWeeklyRecap(): Promise<{
+  data: WeeklyData;
+  now: Date;
+  /** Small icons by universe id for the listed games (Task #103). */
+  icons: Record<string, string | null>;
+}> {
   // Remote (Task #98): few distinct keys, so a cold instance reuses another's entry.
   "use cache: remote";
   cacheLife("hours");
@@ -101,9 +107,17 @@ export async function getWeeklyRecap(): Promise<{ data: WeeklyData; now: Date }>
   ]);
   const spikes = weeklySpikes(anomalies?.recent ?? [], now);
   const universe = await getUniverseIds(spikes.filter((a) => a.scope === "game").map((a) => a.id));
+  const listed = new Set<string>([
+    ...games.map((g) => String(g.universeId)),
+    ...entrants.games.map((g) => String(g.universeId)),
+    ...deaths.games.map((g) => String(g.universeId)),
+    ...Object.values(universe).map(String),
+  ]);
+  const icons = Object.fromEntries(await getSmallIcons([...listed]));
 
   return {
     now,
+    icons,
     data: {
       risingGames: games.map((g) => ({
         universeId: g.universeId.toString(),

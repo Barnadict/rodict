@@ -8,6 +8,7 @@ import {
   getSpeedCandidates,
 } from "@/lib/db/records";
 import { formatCompact } from "@/lib/format";
+import { getSmallIcons } from "@/lib/game-icons";
 import { formatGrowthPct } from "@/lib/stats";
 import { NEAR_LAUNCH_DAYS } from "@/lib/launch-benchmark";
 import {
@@ -28,6 +29,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { LocalTime } from "@/components/local-time";
+import { GameIcon } from "@/components/game-icon";
+import { GenreDot } from "@/components/genre-badge";
+import { PageHeader } from "@/components/page-header";
+import { MobileCards, type MobileCard } from "@/components/data-table/mobile-cards";
 
 export const metadata = {
   title: "Records — rodict",
@@ -47,11 +52,25 @@ async function getRecords() {
     getLongevityRecords(),
     ...SPEED_THRESHOLDS.map((t) => getSpeedCandidates(t)),
   ]);
+  const ranked = SPEED_THRESHOLDS.map((threshold, i) => ({
+    threshold,
+    rows: rankSpeed(speeds[i]),
+  }));
+  // Thumbnails for every listed game (Task #103), in one batch.
+  const ids = new Set<string>([
+    ...peaks.map((g) => String(g.universeId)),
+    ...moves.gains.map((m) => String(m.game.universeId)),
+    ...moves.collapses.map((m) => String(m.game.universeId)),
+    ...longevity.map((g) => String(g.universeId)),
+    ...ranked.flatMap((s) => s.rows.map((r) => String(r.row.universeId))),
+  ]);
+  const icons = Object.fromEntries(await getSmallIcons([...ids]));
   return {
     peaks,
     moves,
     longevity,
-    speeds: SPEED_THRESHOLDS.map((threshold, i) => ({ threshold, rows: rankSpeed(speeds[i]) })),
+    icons,
+    speeds: ranked,
     // Ages are measured to when the data was read, inside the cache.
     asOf: new Date(),
   };
@@ -65,9 +84,12 @@ type GameRef = {
   genre?: { slug: string; name: string } | null;
 };
 
-function GameCell({ game }: { game: GameRef }) {
+type Icons = Record<string, string | null>;
+
+function GameCell({ game, icons }: { game: GameRef; icons: Icons }) {
   return (
-    <span className="flex flex-wrap items-center gap-1.5">
+    <span className="flex min-w-48 flex-wrap items-center gap-1.5 whitespace-normal">
+      <GameIcon src={icons[String(game.universeId)]} className="mr-1" />
       <Link href={`/games/${game.universeId}`} className="font-medium hover:underline">
         {game.name}
       </Link>
@@ -79,7 +101,11 @@ function GameCell({ game }: { game: GameRef }) {
 function GenreCell({ game }: { game: GameRef }) {
   const genre = game.currentGenre ?? game.genre;
   return genre ? (
-    <Link href={`/genres/${genre.slug}`} className="hover:underline">
+    <Link
+      href={`/genres/${genre.slug}`}
+      className="inline-flex items-center gap-1.5 hover:underline"
+    >
+      <GenreDot genre={genre.slug} className="size-2" />
       {genre.name}
     </Link>
   ) : (
@@ -87,15 +113,49 @@ function GenreCell({ game }: { game: GameRef }) {
   );
 }
 
+/** A record row as a phone card (Task #104). */
+function gameCard(
+  game: GameRef,
+  icons: Icons,
+  rank: number,
+  stats: MobileCard["stats"],
+  key: string = String(game.universeId),
+): MobileCard {
+  const genre = game.currentGenre ?? game.genre;
+  return {
+    key,
+    href: `/games/${game.universeId}`,
+    title: game.name,
+    icon: icons[String(game.universeId)] ?? null,
+    rank,
+    subtitle: (
+      <>
+        {genre && (
+          <span className="inline-flex items-center gap-1.5">
+            <GenreDot genre={genre.slug} className="size-2" />
+            {genre.name}
+          </span>
+        )}
+        {game.status === "dead" && <Badge variant="destructive">Dead</Badge>}
+      </>
+    ),
+    stats,
+  };
+}
+
 function Section({
   id,
   title,
   description,
+  cards,
+  empty,
   children,
 }: {
   id: string;
   title: string;
   description: React.ReactNode;
+  cards: MobileCard[];
+  empty: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -104,7 +164,10 @@ function Section({
         <h2 className="font-medium">{title}</h2>
         <p className="text-sm text-muted-foreground">{description}</p>
       </div>
-      <div className="overflow-x-auto rounded-lg border">{children}</div>
+      <MobileCards items={cards} empty={empty} />
+      <div className="hidden overflow-x-auto rounded-lg border sm:block xl:overflow-visible">
+        {children}
+      </div>
     </section>
   );
 }
@@ -120,18 +183,15 @@ function EmptyRow({ cols, children }: { cols: number; children: React.ReactNode 
 }
 
 export default async function RecordsPage() {
-  const { peaks, moves, longevity, speeds, asOf } = await getRecords();
+  const { peaks, moves, longevity, speeds, asOf, icons } = await getRecords();
 
   return (
     <div className="flex flex-1 flex-col gap-8 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Records</h1>
-        <p className="text-muted-foreground">
-          The extremes in everything rodict tracks. Records only cover what we&apos;ve observed:
-          peaks and moves since each game was first tracked, and nothing from the collection gap of
-          20 Aug – 29 Sep 2026.
-        </p>
-        <nav className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+      <PageHeader
+        title="Records"
+        description="The extremes in everything rodict tracks. Records only cover what we've observed: peaks and moves since each game was first tracked, and nothing from the collection gap of 20 Aug – 29 Sep 2026."
+      >
+        <nav className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm">
           <a href="#peaks" className="underline-offset-4 hover:underline">
             All-time peaks
           </a>
@@ -148,12 +208,26 @@ export default async function RecordsPage() {
             Longest-lived
           </a>
         </nav>
-      </div>
+      </PageHeader>
 
       <Section
         id="peaks"
         title="All-time peaks"
         description="The most concurrent players we've recorded for a game at one collection."
+        empty="No games tracked yet."
+        cards={peaks.map((g, i) =>
+          gameCard(g, icons, i + 1, [
+            { label: "Peak", value: formatCompact(g.allTimePeakPlayers) },
+            {
+              label: "Reached",
+              value: g.allTimePeakAt ? (
+                <LocalTime value={g.allTimePeakAt} options={{ dateStyle: "medium" }} />
+              ) : (
+                "—"
+              ),
+            },
+          ]),
+        )}
       >
         <Table>
           <TableHeader>
@@ -171,7 +245,7 @@ export default async function RecordsPage() {
               <TableRow key={g.id}>
                 <TableCell className="text-muted-foreground tabular-nums">{i + 1}</TableCell>
                 <TableCell>
-                  <GameCell game={g} />
+                  <GameCell game={g} icons={icons} />
                 </TableCell>
                 <TableCell>
                   <GenreCell game={g} />
@@ -214,6 +288,29 @@ export default async function RecordsPage() {
           key={table.id}
           id={table.id}
           title={table.title}
+          empty="None flagged yet — they fill in as analytics runs."
+          cards={table.rows.map((m, i) =>
+            gameCard(
+              m.game,
+              icons,
+              i + 1,
+              [
+                {
+                  label: "Players",
+                  value: `${formatCompact(m.prevValue)} → ${formatCompact(m.value)}`,
+                },
+                {
+                  label: "Change",
+                  value: `${m.delta >= 0 ? "+" : "−"}${formatCompact(Math.abs(m.delta))}`,
+                },
+                {
+                  label: "When",
+                  value: <LocalTime value={m.at} options={{ dateStyle: "medium" }} />,
+                },
+              ],
+              `${m.gameId}-${m.at}`,
+            ),
+          )}
           description={
             <>
               {table.description} Ranked by players, not percent, so a small game doubling
@@ -243,7 +340,7 @@ export default async function RecordsPage() {
                 <TableRow key={`${m.gameId}-${m.at}`}>
                   <TableCell className="text-muted-foreground tabular-nums">{i + 1}</TableCell>
                   <TableCell>
-                    <GameCell game={m.game} />
+                    <GameCell game={m.game} icons={icons} />
                   </TableCell>
                   <TableCell>
                     <GenreCell game={m.game} />
@@ -281,7 +378,15 @@ export default async function RecordsPage() {
           {speeds.map(({ threshold, rows }) => (
             <div key={threshold} className="flex flex-col gap-2">
               <h3 className="text-sm font-medium">To {formatCompact(threshold)} players</h3>
-              <div className="overflow-x-auto rounded-lg border">
+              <MobileCards
+                empty="No game tracked from launch has got there yet."
+                items={rows.map((r, i) =>
+                  gameCard(r.row, icons, i + 1, [
+                    { label: "Took", value: `${r.upperBound ? "≤ " : ""}${formatDays(r.days)}` },
+                  ]),
+                )}
+              />
+              <div className="hidden overflow-x-auto rounded-lg border sm:block xl:overflow-visible">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -301,7 +406,7 @@ export default async function RecordsPage() {
                           {i + 1}
                         </TableCell>
                         <TableCell>
-                          <GameCell game={r.row} />
+                          <GameCell game={r.row} icons={icons} />
                         </TableCell>
                         <TableCell>
                           <GenreCell game={r.row} />
@@ -324,6 +429,13 @@ export default async function RecordsPage() {
         id="longest"
         title="Longest-lived, still going"
         description={`The oldest games (by Roblox creation date) that aren't dead by our rule and still have at least ${LONGEVITY_MIN_PLAYERS} players now.`}
+        empty="No games qualify yet."
+        cards={longevity.map((g, i) =>
+          gameCard(g, icons, i + 1, [
+            { label: "Players", value: formatCompact(g.currentPlaying) },
+            { label: "Age", value: formatAge(g.robloxCreatedAt!, asOf) },
+          ]),
+        )}
       >
         <Table>
           <TableHeader>
@@ -342,7 +454,7 @@ export default async function RecordsPage() {
               <TableRow key={g.id}>
                 <TableCell className="text-muted-foreground tabular-nums">{i + 1}</TableCell>
                 <TableCell>
-                  <GameCell game={g} />
+                  <GameCell game={g} icons={icons} />
                 </TableCell>
                 <TableCell>
                   <GenreCell game={g} />

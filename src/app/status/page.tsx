@@ -40,6 +40,7 @@ import { StatTile } from "@/components/data-table/stat-tile";
 import { StatTilesSkeleton } from "@/components/data-table/stat-tiles-skeleton";
 import { TableSkeleton } from "@/components/data-table/table-skeleton";
 import { LocalTime } from "@/components/local-time";
+import { PageHeader } from "@/components/page-header";
 
 export const metadata = {
   title: "Status — rodict",
@@ -98,17 +99,19 @@ async function getStatusData() {
 export default function StatusPage() {
   return (
     <div className="flex flex-1 flex-col gap-8 p-6">
-      <header className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Status</h1>
-        <p className="max-w-2xl text-muted-foreground">
-          How the data pipelines are doing: recent runs, how much of the tracked corpus is fresh,
-          and how much of the database&apos;s monthly write allowance has been used. See{" "}
-          <Link href="/about" className="underline underline-offset-4">
-            About the data
-          </Link>{" "}
-          for how collection works.
-        </p>
-      </header>
+      <PageHeader
+        title="Status"
+        description={
+          <>
+            How the data pipelines are doing: recent runs, how much of the tracked corpus is fresh,
+            and how much of the database&apos;s monthly write allowance has been used. See{" "}
+            <Link href="/about" className="underline underline-offset-4">
+              About the data
+            </Link>{" "}
+            for how collection works.
+          </>
+        }
+      />
       <Suspense fallback={<StatusSkeleton />}>
         <StatusContent />
       </Suspense>
@@ -388,7 +391,7 @@ function CoverageSection({ coverage }: { coverage: TierCoverage[] }) {
       title="Collection coverage"
       description="The share of tracked games collected recently. Quiet games are collected once a day rather than every run, to stay within the write budget, so their 6-hour share is expected to be low."
     >
-      <div className="overflow-x-auto rounded-lg border">
+      <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
         <Table>
           <TableHeader>
             <TableRow>
@@ -448,7 +451,7 @@ function RecentRunsSection({ runs, now }: { runs: StatusRun[]; now: Date }) {
           No runs in the last {STATUS_WINDOW_DAYS} days.
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
+        <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
           <Table>
             <TableHeader>
               <TableRow>

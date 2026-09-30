@@ -49,3 +49,14 @@ export async function getSmallIcons(
   for (const id of ids) if (id in top) out.set(id, top[id]);
   return out;
 }
+
+/**
+ * Small icons for a list that's picked per request (a filter or sort outside
+ * the page's cached loader), cached on the id list so repeat views of the same
+ * list don't call Roblox again. Returns a plain object so it can be cached.
+ */
+export async function getListIcons(universeIds: string[]): Promise<Record<string, string | null>> {
+  "use cache";
+  cacheLife("hours");
+  return Object.fromEntries(await getSmallIcons(universeIds));
+}

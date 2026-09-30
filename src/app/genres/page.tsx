@@ -21,6 +21,9 @@ import { SortableHeader } from "@/components/data-table/sortable-header";
 import { CohortTable } from "@/components/data-table/cohort-table";
 import { WatchlistButton } from "@/components/watchlist/watchlist-button";
 import { PresetLinks } from "@/components/filters/preset-links";
+import { GenreDot } from "@/components/genre-badge";
+import { PageHeader } from "@/components/page-header";
+import { MobileCards } from "@/components/data-table/mobile-cards";
 import {
   RANGE_OPTIONS,
   RANGE_CLEAR_VALUE,
@@ -92,12 +95,10 @@ export default async function GenresPage(props: PageProps<"/genres">) {
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Genres</h1>
-        <p className="text-muted-foreground">
-          Most played, most games, and estimated earnings by genre.
-        </p>
-      </div>
+      <PageHeader
+        title="Genres"
+        description="Most played, most games, and estimated earnings by genre."
+      />
 
       <PresetLinks
         param="range"
@@ -114,112 +115,136 @@ export default async function GenresPage(props: PageProps<"/genres">) {
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-8">
-                  <span className="sr-only">Watch</span>
-                </TableHead>
-                <TableHead className="w-10">#</TableHead>
-                <TableHead>Genre</TableHead>
-                <TableHead className="text-right">
-                  <SortableHeader
-                    field="gameCount"
-                    label="Games"
-                    currentSort={sort}
-                    currentOrder={order}
-                    baseParams={{ range: baseParams.range }}
-                  />
-                </TableHead>
-                <TableHead className="text-right">
-                  <SortableHeader
-                    field="totalPlaying"
-                    label="Players"
-                    currentSort={sort}
-                    currentOrder={order}
-                    baseParams={{ range: baseParams.range }}
-                  />
-                </TableHead>
-                <TableHead className="text-right">
-                  <SortableHeader
-                    field="totalVisits"
-                    label="Visits"
-                    currentSort={sort}
-                    currentOrder={order}
-                    baseParams={{ range: baseParams.range }}
-                  />
-                </TableHead>
-                <TableHead className="text-right">
-                  <SortableHeader
-                    field="totalFavorites"
-                    label="Favorites"
-                    currentSort={sort}
-                    currentOrder={order}
-                    baseParams={{ range: baseParams.range }}
-                  />
-                </TableHead>
-                <TableHead className="text-right">Est. earnings/day</TableHead>
-                <TableHead className="text-right" title="Median players per server, now">
-                  Typical server
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((row, i) => {
-                const earnings = estimateDailyEarningsFromCcu(row.totalPlaying, asOf);
-                return (
-                  <TableRow key={row.genreId ?? "unclassified"}>
-                    <TableCell>
-                      {row.genreId && (
-                        <WatchlistButton kind="genre" id={row.slug} name={row.name} size="icon" />
-                      )}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground tabular-nums">{i + 1}</TableCell>
-                    <TableCell className="font-medium">
-                      {row.genreId ? (
-                        <Link href={`/genres/${row.slug}`} className="hover:underline">
-                          {row.name}
-                        </Link>
-                      ) : (
-                        <Badge variant="outline">{row.name}</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatCompact(row.gameCount)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatCompact(row.totalPlaying)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatCompact(row.totalVisits)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatCompact(row.totalFavorites)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      <span className="inline-flex items-center gap-1.5">
-                        {formatUsdRange(earnings.low, earnings.high)}
-                        <Badge variant="outline" className="text-[10px]">
-                          Est.
-                        </Badge>
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {row.genreId && serverSize[row.genreId]?.median != null ? (
-                        <Link href={`/genres/${row.slug}#servers`} className="hover:underline">
-                          {formatCompact(serverSize[row.genreId].median!)}
-                        </Link>
-                      ) : (
-                        "—"
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+        <>
+          <MobileCards
+            items={rows.map((row, i) => ({
+              key: row.genreId ?? "unclassified",
+              href: row.genreId ? `/genres/${row.slug}` : undefined,
+              title: (
+                <span className="inline-flex items-center gap-2">
+                  <GenreDot genre={row.genreId ? row.slug : null} />
+                  {row.name}
+                </span>
+              ),
+              rank: i + 1,
+              stats: [
+                { label: "Games", value: formatCompact(row.gameCount) },
+                { label: "Players", value: formatCompact(row.totalPlaying) },
+                { label: "Visits", value: formatCompact(row.totalVisits) },
+              ],
+            }))}
+          />
+          <div className="hidden overflow-x-auto rounded-lg border sm:block xl:overflow-visible">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-8">
+                    <span className="sr-only">Watch</span>
+                  </TableHead>
+                  <TableHead className="w-10">#</TableHead>
+                  <TableHead>Genre</TableHead>
+                  <TableHead className="text-right">
+                    <SortableHeader
+                      field="gameCount"
+                      label="Games"
+                      currentSort={sort}
+                      currentOrder={order}
+                      baseParams={{ range: baseParams.range }}
+                    />
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <SortableHeader
+                      field="totalPlaying"
+                      label="Players"
+                      currentSort={sort}
+                      currentOrder={order}
+                      baseParams={{ range: baseParams.range }}
+                    />
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <SortableHeader
+                      field="totalVisits"
+                      label="Visits"
+                      currentSort={sort}
+                      currentOrder={order}
+                      baseParams={{ range: baseParams.range }}
+                    />
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <SortableHeader
+                      field="totalFavorites"
+                      label="Favorites"
+                      currentSort={sort}
+                      currentOrder={order}
+                      baseParams={{ range: baseParams.range }}
+                    />
+                  </TableHead>
+                  <TableHead className="text-right">Est. earnings/day</TableHead>
+                  <TableHead className="text-right" title="Median players per server, now">
+                    Typical server
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((row, i) => {
+                  const earnings = estimateDailyEarningsFromCcu(row.totalPlaying, asOf);
+                  return (
+                    <TableRow key={row.genreId ?? "unclassified"}>
+                      <TableCell>
+                        {row.genreId && (
+                          <WatchlistButton kind="genre" id={row.slug} name={row.name} size="icon" />
+                        )}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground tabular-nums">{i + 1}</TableCell>
+                      <TableCell className="font-medium">
+                        {row.genreId ? (
+                          <Link
+                            href={`/genres/${row.slug}`}
+                            className="inline-flex items-center gap-2 hover:underline"
+                          >
+                            <GenreDot genre={row.slug} />
+                            {row.name}
+                          </Link>
+                        ) : (
+                          <Badge variant="outline">{row.name}</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatCompact(row.gameCount)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatCompact(row.totalPlaying)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatCompact(row.totalVisits)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatCompact(row.totalFavorites)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        <span className="inline-flex items-center gap-1.5">
+                          {formatUsdRange(earnings.low, earnings.high)}
+                          <Badge variant="outline" className="text-[10px]">
+                            Est.
+                          </Badge>
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {row.genreId && serverSize[row.genreId]?.median != null ? (
+                          <Link href={`/genres/${row.slug}#servers`} className="hover:underline">
+                            {formatCompact(serverSize[row.genreId].median!)}
+                          </Link>
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </>
       )}
 
       <p className="text-sm text-muted-foreground">
@@ -239,7 +264,7 @@ export default async function GenresPage(props: PageProps<"/genres">) {
               first.
             </p>
           </div>
-          <div className="overflow-x-auto rounded-lg border">
+          <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
             <Table>
               <TableHeader>
                 <TableRow>

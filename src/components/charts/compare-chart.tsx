@@ -9,11 +9,20 @@ import {
   CartesianGrid,
   Tooltip,
   ReferenceLine,
+  ReferenceArea,
   type TooltipContentProps,
 } from "recharts";
 import type { NameType, ValueType } from "recharts/types/component/DefaultTooltipContent";
 
 import { formatCompact } from "@/lib/format";
+import {
+  COLLECTION_GAP,
+  COLLECTION_GAP_LABEL,
+  TIME_SYNC_ID,
+  overlapsCollectionGap,
+  syncByTime,
+} from "@/lib/chart-time";
+import { ChartEmpty } from "@/components/charts/chart-empty";
 import {
   latestAtOrBefore,
   mergeSeries,
@@ -26,7 +35,11 @@ export interface CompareSeries {
   key: string;
   name: string;
   points: SeriesPoint[];
+  /** Line color; genres pass their own (Task #106), games use the series slots. */
+  color?: string;
 }
+
+const colorOf = (s: CompareSeries, i: number) => s.color ?? seriesColor(i);
 
 function formatValue(v: number, scale: CompareScale): string {
   return scale === "indexed" ? `${Math.round(v)}` : formatCompact(Math.round(v));
@@ -51,7 +64,7 @@ function makeTooltip(series: CompareSeries[], scale: CompareScale, gapMs: number
           <div key={s.key} className="flex items-center gap-2 tabular-nums">
             <span
               className="size-2.5 shrink-0 rounded-full"
-              style={{ background: seriesColor(i) }}
+              style={{ background: colorOf(s, i) }}
             />
             <span className="max-w-48 truncate text-popover-foreground">{s.name}</span>
             <span className="ml-auto pl-3 font-medium text-popover-foreground">
@@ -90,15 +103,16 @@ export function CompareChart({
   const withData = series.filter((s) => s.points.length > 0);
   if (withData.length === 0) {
     return (
-      <div
-        className="flex items-center justify-center rounded-lg border border-dashed text-muted-foreground"
-        style={{ height }}
-      >
-        No readings in this range yet.
-      </div>
+      <ChartEmpty
+        title="No readings in this range yet"
+        hint="Try a longer range. Games are collected every 3h when busy and about once a day when quiet."
+        height={height}
+      />
     );
   }
   const rows = mergeSeries(series, gapMs);
+  const times = rows.map((r) => r.t as number);
+  const showOutage = times.length > 1 && overlapsCollectionGap(times[0], times[times.length - 1]);
   // A reading with no drawn neighbour on either side is a line of zero length,
   // i.e. invisible, so those get a dot.
   const isolated = new Map(
@@ -119,14 +133,19 @@ export function CompareChart({
       <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
         {series.map((s, i) => (
           <li key={s.key} className="inline-flex items-center gap-1.5">
-            <span className="h-0.5 w-4 rounded" style={{ background: seriesColor(i) }} />
+            <span className="h-0.5 w-4 rounded" style={{ background: colorOf(s, i) }} />
             <span className="text-foreground">{s.name}</span>
             {s.points.length === 0 && <span>(no readings in range)</span>}
           </li>
         ))}
       </ul>
       <ResponsiveContainer width="100%" height={height} role="img" aria-label={ariaLabel}>
-        <LineChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+        <LineChart
+          data={rows}
+          margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
+          syncId={TIME_SYNC_ID}
+          syncMethod={syncByTime}
+        >
           <CartesianGrid stroke="var(--border)" vertical={false} />
           <XAxis
             dataKey="t"
@@ -154,6 +173,21 @@ export function CompareChart({
             content={makeTooltip(series, scale, gapMs)}
             cursor={{ stroke: "var(--muted-foreground)", strokeWidth: 1 }}
           />
+          {showOutage && (
+            <ReferenceArea
+              x1={COLLECTION_GAP.from}
+              x2={COLLECTION_GAP.to}
+              fill="var(--muted)"
+              fillOpacity={0.6}
+              ifOverflow="hidden"
+              label={{
+                value: COLLECTION_GAP_LABEL,
+                position: "insideTop",
+                fontSize: 11,
+                fill: "var(--muted-foreground)",
+              }}
+            />
+          )}
           {scale === "indexed" && (
             <ReferenceLine y={100} stroke="var(--muted-foreground)" strokeDasharray="4 3" />
           )}
@@ -163,7 +197,7 @@ export function CompareChart({
               type="monotone"
               dataKey={s.key}
               name={s.name}
-              stroke={seriesColor(i)}
+              stroke={colorOf(s, i)}
               strokeWidth={2}
               dot={(props: { cx?: number; cy?: number; index?: number }) =>
                 props.index !== undefined &&
@@ -175,7 +209,7 @@ export function CompareChart({
                     cx={props.cx}
                     cy={props.cy}
                     r={4}
-                    fill={seriesColor(i)}
+                    fill={colorOf(s, i)}
                     stroke="var(--background)"
                     strokeWidth={2}
                   />

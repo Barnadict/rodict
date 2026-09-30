@@ -134,6 +134,8 @@ export interface CreatorRow {
   active: number;
   totalPlaying: number;
   hits: number;
+  /** Universe id of their most-played tracked game, for the list icon (Task #103). */
+  topUniverseId?: bigint | null;
 }
 
 /** Share of a creator's tracked games that are hits. */

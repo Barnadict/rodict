@@ -17,6 +17,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { GenreThemeMatrix, type MatrixCellView } from "@/components/charts/genre-theme-matrix";
+import { PageHeader } from "@/components/page-header";
+import { MobileCards } from "@/components/data-table/mobile-cards";
 
 export const metadata = { title: "Themes — rodict" };
 
@@ -77,16 +79,25 @@ export default async function ThemesPage() {
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Themes</h1>
-        <p className="text-muted-foreground">
-          The setting of a game (Anime, Fantasy, Space…), tracked separately from its gameplay
-          genre. A game can have several themes or none; {formatCompact(themedGames)} tracked games
-          have at least one.
-        </p>
-      </div>
+      <PageHeader
+        title="Themes"
+        description={`The setting of a game (Anime, Fantasy, Space…), tracked separately from its gameplay genre. A game can have several themes or none; ${formatCompact(themedGames)} tracked games have at least one.`}
+      />
 
-      <div className="overflow-x-auto rounded-lg border">
+      <MobileCards
+        items={themeRows.map(({ theme, stats }, i) => ({
+          key: theme.id,
+          href: `/themes/${theme.slug}`,
+          title: theme.name,
+          rank: i + 1,
+          stats: [
+            { label: "Games", value: formatCompact(stats?.n ?? 0) },
+            { label: "Players", value: stats ? formatCompact(stats.totalPlaying) : "—" },
+            { label: "Median/game", value: stats ? formatCompact(stats.medianPlaying) : "—" },
+          ],
+        }))}
+      />
+      <div className="hidden overflow-x-auto rounded-lg border sm:block xl:overflow-visible">
         <Table>
           <TableHeader>
             <TableRow>

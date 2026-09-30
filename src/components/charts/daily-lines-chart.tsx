@@ -8,6 +8,7 @@ import {
   YAxis,
   CartesianGrid,
   Legend,
+  ReferenceArea,
   Tooltip,
   type TooltipContentProps,
 } from "recharts";
@@ -15,6 +16,14 @@ import type { NameType, ValueType } from "recharts/types/component/DefaultToolti
 
 import { formatCompact } from "@/lib/format";
 import { seriesColor } from "@/lib/compare";
+import {
+  COLLECTION_GAP,
+  COLLECTION_GAP_LABEL,
+  TIME_SYNC_ID,
+  overlapsCollectionGap,
+  syncByTime,
+} from "@/lib/chart-time";
+import { ChartEmpty } from "@/components/charts/chart-empty";
 
 export interface DailyLine {
   key: string;
@@ -93,25 +102,30 @@ export function DailyLinesChart({
   emptyMessage?: string;
 }) {
   if (data.length === 0) {
-    return (
-      <div
-        className="flex items-center justify-center text-sm text-muted-foreground"
-        style={{ height }}
-      >
-        {emptyMessage}
-      </div>
-    );
+    return <ChartEmpty title={emptyMessage} height={height} />;
   }
   const rank = format === "rank";
+  // A real time axis (Task #109), so the days line up with the page's other
+  // time charts for the shared crosshair and the outage band.
+  const rows = data.map((d) => ({ ...d, t: Date.parse(d.date) }));
+  const showOutage = rows.length > 1 && overlapsCollectionGap(rows[0].t, rows[rows.length - 1].t);
   // A single day draws no line, so show its dots.
   const showDots = data.length <= 2;
   return (
     <ResponsiveContainer width="100%" height={height} role="img" aria-label={ariaLabel}>
-      <LineChart data={data} margin={{ top: 8, right: 8, bottom: 4, left: 0 }}>
+      <LineChart
+        data={rows}
+        margin={{ top: 8, right: 8, bottom: 4, left: 0 }}
+        syncId={TIME_SYNC_ID}
+        syncMethod={syncByTime}
+      >
         <CartesianGrid stroke="var(--border)" vertical={false} />
         <XAxis
-          dataKey="date"
-          tickFormatter={(v: string) => formatDay(v)}
+          dataKey="t"
+          type="number"
+          scale="time"
+          domain={["dataMin", "dataMax"]}
+          tickFormatter={(v: number) => formatDay(new Date(v).toISOString())}
           stroke="var(--muted-foreground)"
           tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
           tickLine={false}
@@ -134,6 +148,21 @@ export function DailyLinesChart({
           cursor={{ stroke: "var(--muted-foreground)", strokeWidth: 1 }}
         />
         <Legend wrapperStyle={{ fontSize: 12 }} />
+        {showOutage && (
+          <ReferenceArea
+            x1={COLLECTION_GAP.from}
+            x2={COLLECTION_GAP.to}
+            fill="var(--muted)"
+            fillOpacity={0.6}
+            ifOverflow="hidden"
+            label={{
+              value: COLLECTION_GAP_LABEL,
+              position: "insideTop",
+              fontSize: 11,
+              fill: "var(--muted-foreground)",
+            }}
+          />
+        )}
         {lines.map((l, i) => (
           <Line
             key={l.key}

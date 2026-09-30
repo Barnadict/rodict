@@ -8,7 +8,11 @@
  * called directly from a Client Component, not from other server code.
  */
 
+import { cacheLife } from "next/cache";
+
 import { prisma } from "@/lib/prisma";
+import { getSmallIcons } from "@/lib/game-icons";
+import { getGameSparklines, getGenreSparklines } from "@/lib/db/sparklines";
 import { getGenreStats } from "@/lib/db/genre-stats";
 import { estimateDailyEarningsFromCcu } from "@/lib/earnings/estimate";
 import { jsonSafe } from "@/lib/db/serialize";
@@ -23,6 +27,10 @@ export interface WatchlistGameData {
   status: string;
   estLow: number;
   estHigh: number;
+  /** Small icon URL (Task #103). */
+  icon: string | null;
+  /** 7-day daily average players (Task #102). */
+  spark: (number | null)[];
 }
 
 export interface WatchlistGenreData {
@@ -32,6 +40,27 @@ export interface WatchlistGenreData {
   totalPlaying: number;
   estLow: number;
   estHigh: number;
+  spark: (number | null)[];
+}
+
+/**
+ * Icons and sparklines for a watched set, cached on the sorted id list so a
+ * reload (or another visitor watching the same games) reuses it.
+ */
+async function getGameExtras(gameIds: string[], universeIds: string[]) {
+  "use cache";
+  cacheLife("hours");
+  const [icons, sparks] = await Promise.all([
+    getSmallIcons(universeIds),
+    getGameSparklines(gameIds),
+  ]);
+  return { icons: Object.fromEntries(icons), sparks };
+}
+
+async function getGenreExtras(genreIds: string[]) {
+  "use cache";
+  cacheLife("hours");
+  return getGenreSparklines(genreIds);
 }
 
 /** Resolve watched games by universeId. Ids that fail to parse or no longer
@@ -57,6 +86,12 @@ export async function fetchWatchlistGames(universeIds: string[]): Promise<Watchl
     },
   });
 
+  const sorted = [...games].sort((a, b) => a.id.localeCompare(b.id));
+  const extras = await getGameExtras(
+    sorted.map((g) => g.id),
+    sorted.map((g) => g.universeId.toString()),
+  );
+
   return games.map((g) => {
     const est = estimateDailyEarningsFromCcu(g.currentPlaying, undefined, g.passCatalog);
     return jsonSafe({
@@ -69,6 +104,8 @@ export async function fetchWatchlistGames(universeIds: string[]): Promise<Watchl
       status: g.status,
       estLow: est.low,
       estHigh: est.high,
+      icon: extras.icons[g.universeId.toString()] ?? null,
+      spark: extras.sparks[g.id] ?? [],
     });
   });
 }
@@ -77,18 +114,19 @@ export async function fetchWatchlistGames(universeIds: string[]): Promise<Watchl
 export async function fetchWatchlistGenres(slugs: string[]): Promise<WatchlistGenreData[]> {
   if (slugs.length === 0) return [];
   const wanted = new Set(slugs);
-  const stats = await getGenreStats();
-  return stats
-    .filter((s) => wanted.has(s.slug))
-    .map((s) => {
-      const est = estimateDailyEarningsFromCcu(s.totalPlaying);
-      return {
-        slug: s.slug,
-        name: s.name,
-        gameCount: s.gameCount,
-        totalPlaying: s.totalPlaying,
-        estLow: est.low,
-        estHigh: est.high,
-      };
-    });
+  const stats = (await getGenreStats()).filter((s) => wanted.has(s.slug));
+  const ids = stats.flatMap((s) => (s.genreId ? [s.genreId] : [])).sort();
+  const sparks = await getGenreExtras(ids);
+  return stats.map((s) => {
+    const est = estimateDailyEarningsFromCcu(s.totalPlaying);
+    return {
+      slug: s.slug,
+      name: s.name,
+      gameCount: s.gameCount,
+      totalPlaying: s.totalPlaying,
+      estLow: est.low,
+      estHigh: est.high,
+      spark: (s.genreId && sparks[s.genreId]) || [],
+    };
+  });
 }

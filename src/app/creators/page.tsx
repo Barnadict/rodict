@@ -13,6 +13,7 @@ import {
   rankCreators,
 } from "@/lib/creators";
 import { formatCompact } from "@/lib/format";
+import { getListIcons } from "@/lib/game-icons";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -25,6 +26,9 @@ import {
 } from "@/components/ui/table";
 import { PresetLinks } from "@/components/filters/preset-links";
 import { StatTile } from "@/components/data-table/stat-tile";
+import { GameIcon } from "@/components/game-icon";
+import { PageHeader } from "@/components/page-header";
+import { MobileCards } from "@/components/data-table/mobile-cards";
 
 export const metadata = {
   title: "Creators — rodict",
@@ -48,16 +52,19 @@ export default async function CreatorsPage(props: PageProps<"/creators">) {
   const rows = ranked.slice(0, CREATORS_LIMIT);
   const groups = all.filter((c) => c.type === "Group").length;
   const withHit = all.filter((c) => c.hits > 0).length;
+  // Each creator shows their most-played game's icon.
+  const icons = await getListIcons(
+    rows.flatMap((c) => (c.topUniverseId ? [String(c.topUniverseId)] : [])),
+  );
+  const iconOf = (c: (typeof rows)[number]) =>
+    c.topUniverseId ? (icons[String(c.topUniverseId)] ?? null) : null;
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Creators</h1>
-        <p className="text-muted-foreground">
-          The users and groups behind the games rodict tracks. Counts only cover games our discovery
-          has found, not each creator&apos;s whole catalog.
-        </p>
-      </div>
+      <PageHeader
+        title="Creators"
+        description="The users and groups behind the games rodict tracks. Counts only cover games our discovery has found, not each creator's whole catalog."
+      />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatTile
@@ -92,7 +99,23 @@ export default async function CreatorsPage(props: PageProps<"/creators">) {
             lucky game doesn&apos;t make a 100%.
           </p>
         )}
-        <div className="overflow-x-auto rounded-lg border">
+        <MobileCards
+          empty="No creators yet."
+          items={rows.map((c, i) => ({
+            key: creatorPath(c.id, c.type)!,
+            href: creatorPath(c.id, c.type)!,
+            title: c.name ?? `${c.type} ${c.id}`,
+            icon: iconOf(c),
+            rank: i + 1,
+            subtitle: c.type === "Group" ? <Badge variant="outline">Group</Badge> : undefined,
+            stats: [
+              { label: "Players", value: formatCompact(c.totalPlaying) },
+              { label: "Games", value: formatCompact(c.games) },
+              { label: "Hits", value: formatCompact(c.hits) },
+            ],
+          }))}
+        />
+        <div className="hidden overflow-x-auto rounded-lg border sm:block xl:overflow-visible">
           <Table>
             <TableHeader>
               <TableRow>
@@ -120,6 +143,7 @@ export default async function CreatorsPage(props: PageProps<"/creators">) {
                     <TableCell className="text-muted-foreground tabular-nums">{i + 1}</TableCell>
                     <TableCell className="font-medium">
                       <span className="flex flex-wrap items-center gap-1.5">
+                        <GameIcon src={iconOf(c)} className="mr-1" />
                         <Link href={href} className="hover:underline">
                           {c.name ?? `${c.type} ${c.id}`}
                         </Link>

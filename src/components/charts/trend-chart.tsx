@@ -18,6 +18,14 @@ import type { NameType, ValueType } from "recharts/types/component/DefaultToolti
 
 import { formatCompact } from "@/lib/format";
 import {
+  COLLECTION_GAP,
+  COLLECTION_GAP_LABEL,
+  TIME_SYNC_ID,
+  overlapsCollectionGap,
+  syncByTime,
+} from "@/lib/chart-time";
+import { ChartEmpty } from "@/components/charts/chart-empty";
+import {
   LOW_COVERAGE,
   findSeriesGaps,
   formatGrowthPct,
@@ -53,6 +61,10 @@ function formatValue(v: number, format: TrendValueFormat): string {
 
 interface TrendChartProps {
   data: TrendPoint[];
+  /** Shown under the empty state: when this chart fills in (Task #109). */
+  emptyHint?: React.ReactNode;
+  /** Charts sharing an id share one crosshair; time charts all default to one. */
+  syncId?: string;
   /** Noun after the value in the tooltip, e.g. "players". */
   unit?: string;
   /** Overlay a trailing moving average (needs a few points to be meaningful). */
@@ -72,6 +84,8 @@ interface TrendChartProps {
   events?: string[];
   /** Legend label for `events`. */
   eventLabel?: string;
+  /** Line color, e.g. a genre's own (Task #106). Defaults to the primary. */
+  color?: string;
 }
 
 type ChartRow = {
@@ -156,6 +170,8 @@ export function TrendChart({
   unit = "",
   movingAverageWindow,
   emptyMessage = "No data in this range yet.",
+  emptyHint,
+  syncId = TIME_SYNC_ID,
   height = 288,
   ariaLabel = "Line chart",
   projection = [],
@@ -163,15 +179,24 @@ export function TrendChart({
   markers = [],
   events = [],
   eventLabel = "Event",
+  color = "var(--primary)",
 }: TrendChartProps) {
   if (data.length === 0) {
+    return <ChartEmpty title={emptyMessage} hint={emptyHint} height={height} />;
+  }
+  if (data.length === 1) {
+    // One reading draws no line; say so rather than show a lone dot.
     return (
-      <div
-        className="flex items-center justify-center rounded-lg border border-dashed text-muted-foreground"
-        style={{ height }}
-      >
-        {emptyMessage}
-      </div>
+      <ChartEmpty
+        title="Not enough history to draw a line yet"
+        hint={
+          <>
+            {`Only one reading in this range so far (${formatValue(data[0].value, valueFormat)}${unit ? ` ${unit}` : ""}). A line appears after the next collection.`}
+            {emptyHint && <> {emptyHint}</>}
+          </>
+        }
+        height={height}
+      />
     );
   }
 
@@ -195,6 +220,17 @@ export function TrendChart({
   // each gap breaks both lines there (connectNulls is off), and the span is
   // shaded and labeled so the break reads as "not collected" rather than zero.
   const gaps = findSeriesGaps(points.map((p) => p.t));
+  // Shaded spans: the known 2026 outage is labeled as such and widened to its
+  // full dates; other long pauses are plain "No data".
+  const shaded = gaps.map((g) =>
+    overlapsCollectionGap(g.from, g.to)
+      ? {
+          from: Math.min(g.from, COLLECTION_GAP.from),
+          to: Math.max(g.to, COLLECTION_GAP.to),
+          label: COLLECTION_GAP_LABEL,
+        }
+      : { ...g, label: "No data" },
+  );
   const chartData: ChartRow[] = [...points];
   for (const g of gaps) {
     chartData.push({ date: "", t: (g.from + g.to) / 2, value: null, ma: null });
@@ -232,7 +268,7 @@ export function TrendChart({
       {(showMa || showProjection || showMarkers || showEvents) && (
         <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1.5">
-            <span className="h-0.5 w-4 rounded bg-primary" /> Actual
+            <span className="h-0.5 w-4 rounded" style={{ background: color }} /> Actual
           </span>
           {showMa && (
             <span className="inline-flex items-center gap-1.5">
@@ -242,7 +278,13 @@ export function TrendChart({
           )}
           {showProjection && (
             <span className="inline-flex items-center gap-1.5">
-              <span className="h-2.5 w-4 rounded-sm border-t-2 border-dashed border-primary bg-primary/15" />{" "}
+              <span
+                className="h-2.5 w-4 rounded-sm border-t-2 border-dashed"
+                style={{
+                  borderColor: color,
+                  background: `color-mix(in oklch, ${color} 15%, transparent)`,
+                }}
+              />{" "}
               Projection (~80% band)
             </span>
           )}
@@ -261,7 +303,12 @@ export function TrendChart({
         </div>
       )}
       <ResponsiveContainer width="100%" height={height} role="img" aria-label={ariaLabel}>
-        <ComposedChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+        <ComposedChart
+          data={chartData}
+          margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
+          syncId={syncId}
+          syncMethod={syncByTime}
+        >
           <CartesianGrid stroke="var(--border)" vertical={false} />
           <XAxis
             dataKey="t"
@@ -289,7 +336,7 @@ export function TrendChart({
             content={makeTooltip(unit, showMa, valueFormat)}
             cursor={{ stroke: "var(--muted-foreground)", strokeWidth: 1 }}
           />
-          {gaps.map((g) => (
+          {shaded.map((g) => (
             <ReferenceArea
               key={g.from}
               x1={g.from}
@@ -298,7 +345,7 @@ export function TrendChart({
               fillOpacity={0.6}
               ifOverflow="hidden"
               label={{
-                value: "No data",
+                value: g.label,
                 position: "insideTop",
                 fontSize: 11,
                 fill: "var(--muted-foreground)",
@@ -319,7 +366,7 @@ export function TrendChart({
               type="linear"
               dataKey="band"
               stroke="none"
-              fill="var(--primary)"
+              fill={color}
               fillOpacity={0.15}
               connectNulls
               activeDot={false}
@@ -330,7 +377,7 @@ export function TrendChart({
             <Line
               type="linear"
               dataKey="forecast"
-              stroke="var(--primary)"
+              stroke={color}
               strokeWidth={2}
               strokeDasharray="5 4"
               dot={false}
@@ -352,9 +399,11 @@ export function TrendChart({
           <Line
             type="monotone"
             dataKey="value"
-            stroke="var(--primary)"
+            stroke={color}
             strokeWidth={2}
-            dot={renderCoverageDot}
+            dot={(props: Parameters<typeof renderCoverageDot>[0]) =>
+              renderCoverageDot({ ...props, color })
+            }
             activeDot={{ r: 4, stroke: "var(--background)", strokeWidth: 2 }}
             isAnimationActive={false}
           />
@@ -382,8 +431,9 @@ function renderCoverageDot(props: {
   cy?: number;
   index?: number;
   payload?: { coverage?: number | null };
+  color?: string;
 }) {
-  const { cx, cy, index, payload } = props;
+  const { cx, cy, index, payload, color = "var(--primary)" } = props;
   const key = `dot-${index}`;
   if (cx === undefined || cy === undefined || typeof payload?.coverage !== "number") {
     return <g key={key} />;
@@ -396,7 +446,7 @@ function renderCoverageDot(props: {
       cy={cy}
       r={3}
       fill="var(--background)"
-      stroke="var(--primary)"
+      stroke={color}
       strokeWidth={1.5}
     />
   );

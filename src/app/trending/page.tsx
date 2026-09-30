@@ -5,9 +5,17 @@ import { RISING, getRisingGames, getRisingGenres } from "@/lib/db/trends";
 import { getRecentAnomalies } from "@/lib/db/analytics";
 import { getUniverseIds } from "@/lib/db/games";
 import { formatCompact } from "@/lib/format";
+import { getSmallIcons } from "@/lib/game-icons";
+import { getGameSparklines, getGenreSparklines } from "@/lib/db/sparklines";
+import { SPARK_DAYS } from "@/lib/sparkline";
 import { formatGrowthPct } from "@/lib/stats";
 
 import { Badge } from "@/components/ui/badge";
+import { GenreBadge, GenreDot } from "@/components/genre-badge";
+import { GameIcon } from "@/components/game-icon";
+import { Sparkline } from "@/components/sparkline";
+import { PageHeader } from "@/components/page-header";
+import { MobileCards } from "@/components/data-table/mobile-cards";
 import {
   Table,
   TableBody,
@@ -52,10 +60,20 @@ async function getTrendingData(range: RangeKey) {
 
   // Anomalies are keyed by Game.id; game pages by universe id.
   const recent = anomalies?.recent.slice(0, RECENT_SHOWN) ?? [];
-  const universe = await getUniverseIds(recent.filter((a) => a.scope === "game").map((a) => a.id));
+  // Thumbnails (Task #103) and 7-day sparklines (Task #102) for the listed rows only.
+  const [universe, icons, gameSparks, genreSparks] = await Promise.all([
+    getUniverseIds(recent.filter((a) => a.scope === "game").map((a) => a.id)),
+    getSmallIcons(games.map((g) => g.universeId)),
+    getGameSparklines(games.map((g) => g.id)),
+    getGenreSparklines(genres.map((g) => g.id)),
+  ]);
   return {
-    games,
-    genres,
+    games: games.map((g) => ({
+      ...g,
+      icon: icons.get(String(g.universeId)) ?? null,
+      spark: gameSparks[g.id] ?? [],
+    })),
+    genres: genres.map((g) => ({ ...g, spark: genreSparks[g.id] ?? [] })),
     recent: recent.map((a) => ({
       ...a,
       universeId: a.scope === "game" ? (universe[a.id] ?? null) : null,
@@ -73,12 +91,10 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Trending</h1>
-        <p className="text-muted-foreground">
-          Fastest-growing games and genres by average concurrent players over the selected window.
-        </p>
-      </div>
+      <PageHeader
+        title="Trending"
+        description="Fastest-growing games and genres by average concurrent players over the selected window."
+      />
 
       <PresetLinks
         param="range"
@@ -103,12 +119,31 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
               <h2 className="font-medium">Rising games</h2>
               <ExportLinks dataset="trending" params={{ kind: "games", range }} />
             </div>
-            <div className="overflow-x-auto rounded-lg border">
+            <MobileCards
+              items={games.map((g, i) => ({
+                key: g.id,
+                href: `/games/${g.universeId}`,
+                title: g.name,
+                icon: g.icon,
+                rank: i + 1,
+                subtitle: g.genreName ? <GenreBadge name={g.genreName} /> : undefined,
+                stats: [
+                  {
+                    label: "Avg players",
+                    value: `${formatCompact(Math.round(g.basePlaying))} → ${formatCompact(Math.round(g.currentPlaying))}`,
+                  },
+                  { label: "Growth", value: <GrowthBadge growth={g.growthPct} /> },
+                ],
+                aside: <Sparkline values={g.spark} width={64} />,
+              }))}
+            />
+            <div className="hidden overflow-x-auto rounded-lg border sm:block xl:overflow-visible">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-8">#</TableHead>
                     <TableHead>Game</TableHead>
+                    <TableHead>Last {SPARK_DAYS}d</TableHead>
                     <TableHead className="text-right">Avg players</TableHead>
                     <TableHead className="text-right">Growth</TableHead>
                   </TableRow>
@@ -117,15 +152,19 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
                   {games.map((g, i) => (
                     <TableRow key={g.id}>
                       <TableCell className="text-muted-foreground tabular-nums">{i + 1}</TableCell>
-                      <TableCell className="font-medium">
-                        <Link href={`/games/${g.universeId}`} className="hover:underline">
-                          {g.name}
-                        </Link>
-                        {g.genreName && (
-                          <Badge variant="secondary" className="ml-2 align-middle text-[10px]">
-                            {g.genreName}
-                          </Badge>
-                        )}
+                      <TableCell className="min-w-44 font-medium whitespace-normal">
+                        <div className="flex items-center gap-2.5">
+                          <GameIcon src={g.icon} />
+                          <div className="flex min-w-0 flex-col items-start gap-0.5">
+                            <Link href={`/games/${g.universeId}`} className="hover:underline">
+                              {g.name}
+                            </Link>
+                            {g.genreName && <GenreBadge name={g.genreName} />}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Sparkline values={g.spark} />
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         <span className="text-muted-foreground">
@@ -148,12 +187,33 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
               <h2 className="font-medium">Rising genres</h2>
               <ExportLinks dataset="trending" params={{ kind: "genres", range }} />
             </div>
-            <div className="overflow-x-auto rounded-lg border">
+            <MobileCards
+              items={genres.map((g, i) => ({
+                key: g.id,
+                href: `/genres/${g.slug}`,
+                title: (
+                  <span className="inline-flex items-center gap-1.5">
+                    <GenreDot genre={g.slug} /> {g.name}
+                  </span>
+                ),
+                rank: i + 1,
+                stats: [
+                  {
+                    label: "Avg players",
+                    value: `${formatCompact(Math.round(g.basePlaying))} → ${formatCompact(Math.round(g.currentPlaying))}`,
+                  },
+                  { label: "Growth", value: <GrowthBadge growth={g.growthPct} /> },
+                ],
+                aside: <Sparkline values={g.spark} width={64} />,
+              }))}
+            />
+            <div className="hidden overflow-x-auto rounded-lg border sm:block xl:overflow-visible">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-8">#</TableHead>
                     <TableHead>Genre</TableHead>
+                    <TableHead>Last {SPARK_DAYS}d</TableHead>
                     <TableHead className="text-right">Avg players</TableHead>
                     <TableHead className="text-right">Growth</TableHead>
                   </TableRow>
@@ -163,9 +223,15 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
                     <TableRow key={g.id}>
                       <TableCell className="text-muted-foreground tabular-nums">{i + 1}</TableCell>
                       <TableCell className="font-medium">
-                        <Link href={`/genres/${g.slug}`} className="hover:underline">
-                          {g.name}
-                        </Link>
+                        <span className="inline-flex items-center gap-2">
+                          <GenreDot genre={g.slug} />
+                          <Link href={`/genres/${g.slug}`} className="hover:underline">
+                            {g.name}
+                          </Link>
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <Sparkline values={g.spark} />
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         <span className="text-muted-foreground">

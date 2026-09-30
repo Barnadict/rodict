@@ -25,6 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/page-header";
 
 export const metadata = {
   title: "About the data — rodict",
@@ -63,15 +64,17 @@ function Section({
 export default function AboutPage() {
   return (
     <div className="flex flex-1 flex-col gap-8 p-6">
-      <header className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">About the data</h1>
-        <p className="max-w-2xl text-muted-foreground">
-          rodict shows statistics about Roblox games and genres so you can spot patterns yourself.
-          It never tells you what to build. This page explains exactly where every number comes
-          from, how it&apos;s collected, and — importantly — which numbers are{" "}
-          <span className="font-medium text-foreground">estimates rather than facts</span>.
-        </p>
-      </header>
+      <PageHeader
+        title="About the data"
+        description={
+          <>
+            rodict shows statistics about Roblox games and genres so you can spot patterns yourself.
+            It never tells you what to build. This page explains exactly where every number comes
+            from, how it&apos;s collected, and — importantly — which numbers are{" "}
+            <span className="font-medium text-foreground">estimates rather than facts</span>.
+          </>
+        }
+      />
 
       {/* The single most important disclosure on the site gets the most prominent treatment. */}
       <div className="space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-4">
@@ -94,7 +97,7 @@ export default function AboutPage() {
           the same endpoints the Roblox website itself calls. No private, scraped-from-HTML, or
           logged-in data is used, and nothing is collected about individual players.
         </p>
-        <div className="overflow-x-auto rounded-lg border">
+        <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
           <Table>
             <TableHeader>
               <TableRow>
@@ -210,7 +213,7 @@ export default function AboutPage() {
         </p>
 
         <h3 className="pt-2 font-medium">The assumptions</h3>
-        <div className="overflow-x-auto rounded-lg border">
+        <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
           <Table>
             <TableHeader>
               <TableRow>
@@ -297,7 +300,7 @@ export default function AboutPage() {
           Roblox actually pays out per Robux cashed out. The rate changes over time, so an estimate
           for an older snapshot uses the rate that was in effect on that date:
         </p>
-        <div className="overflow-x-auto rounded-lg border">
+        <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
           <Table>
             <TableHeader>
               <TableRow>
@@ -359,7 +362,7 @@ export default function AboutPage() {
         <p className="max-w-2xl text-muted-foreground">
           Several figures on this site are computed, not observed. Each is labeled where it appears:
         </p>
-        <div className="overflow-x-auto rounded-lg border">
+        <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
           <Table>
             <TableHeader>
               <TableRow>

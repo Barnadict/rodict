@@ -565,6 +565,21 @@ export async function getTopUniverseIds(limit: number): Promise<bigint[]> {
   return rows.map((r) => r.universeId);
 }
 
+/** The most-played games right now, for the dashboard (Task #105). */
+export function getTopGamesNow(limit: number) {
+  return prisma.game.findMany({
+    orderBy: { currentPlaying: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      universeId: true,
+      name: true,
+      currentPlaying: true,
+      currentGenre: { select: { slug: true, name: true } },
+    },
+  });
+}
+
 /** The latest `n` snapshots of one game, oldest-first. */
 export async function getLatestSnapshots(gameId: string, n: number) {
   const rows = await prisma.gameSnapshot.findMany({
