@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { COLLECTION_CADENCE, type CollectionTier } from "@/lib/collector/cadence";
+import { effectiveRunStatus } from "@/lib/collector/run-health";
 import { parseWritesTotal, type StatusRun } from "@/lib/status";
 
 /**
@@ -23,7 +24,13 @@ export async function getRunsSince(since: Date): Promise<StatusRun[]> {
       error: true,
     },
   });
-  return rows.map(({ summary, ...r }) => ({ ...r, writesTotal: parseWritesTotal(summary) }));
+  // `effectiveRunStatus` (Task #75): a partial collect run that saved (almost)
+  // nothing counts as a failure here, as it does in the footer.
+  return rows.map(({ summary, ...r }) => ({
+    ...r,
+    status: effectiveRunStatus({ ...r, summary }),
+    writesTotal: parseWritesTotal(summary),
+  }));
 }
 
 export interface TierCoverage {

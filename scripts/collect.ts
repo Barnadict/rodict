@@ -50,9 +50,10 @@ async function main() {
     // Per-game failures don't abort the run, but they shouldn't be reported as
     // a clean success either — the run is "partial" so monitoring can see it.
     // So is a run the write-budget guard reduced or paused (Task #47).
+    const status = collectionJobStatus(summary);
     await recordJobRun({
       job: "collect",
-      status: collectionJobStatus(summary),
+      status,
       startedAt: summary.startedAt,
       finishedAt: summary.finishedAt,
       summary: collectionJobSummary(summary),
@@ -62,6 +63,13 @@ async function main() {
     console.log(
       `\nDone in ${(summary.durationMs / 1000).toFixed(1)}s — persisted ${summary.persisted} games (${summary.newGames} new).`,
     );
+
+    // A run that saved (almost) nothing (Task #75) must turn the workflow red,
+    // so the alert job opens an issue. It's recorded above either way.
+    if (status === "failure") {
+      console.error("::error::Collection saved (almost) nothing — treated as a failed run.");
+      process.exitCode = 1;
+    }
   } catch (err) {
     // Record the failure before rethrowing, so a crashed run is still visible.
     // A failure while recording the failure must not mask the original error.

@@ -425,11 +425,15 @@ export default function AboutPage() {
                 <TableCell className="font-medium">Notable changes (spikes / drops)</TableCell>
                 <TableCell className="text-muted-foreground">
                   A step is flagged only if it is both statistically unusual for that game&apos;s
-                  own curve (robust z-score using median/MAD) <em>and</em> large in absolute terms.
-                  Both bars are required — judged on unusualness alone, an ordinary wiggle on a very
-                  steady curve scores as an extreme outlier. A step must also move at least 50
-                  players, so a small game going from 8 to 12 isn&apos;t flagged, and steps across a
-                  collection gap aren&apos;t compared at all.
+                  own curve (robust z-score of at least 5 using median/MAD) <em>and</em> large in
+                  absolute terms (at least 25%). Both bars are required — judged on unusualness
+                  alone, an ordinary wiggle on a very steady curve scores as an extreme outlier.
+                  Unusualness is measured on a log scale, so a fall and the recovery from it count
+                  the same, and a game&apos;s ordinary daily rise out of its overnight low
+                  isn&apos;t flagged. A step must also move at least 50 players, so a small game
+                  going from 8 to 12 isn&apos;t flagged. Steps across a collection gap, or spanning
+                  much longer than the game&apos;s usual time between readings, aren&apos;t compared
+                  at all.
                 </TableCell>
               </TableRow>
               <TableRow>

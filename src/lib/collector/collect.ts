@@ -27,6 +27,7 @@ import type { JobStatus } from "@/lib/db/job-runs";
 
 import { decideBudgetGuard, type BudgetGuardDecision } from "./budget-guard";
 import { discoverUniverseIds, type DiscoverOptions } from "./discover";
+import { BULK_PERSIST_ERROR_PREFIX, isBrokenCollectRun } from "./run-health";
 
 export interface CollectionSummary {
   startedAt: Date;
@@ -42,11 +43,15 @@ export interface CollectionSummary {
   deferredLowActivity: number;
   /** Deferred games collected anyway because they were on an explore chart. */
   chartPromoted: number;
+  /** Games this run set out to collect (after any `maxGames` cap). */
+  due: number;
   detailsFetched: number;
   rejectedDetails: number;
   rejectedVotes: number;
   mergeWarnings: number;
   persisted: number;
+  /** The bulk persist step threw, so (almost) nothing was saved (Task #75). */
+  persistFailed: boolean;
   newGames: number;
   peaksUpdated: number;
   genreChanges: number;
@@ -137,6 +142,7 @@ export async function runCollection(opts: CollectOptions = {}): Promise<Collecti
   }
 
   let persisted = 0;
+  let persistFailed = false;
   let newGames = 0;
   let peaksUpdated = 0;
   let genreChanges = 0;
@@ -151,7 +157,8 @@ export async function runCollection(opts: CollectOptions = {}): Promise<Collecti
     updatesRecorded = result.updatesRecorded;
     writes = result.writes;
   } catch (err) {
-    errors.push(`bulk persist: ${err instanceof Error ? err.message : String(err)}`);
+    persistFailed = true;
+    errors.push(`${BULK_PERSIST_ERROR_PREFIX} ${err instanceof Error ? err.message : String(err)}`);
   }
 
   // Precompute per-genre aggregate snapshots for this run (genre time series).
@@ -174,11 +181,13 @@ export async function runCollection(opts: CollectOptions = {}): Promise<Collecti
     knownReCollected: discovery.knownCount,
     deferredLowActivity: discovery.deferredCount,
     chartPromoted: discovery.chartPromotedCount,
+    due: universeIds.length,
     detailsFetched: detailsFetch.data.length,
     rejectedDetails: details.rejected.length,
     rejectedVotes: votes.rejected.length,
     mergeWarnings: warnings.length,
     persisted,
+    persistFailed,
     newGames,
     peaksUpdated,
     genreChanges,
@@ -204,11 +213,13 @@ function pausedSummary(startedAt: Date, budgetGuard: BudgetGuardDecision): Colle
     knownReCollected: 0,
     deferredLowActivity: 0,
     chartPromoted: 0,
+    due: 0,
     detailsFetched: 0,
     rejectedDetails: 0,
     rejectedVotes: 0,
     mergeWarnings: 0,
     persisted: 0,
+    persistFailed: false,
     newGames: 0,
     peaksUpdated: 0,
     genreChanges: 0,
@@ -222,9 +233,11 @@ function pausedSummary(startedAt: Date, budgetGuard: BudgetGuardDecision): Colle
 }
 
 /** A run with per-game errors, or one the budget guard reduced or paused, is
- * "partial" rather than a clean success, so monitoring can tell them apart. */
+ * "partial" rather than a clean success, so monitoring can tell them apart. A
+ * run that saved (almost) nothing is a "failure", so it alerts (Task #75). */
 export function collectionJobStatus(summary: CollectionSummary): JobStatus {
   const guarded = summary.budgetGuard !== null && summary.budgetGuard.mode !== "normal";
+  if (isBrokenCollectRun({ ...summary, guarded })) return "failure";
   return summary.errors.length > 0 || guarded ? "partial" : "success";
 }
 
@@ -245,6 +258,7 @@ export function collectionJobSummary(summary: CollectionSummary) {
     knownReCollected: summary.knownReCollected,
     deferredLowActivity: summary.deferredLowActivity,
     chartPromoted: summary.chartPromoted,
+    due: summary.due,
     persisted: summary.persisted,
     newGames: summary.newGames,
     peaksUpdated: summary.peaksUpdated,

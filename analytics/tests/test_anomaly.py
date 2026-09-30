@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
 import deadrule
 from anomaly import MAX_GAP_DAYS, MIN_ABS_CHANGE, MIN_POINTS, _anomalies
@@ -152,3 +153,44 @@ def test_steps_across_a_collection_gap_are_not_flagged():
 
 def test_gap_threshold_matches_the_dead_rule():
     assert MAX_GAP_DAYS == deadrule.MAX_GAP_DAYS
+
+
+# --- Task #76: measured against production ------------------------------------
+
+def _daily_cycle(days=4, base=400, swing=0.6):
+    # 3-hourly readings of a game whose players swing +/-60% over each day,
+    # with the steepest ramp around the morning trough, as in production.
+    shape = [1.0, 0.7, 0.4, 0.45, 0.8, 1.2, 1.5, 1.3]
+    return np.array([base * (1 + swing * (s - 0.9)) for _ in range(days) for s in shape])
+
+
+def test_the_morning_rebound_of_a_daily_cycle_is_not_flagged():
+    # The #55 rules flagged ~half the corpus, mostly this: percent change made
+    # each day's climb out of the trough look bigger than the fall into it.
+    values = _daily_cycle()
+    assert _anomalies(_hourly(values), values) == []
+
+
+def test_a_fall_and_its_recovery_score_the_same():
+    values = np.array([1000, 1010, 995, 1005, 1000, 1010, 250, 1000, 1005, 995], dtype=float)
+    an = _anomalies(_hourly(values), values)
+    assert [a["direction"] for a in an] == ["drop", "spike"]
+    # Equal up to the series' median step and log1p's +1. Under percent change
+    # (-75% vs +300%) the recovery scored ~4x the fall.
+    assert an[1]["score"] == pytest.approx(an[0]["score"], rel=0.05)
+
+
+def test_a_step_much_longer_than_the_series_usual_spacing_is_not_flagged():
+    # The first step after the outage was 6h against a 3h cadence: it had twice
+    # as long to move, so it isn't judged against the 3h steps.
+    values = np.array([1000, 1010, 1000, 1010, 1000, 1010, 1000, 3000], dtype=float)
+    times = _hourly(values[:7]) + [_hourly(values)[6] + pd.Timedelta(hours=6)]
+    assert _anomalies(times, values) == []
+    assert len(_anomalies(_hourly(values), values)) == 1  # the same step at 3h is
+
+
+def test_a_daily_cadence_game_is_judged_by_its_own_spacing():
+    # Low-activity games are collected every 24h (Task #46); the spacing rule
+    # is relative, so their steps are still compared.
+    values = np.array([1000, 1010, 1000, 1010, 1000, 1010, 1000, 3000], dtype=float)
+    assert len(_anomalies(_hourly(values, step_hours=24), values)) == 1

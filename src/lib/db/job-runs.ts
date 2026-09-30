@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { effectiveRunStatus } from "@/lib/collector/run-health";
 
 /**
  * Run history for the collector / analytics pipelines (Task #34).
@@ -47,38 +48,46 @@ export interface JobRunView {
   error: string | null;
 }
 
-/** The most recent run of a job, whatever its outcome. */
-export function getLastRun(job: JobName): Promise<JobRunView | null> {
-  return prisma.jobRun.findFirst({
-    where: { job },
-    orderBy: { startedAt: "desc" },
-    select: {
-      id: true,
-      job: true,
-      status: true,
-      startedAt: true,
-      finishedAt: true,
-      durationMs: true,
-      error: true,
-    },
-  });
+const RUN_VIEW_SELECT = {
+  id: true,
+  job: true,
+  status: true,
+  startedAt: true,
+  finishedAt: true,
+  durationMs: true,
+  summary: true,
+  error: true,
+} as const;
+
+/** A row with its status replaced by `effectiveRunStatus` (Task #75), so a
+ * `partial` collect run that saved (almost) nothing reads as a failure. */
+function toView({ summary, ...row }: JobRunView & { summary: string | null }): JobRunView {
+  return { ...row, status: effectiveRunStatus({ ...row, summary }) };
 }
 
-/** The most recent run of a job that actually succeeded (fully or partially). */
-export function getLastSuccessfulRun(job: JobName): Promise<JobRunView | null> {
-  return prisma.jobRun.findFirst({
+/** The most recent run of a job, whatever its outcome. */
+export async function getLastRun(job: JobName): Promise<JobRunView | null> {
+  const row = await prisma.jobRun.findFirst({
+    where: { job },
+    orderBy: { startedAt: "desc" },
+    select: RUN_VIEW_SELECT,
+  });
+  return row ? toView(row) : null;
+}
+
+/** How many recent success/partial rows to scan past broken ones. */
+const LAST_SUCCESS_SCAN = 20;
+
+/** The most recent run of a job that actually succeeded (fully or partially).
+ * Broken `partial` runs (Task #75) are skipped. */
+export async function getLastSuccessfulRun(job: JobName): Promise<JobRunView | null> {
+  const rows = await prisma.jobRun.findMany({
     where: { job, status: { in: ["success", "partial"] } },
     orderBy: { startedAt: "desc" },
-    select: {
-      id: true,
-      job: true,
-      status: true,
-      startedAt: true,
-      finishedAt: true,
-      durationMs: true,
-      error: true,
-    },
+    take: LAST_SUCCESS_SCAN,
+    select: RUN_VIEW_SELECT,
   });
+  return rows.map(toView).find((r) => r.status !== "failure") ?? null;
 }
 
 export interface PipelineHealth {
@@ -98,21 +107,14 @@ export async function getPipelineHealth(job: JobName): Promise<PipelineHealth> {
 }
 
 /** Recent run history, newest first (for an ops/debug view). */
-export function getRecentJobRuns(job: JobName, limit = 20): Promise<JobRunView[]> {
-  return prisma.jobRun.findMany({
+export async function getRecentJobRuns(job: JobName, limit = 20): Promise<JobRunView[]> {
+  const rows = await prisma.jobRun.findMany({
     where: { job },
     orderBy: { startedAt: "desc" },
     take: limit,
-    select: {
-      id: true,
-      job: true,
-      status: true,
-      startedAt: true,
-      finishedAt: true,
-      durationMs: true,
-      error: true,
-    },
+    select: RUN_VIEW_SELECT,
   });
+  return rows.map(toView);
 }
 
 export interface DiscoveryRun {
