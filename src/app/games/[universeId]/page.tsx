@@ -20,7 +20,8 @@ import { deriveSnapshotMetrics, PASS_TIER_NOTE } from "@/lib/earnings/estimate";
 import { formatCompact, formatExact, formatRelativeTime, formatUsdRange } from "@/lib/format";
 import { formatGrowthPct } from "@/lib/stats";
 import { creatorPath } from "@/lib/creators";
-import { getEngagement } from "@/lib/cached-queries";
+import { getAllRankLadders, getEngagement } from "@/lib/cached-queries";
+import { UNCLASSIFIED_KEY, bestRank, rankHistory, rankRows } from "@/lib/rank-history";
 import {
   SESSION_ESTIMATE,
   favoritesPer1kVisits,
@@ -47,6 +48,7 @@ import {
   type TrendMarker,
   type TrendValueFormat,
 } from "@/components/charts/trend-chart";
+import { DailyLinesChart } from "@/components/charts/daily-lines-chart";
 import { LocalTime } from "@/components/local-time";
 import { StatTile } from "@/components/data-table/stat-tile";
 import { GrowthBadge } from "@/components/data-table/growth-badge";
@@ -119,6 +121,7 @@ async function getGameDetail(universeIdParam: string, range: RangeKey) {
     passCatalog,
     engagement,
     benchmark,
+    ladders,
   ] = await Promise.all([
     getGameSnapshots(game.id, { from: rangeToCutoff(range) }),
     getAnomaliesForGame(game.id),
@@ -129,7 +132,18 @@ async function getGameDetail(universeIdParam: string, range: RangeKey) {
     game.currentGenreId && game.robloxCreatedAt
       ? getLaunchBenchmarkForGenre(game.currentGenreId)
       : null,
+    getAllRankLadders(),
   ]);
+
+  // Rank by daily average players on each day the stored ladders cover
+  // (Task #90). Days the range cuts into are skipped: their average would
+  // differ from the ladder's.
+  const ranks = rankHistory(
+    snapshots.map((s) => ({ t: s.collectedAt.getTime(), playing: s.playing })),
+    ladders,
+    game.currentGenreId ?? UNCLASSIFIED_KEY,
+    rangeToCutoff(range),
+  );
 
   // Where the game sits among its genre's launches, on its latest full day
   // since launch that the benchmark covers (Task #83).
@@ -161,6 +175,7 @@ async function getGameDetail(universeIdParam: string, range: RangeKey) {
     passCatalog,
     launch,
     launchNearDays: benchmark?.nearLaunchDays ?? null,
+    ranks,
     sessionMinutes: engagement.games.find((g) => g.id === game.id)?.minutes ?? null,
     iconUrl: icons.get(String(universeId)) ?? null,
   };
@@ -215,7 +230,10 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
     sessionMinutes,
     launch,
     launchNearDays,
+    ranks,
   } = data;
+  const latestRank = ranks.at(-1);
+  const hasRanks = ranks.some((r) => r.overall !== null);
   const latest = snapshots[snapshots.length - 1];
   const previous = snapshots.length > 1 ? snapshots[snapshots.length - 2] : undefined;
   const derived = latest ? deriveSnapshotMetrics(latest, previous, passCatalog) : null;
@@ -519,6 +537,55 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
           </details>
         )}
       </div>
+
+      {ranks.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <div>
+            <h2 className="font-medium">Rank history</h2>
+            <p className="text-sm text-muted-foreground">
+              Where this game ranked by daily average players each day (UTC), among every tracked
+              game and within {game.currentGenre ? game.currentGenre.name : "unclassified games"}.
+              Games collected more often don&apos;t count more: every game is one daily average.
+              {latestRank && latestRank.overall !== null && (
+                <>
+                  {" "}
+                  Latest (
+                  {new Date(latestRank.date).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    timeZone: "UTC",
+                  })}
+                  ):{" "}
+                  <span className="font-medium text-foreground tabular-nums">
+                    #{formatExact(latestRank.overall)}
+                  </span>{" "}
+                  of {formatExact(latestRank.overallOf)} overall,{" "}
+                  <span className="font-medium text-foreground tabular-nums">
+                    #{formatExact(latestRank.genre!)}
+                  </span>{" "}
+                  of {formatExact(latestRank.genreOf)} in genre. Best in this range: #
+                  {formatExact(bestRank(ranks, "overall")!)} overall.
+                </>
+              )}
+            </p>
+          </div>
+          <div className="rounded-lg border p-4">
+            <DailyLinesChart
+              data={hasRanks ? rankRows(ranks) : []}
+              lines={[
+                { key: "overall", name: "Overall" },
+                {
+                  key: "genre",
+                  name: game.currentGenre ? `In ${game.currentGenre.name}` : "In genre",
+                },
+              ]}
+              format="rank"
+              emptyMessage="Averaged under 1 player on every day in range, so unranked."
+              ariaLabel={`Line chart of ${game.name}'s daily rank by players, overall and in its genre`}
+            />
+          </div>
+        </section>
+      )}
 
       {anomalies && anomalies.nAnomalies > 0 && (
         <section className="flex flex-col gap-2">

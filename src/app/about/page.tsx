@@ -492,6 +492,55 @@ export default function AboutPage() {
                 </TableCell>
               </TableRow>
               <TableRow>
+                <TableCell className="font-medium">Market concentration</TableCell>
+                <TableCell className="text-muted-foreground">
+                  Per genre and UTC day, the share of the genre&apos;s players held by its top 1, 5
+                  and 10 games, and the Herfindahl-Hirschman index (sum of squared shares, shown on
+                  a 0–10,000 scale). Each game counts once a day with its daily average players, so
+                  games collected more often don&apos;t weigh more. The &ldquo;many small games / a
+                  few leaders / a few giants&rdquo; labels use the usual antitrust bands (1,500 and
+                  2,500) purely as labels. Days with no collection are gaps.
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">Rank history</TableCell>
+                <TableCell className="text-muted-foreground">
+                  A game&apos;s rank on a day is 1 + the number of tracked games with a higher daily
+                  average (rounded to whole players; ties share a rank), overall and within its
+                  current genre. Games averaging under 1 player that day are unranked. Ranks cover
+                  the last 90 days. Only games we track are ranked, so &ldquo;#50&rdquo; means 50th
+                  among rodict&apos;s games, not all of Roblox.
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">Update cadence</TableCell>
+                <TableCell className="text-muted-foreground">
+                  An update is a change in Roblox&apos;s last-updated time. The share updated
+                  recently and days since the last update use every game&apos;s current timestamp.
+                  Days between updates and update counts use the updates we record, at most one per
+                  collection, so they undercount games that update often. Cadence vs. player change
+                  is associational, not causal.
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">Game pass pricing</TableCell>
+                <TableCell className="text-muted-foreground">
+                  From each checked game&apos;s on-sale pass list (re-checked about weekly). Median
+                  and middle half are over every pass in the genre; passes per game counts checked
+                  games with none as 0. List prices only: sales and developer products aren&apos;t
+                  public.
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">Server size</TableCell>
+                <TableCell className="text-muted-foreground">
+                  The max players per server Roblox reports for each game, from its latest reading
+                  in the last day. The genre figure is the median over its games; &ldquo;size vs.
+                  players&rdquo; is the Spearman rank correlation between server size and players
+                  now across games with players (10+ needed), associational only.
+                </TableCell>
+              </TableRow>
+              <TableRow>
                 <TableCell className="font-medium">Trajectory archetypes</TableCell>
                 <TableCell className="text-muted-foreground">
                   k-means clustering on scale-free curve-shape features, labeled from the cluster

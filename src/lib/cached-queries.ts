@@ -2,6 +2,9 @@ import { cacheLife } from "next/cache";
 
 import { getGameWindowGrowth } from "@/lib/db/trends";
 import { getEngagementIndex } from "@/lib/db/engagement";
+import { getConcentrationAll, getRankLadders } from "@/lib/db/analytics";
+import { getPassPricingIndex } from "@/lib/db/pass-pricing";
+import { getUpdateCadenceIndex } from "@/lib/db/update-cadence";
 import { rangeToCutoff, type RangeKey } from "@/lib/date-range";
 
 /**
@@ -38,4 +41,37 @@ export async function getEngagement() {
 export async function getSessionById(): Promise<Map<string, number>> {
   const { games } = await getEngagement();
   return new Map(games.map((g) => [g.id, g.minutes]));
+}
+
+/**
+ * Every stored daily rank ladder (Task #90, ≤90 rows), shared by all game
+ * pages: each page slices the days its range covers instead of reading them.
+ */
+export async function getAllRankLadders() {
+  "use cache";
+  cacheLife("hours");
+  return getRankLadders();
+}
+
+/** Every genre's concentration series (Task #87), as [genreId, series] pairs. */
+export async function getConcentrationIndex() {
+  "use cache";
+  cacheLife("hours");
+  return [...(await getConcentrationAll())];
+}
+
+/** Update cadence for every genre (Task #88); growth over the same 30 days. */
+export async function getUpdateCadence() {
+  "use cache";
+  cacheLife("hours");
+  // The "30d" range is CADENCE.recentDays; update-cadence.test.ts pins that.
+  const growth = await getGrowthById("30d");
+  return getUpdateCadenceIndex(growth, new Date());
+}
+
+/** Game-pass pricing for every genre (Task #89). */
+export async function getPassPricing() {
+  "use cache";
+  cacheLife("hours");
+  return getPassPricingIndex();
 }

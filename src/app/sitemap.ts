@@ -24,6 +24,7 @@ const STATIC_PATHS = [
   "/records",
   "/graveyard",
   "/creators",
+  "/updates",
   "/about",
   "/status",
 ];

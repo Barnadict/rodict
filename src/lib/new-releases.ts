@@ -64,7 +64,8 @@ export interface LifecycleBandPoint {
   nGames: number;
 }
 
-function quantile(sorted: number[], q: number): number {
+/** Linear-interpolated quantile of an ascending, non-empty array (q in 0–1). */
+export function quantile(sorted: number[], q: number): number {
   const pos = (sorted.length - 1) * q;
   const lo = Math.floor(pos);
   const hi = Math.ceil(pos);

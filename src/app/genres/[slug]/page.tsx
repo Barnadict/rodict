@@ -18,11 +18,21 @@ import {
   getForecastForGenre,
   getUpdateImpactForGenre,
   getLaunchBenchmarkForGenre,
+  getConcentrationForGenre,
   getAnalyticsComputedAt,
 } from "@/lib/db/analytics";
 import { benchmarkBand } from "@/lib/launch-benchmark";
 import { estimateDailyEarningsFromCcu } from "@/lib/earnings/estimate";
-import { getEngagement } from "@/lib/cached-queries";
+import { getEngagement, getPassPricing, getUpdateCadence } from "@/lib/cached-queries";
+import {
+  concentrationLevel,
+  concentrationRows,
+  effectiveGames,
+  hhiPoints,
+  latestWithBaseline,
+} from "@/lib/concentration";
+import { PRICE_BUCKETS } from "@/lib/pass-pricing";
+import { SERVER_SIZE } from "@/lib/server-size";
 import { SESSION_ESTIMATE, formatSessionMinutes } from "@/lib/engagement";
 import { formatCompact, formatUsdRange } from "@/lib/format";
 import { LOW_COVERAGE, buildProjection, formatGrowthPct } from "@/lib/stats";
@@ -39,6 +49,7 @@ import {
 import { TrendChart, type TrendPoint } from "@/components/charts/trend-chart";
 import { LocalTime } from "@/components/local-time";
 import { LifecycleChart } from "@/components/charts/lifecycle-chart";
+import { DailyLinesChart } from "@/components/charts/daily-lines-chart";
 import { SurvivalChart } from "@/components/charts/survival-chart";
 import { SeasonalityHeatmap } from "@/components/charts/seasonality-heatmap";
 import { GrowthBadge } from "@/components/data-table/growth-badge";
@@ -101,6 +112,9 @@ async function getGenreDetail(slug: string, range: RangeKey) {
     analyticsAt,
     engagementIndex,
     launchBenchmark,
+    concentration,
+    cadence,
+    passPricing,
   ] = await Promise.all([
     getGenreStatBySlug(slug),
     getGenreSnapshots(genre.id, { from: cutoff }),
@@ -117,6 +131,9 @@ async function getGenreDetail(slug: string, range: RangeKey) {
     getAnalyticsComputedAt(),
     getEngagement(),
     getLaunchBenchmarkForGenre(genre.id),
+    getConcentrationForGenre(genre.id),
+    getUpdateCadence(),
+    getPassPricing(),
   ]);
 
   // A range narrower than "all" adds a Δ column to top games, scoped to just
@@ -150,6 +167,12 @@ async function getGenreDetail(slug: string, range: RangeKey) {
     moverUniverseIds,
     launchBenchmark,
     engagement: engagementIndex.genres.find((g) => g.genreId === genre.id) ?? null,
+    serverSize: engagementIndex.serverSize[genre.id] ?? null,
+    concentration,
+    cadence: cadence.genres.find((g) => g.genreId === genre.id) ?? null,
+    cadenceTop: cadence.topByGenre[genre.id] ?? [],
+    cadenceDays: cadence.recentDays,
+    passPricing: passPricing.genres[genre.id] ?? null,
     // Priced at the as-of date rather than "now" so the cached entry doesn't
     // depend on when it happens to be read.
     earnings: stat ? estimateDailyEarningsFromCcu(stat.totalPlaying, cutoff ?? new Date()) : null,
@@ -184,7 +207,14 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
     engagement,
     launchBenchmark,
     earnings,
+    serverSize,
+    concentration,
+    cadence,
+    cadenceTop,
+    cadenceDays,
+    passPricing,
   } = data;
+  const conc = concentration ? latestWithBaseline(concentration.days) : null;
   const launchBand = benchmarkBand(launchBenchmark);
 
   const hasAnalytics = !!(survival || clustering || opportunity || momentum);
@@ -411,6 +441,63 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
         )}
       </section>
 
+      {conc && concentration && (
+        <section id="concentration" className="flex scroll-mt-6 flex-col gap-3">
+          <div>
+            <h2 className="font-medium">Market concentration</h2>
+            <p className="text-sm text-muted-foreground">
+              How much of the genre&apos;s players its biggest games hold, from each game&apos;s
+              daily average players (UTC days). On {conc.latest.day} its{" "}
+              {formatCompact(conc.latest.n)} games with a reading looked like{" "}
+              <span className="font-medium text-foreground">
+                {concentrationLevel(conc.latest.hhi)}
+              </span>
+              .{" "}
+              <Link href="/saturation#concentration" className="underline underline-offset-2">
+                Compare genres
+              </Link>
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {(["top1", "top5", "top10"] as const).map((k) => (
+              <StatTile
+                key={k}
+                label={k === "top1" ? "Biggest game's share" : `Top ${k.slice(3)} share`}
+                value={`${Math.round(conc.latest[k] * 100)}%`}
+                hint={
+                  conc.baseline
+                    ? `${Math.round(conc.baseline[k] * 100)}% on ${conc.baseline.day}`
+                    : undefined
+                }
+              />
+            ))}
+            <StatTile
+              label="HHI"
+              value={formatCompact(hhiPoints(conc.latest.hhi))}
+              hint={`Like ${effectiveGames(conc.latest.hhi)?.toFixed(1) ?? "—"} equal-sized games`}
+            />
+          </div>
+          <div className="rounded-lg border p-4">
+            <DailyLinesChart
+              data={concentrationRows(concentration.days)}
+              lines={[
+                { key: "top1", name: "Biggest game" },
+                { key: "top5", name: "Top 5" },
+                { key: "top10", name: "Top 10" },
+              ]}
+              format="percent"
+              ariaLabel={`Line chart of the share of ${genre.name} players held by its top 1, 5 and 10 games per day`}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            HHI is the sum of every game&apos;s squared share, on a 0–10,000 scale: under 1,500 is
+            many small games, over 2,500 a few giants (the usual antitrust bands, used here only as
+            labels). A day needs {concentration.minGames}+ games with a reading. Days with no
+            collection are gaps, not zeros. Games are grouped by their current genre.
+          </p>
+        </section>
+      )}
+
       <section id="lifecycle" className="flex scroll-mt-6 flex-col gap-3">
         <div>
           <h2 className="font-medium">Lifecycle</h2>
@@ -530,6 +617,81 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
         </section>
       )}
 
+      {cadence && (
+        <section id="updates" className="flex scroll-mt-6 flex-col gap-3">
+          <div>
+            <h2 className="font-medium">Update cadence</h2>
+            <p className="text-sm text-muted-foreground">
+              How often this genre&apos;s games change on Roblox (a publish, or some settings
+              edits).{" "}
+              <Link href="/updates" className="underline underline-offset-2">
+                All genres and the most-updated games
+              </Link>
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatTile
+              label={`Updated in the last ${cadenceDays} days`}
+              value={
+                cadence.updatedRecentlyShare !== null
+                  ? `${Math.round(cadence.updatedRecentlyShare * 100)}%`
+                  : "—"
+              }
+              hint={`Of ${formatCompact(cadence.games)} games`}
+            />
+            <StatTile
+              label="Median days since last update"
+              value={
+                cadence.medianDaysSinceUpdate !== null
+                  ? formatCompact(Math.round(cadence.medianDaysSinceUpdate))
+                  : "—"
+              }
+            />
+            <StatTile
+              label="Typical days between updates"
+              value={
+                cadence.medianDaysBetween !== null ? cadence.medianDaysBetween.toFixed(1) : "—"
+              }
+              hint={
+                cadence.intervalGames
+                  ? `Median of ${formatCompact(cadence.intervalGames)} games' own medians`
+                  : "No recorded updates yet"
+              }
+            />
+            <StatTile
+              label={`Updates recorded, last ${cadenceDays} days`}
+              value={formatCompact(cadence.recentUpdates)}
+            />
+          </div>
+          {cadenceTop.length > 0 && (
+            <div className="flex flex-col divide-y rounded-lg border">
+              <div className="p-3 text-sm text-muted-foreground">
+                Most updated · last {cadenceDays} days
+              </div>
+              {cadenceTop.map((g) => (
+                <Link
+                  key={g.id}
+                  href={`/games/${g.universeId}`}
+                  className="flex items-center justify-between gap-3 p-3 hover:bg-muted/50"
+                >
+                  <span className="min-w-0 truncate font-medium">{g.name}</span>
+                  <span className="shrink-0 text-sm text-muted-foreground tabular-nums">
+                    {g.updates} update{g.updates === 1 ? "" : "s"} ·{" "}
+                    {formatCompact(g.currentPlaying)} playing
+                  </span>
+                </Link>
+              ))}
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground">
+            &ldquo;Updated&rdquo; and &ldquo;days since&rdquo; use every game&apos;s current
+            last-updated time. Days between and counts use the updates we recorded, which only
+            started recently and see at most one update per collection, so they undercount games
+            that update several times a day.
+          </p>
+        </section>
+      )}
+
       {updateImpact && (
         <section className="flex flex-col gap-3">
           <div>
@@ -570,6 +732,120 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
               </div>
             ))}
           </div>
+        </section>
+      )}
+
+      {passPricing && passPricing.checkedGames > 0 && (
+        <section id="passes" className="flex scroll-mt-6 flex-col gap-3">
+          <div>
+            <h2 className="font-medium">Game pass pricing</h2>
+            <p className="text-sm text-muted-foreground">
+              Prices of the game passes on sale in this genre&apos;s games, from{" "}
+              {formatCompact(passPricing.checkedGames)} of {formatCompact(stat?.gameCount ?? 0)}{" "}
+              games whose pass list we&apos;ve checked (each game is checked about once a week).
+              These are list prices, not sales: only Roblox knows what sells.{" "}
+              <Link href="/genres#passes" className="underline underline-offset-2">
+                Compare genres
+              </Link>
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatTile
+              label="Games with passes"
+              value={`${Math.round((passPricing.gamesWithPasses / passPricing.checkedGames) * 100)}%`}
+              hint={`${formatCompact(passPricing.gamesWithPasses)} of ${formatCompact(passPricing.checkedGames)} checked`}
+            />
+            <StatTile
+              label="Median passes per game"
+              value={passPricing.medianPassesPerGame?.toString() ?? "—"}
+              hint="Games with none count as 0"
+            />
+            <StatTile
+              label="Median pass price"
+              value={
+                passPricing.medianPrice !== null
+                  ? `R$${formatCompact(Math.round(passPricing.medianPrice))}`
+                  : "—"
+              }
+              hint={
+                passPricing.p25Price !== null
+                  ? `Middle half R$${formatCompact(Math.round(passPricing.p25Price))}–${formatCompact(Math.round(passPricing.p75Price!))}`
+                  : undefined
+              }
+            />
+            <StatTile
+              label="Median cost of all passes"
+              value={
+                passPricing.medianTotalRobux !== null
+                  ? `R$${formatCompact(Math.round(passPricing.medianTotalRobux))}`
+                  : "—"
+              }
+              hint="Per game with passes"
+            />
+          </div>
+          {passPricing.passes > 0 && (
+            <div className="flex flex-col gap-1.5 rounded-lg border p-4">
+              <span className="text-sm text-muted-foreground">
+                Price distribution · {formatCompact(passPricing.passes)} passes (Robux)
+              </span>
+              {PRICE_BUCKETS.map((b, i) => (
+                <div key={b.label} className="flex items-center gap-3 text-sm tabular-nums">
+                  <span className="w-16 shrink-0 text-muted-foreground">{b.label}</span>
+                  <div className="h-3 flex-1 rounded-sm bg-muted">
+                    <div
+                      className="h-3 rounded-sm bg-primary"
+                      style={{ width: `${passPricing.distribution[i] * 100}%` }}
+                    />
+                  </div>
+                  <span className="w-10 shrink-0 text-right">
+                    {Math.round(passPricing.distribution[i] * 100)}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {serverSize && serverSize.games > 0 && (
+        <section id="servers" className="flex scroll-mt-6 flex-col gap-3">
+          <div>
+            <h2 className="font-medium">Server size</h2>
+            <p className="text-sm text-muted-foreground">
+              Players per server (the developer&apos;s max-players setting), from each game&apos;s
+              latest reading in the last {SESSION_ESTIMATE.windowHours}h.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatTile
+              label="Typical server size"
+              value={serverSize.median !== null ? formatCompact(serverSize.median) : "—"}
+              hint={
+                serverSize.p25 !== null
+                  ? `Middle half ${formatCompact(serverSize.p25)}–${formatCompact(serverSize.p75!)} · ${formatCompact(serverSize.games)} games`
+                  : undefined
+              }
+            />
+            <StatTile
+              label={`Busy games (${SERVER_SIZE.busyPlayers}+ playing)`}
+              value={serverSize.medianBusy !== null ? formatCompact(serverSize.medianBusy) : "—"}
+              hint={`Median of ${formatCompact(serverSize.busyGames)} games`}
+            />
+            <StatTile
+              label="Size vs. players (Spearman)"
+              value={serverSize.spearman !== null ? serverSize.spearman.toFixed(2) : "—"}
+              hint={
+                serverSize.spearman !== null
+                  ? `${formatCompact(serverSize.spearmanGames)} games with players`
+                  : `Needs ${SERVER_SIZE.minCorrelationGames}+ games with players`
+              }
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            The correlation runs from −1 to 1: above 0 means this genre&apos;s games with bigger
+            servers tend to have more players, below 0 fewer. It&apos;s a rank correlation across
+            games and says nothing about cause: popular kinds of game may simply use bigger servers.
+          </p>
         </section>
       )}
 

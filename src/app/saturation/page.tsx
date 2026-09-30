@@ -3,6 +3,14 @@ import { cacheLife } from "next/cache";
 
 import { getGenreStats } from "@/lib/db/genre-stats";
 import { getOpportunityRanking, getAnalyticsComputedAt } from "@/lib/db/analytics";
+import { getConcentrationIndex } from "@/lib/cached-queries";
+import { getAllGenres } from "@/lib/db/genres";
+import {
+  concentrationLevel,
+  effectiveGames,
+  hhiPoints,
+  latestWithBaseline,
+} from "@/lib/concentration";
 import { formatCompact } from "@/lib/format";
 
 import {
@@ -33,20 +41,34 @@ async function getSaturationData(range: RangeKey) {
   cacheLife("hours");
 
   const asOf = rangeToCutoff(range);
-  const [stats, opportunity, analyticsAt] = await Promise.all([
+  const [stats, opportunity, analyticsAt, concentration, genres] = await Promise.all([
     getGenreStats({ asOf }),
     getOpportunityRanking(),
     getAnalyticsComputedAt(),
+    getConcentrationIndex(),
+    getAllGenres(),
   ]);
 
-  return { stats, opportunity, analyticsAt, asOf };
+  // Latest day per genre (Task #87), most concentrated first. Not range-scoped:
+  // it's today's market shape, with the 30-days-earlier HHI for direction.
+  const genreById = new Map(genres.map((g) => [g.id, g]));
+  const concentrationRows = concentration
+    .flatMap(([genreId, series]) => {
+      const genre = genreById.get(genreId);
+      const c = latestWithBaseline(series.days);
+      return genre && c ? [{ slug: genre.slug, name: genre.name, ...c }] : [];
+    })
+    .sort((a, b) => b.latest.hhi - a.latest.hhi);
+
+  return { stats, opportunity, analyticsAt, asOf, concentrationRows };
 }
 
 export default async function SaturationPage(props: PageProps<"/saturation">) {
   const sp = await props.searchParams;
   const range = parseRangeKey(Array.isArray(sp.range) ? sp.range[0] : sp.range);
 
-  const { stats, opportunity, analyticsAt, asOf } = await getSaturationData(range);
+  const { stats, opportunity, analyticsAt, asOf, concentrationRows } =
+    await getSaturationData(range);
 
   // Precomputed opportunity score (Task #24), keyed by genre slug. It reflects
   // current data regardless of the range toggle (which scopes the scatter).
@@ -168,6 +190,82 @@ export default async function SaturationPage(props: PageProps<"/saturation">) {
           </>
         )}
       </p>
+
+      {concentrationRows.length > 0 && (
+        <section id="concentration" className="flex scroll-mt-6 flex-col gap-3">
+          <div>
+            <h2 className="font-medium">Market concentration</h2>
+            <p className="max-w-2xl text-sm text-muted-foreground">
+              How much of each genre&apos;s players its biggest games hold on the latest day, from
+              each game&apos;s daily average players. A genre with a high HHI is a few giants: a new
+              game competes with them for attention. A low one is many small games. Most
+              concentrated first; the day&apos;s date is in each genre&apos;s row.
+            </p>
+          </div>
+          <div className="overflow-x-auto rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Genre</TableHead>
+                  <TableHead className="text-right">Games</TableHead>
+                  <TableHead className="text-right">Biggest game</TableHead>
+                  <TableHead className="text-right">Top 5</TableHead>
+                  <TableHead className="text-right">Top 10</TableHead>
+                  <TableHead className="text-right">HHI</TableHead>
+                  <TableHead className="text-right">30 days earlier</TableHead>
+                  <TableHead className="text-right">Like N equal games</TableHead>
+                  <TableHead>Shape</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {concentrationRows.map((r) => (
+                  <TableRow key={r.slug}>
+                    <TableCell className="font-medium">
+                      <Link
+                        href={`/genres/${r.slug}#concentration`}
+                        className="hover:underline"
+                        title={`Latest day: ${r.latest.day}`}
+                      >
+                        {r.name}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatCompact(r.latest.n)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {Math.round(r.latest.top1 * 100)}%
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {Math.round(r.latest.top5 * 100)}%
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {Math.round(r.latest.top10 * 100)}%
+                    </TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">
+                      {formatCompact(hhiPoints(r.latest.hhi))}
+                    </TableCell>
+                    <TableCell className="text-right text-muted-foreground tabular-nums">
+                      {r.baseline ? formatCompact(hhiPoints(r.baseline.hhi)) : "—"}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {effectiveGames(r.latest.hhi)?.toFixed(1) ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {concentrationLevel(r.latest.hhi)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            HHI (Herfindahl-Hirschman index) is the sum of every game&apos;s squared share of the
+            genre&apos;s players, on a 0–10,000 scale. Under 1,500 reads as many small games and
+            over 2,500 as a few giants, the usual antitrust bands, used here only as labels.
+            &ldquo;Like N equal games&rdquo; is 10,000 ÷ HHI. Not affected by the range toggle.
+          </p>
+        </section>
+      )}
     </div>
   );
 }

@@ -4,6 +4,8 @@ import { cacheLife } from "next/cache";
 import { getGenreStats, type GenreStatsSort } from "@/lib/db/genre-stats";
 import { getCohortsGlobal } from "@/lib/db/analytics";
 import { estimateDailyEarningsFromCcu } from "@/lib/earnings/estimate";
+import { getEngagement, getPassPricing } from "@/lib/cached-queries";
+import type { PassPricing } from "@/lib/pass-pricing";
 import { formatCompact, formatUsdRange } from "@/lib/format";
 
 import { Badge } from "@/components/ui/badge";
@@ -70,10 +72,19 @@ export default async function GenresPage(props: PageProps<"/genres">) {
   const order = get("order") === "asc" ? "asc" : "desc";
   const range = parseRangeKey(get("range"));
 
-  const [{ rows, asOf }, cohorts] = await Promise.all([
+  const [{ rows, asOf }, cohorts, { serverSize }, passPricing] = await Promise.all([
     getGenreRows(range, sort, order),
     getGlobalCohorts(),
+    getEngagement(),
+    getPassPricing(),
   ]);
+  // Pass pricing by genre (Task #89), most-monetized first.
+  const passRows = rows
+    .flatMap((r) => {
+      const p = r.genreId ? passPricing.genres[r.genreId] : undefined;
+      return p && p.checkedGames > 0 ? [{ slug: r.slug, name: r.name, p }] : [];
+    })
+    .sort((a, b) => (b.p.medianPrice ?? -1) - (a.p.medianPrice ?? -1));
   const baseParams = { sort, order, range: range === RANGE_CLEAR_VALUE ? undefined : range };
   const totalGames = rows.reduce((sum, r) => sum + r.gameCount, 0);
 
@@ -147,6 +158,9 @@ export default async function GenresPage(props: PageProps<"/genres">) {
                   />
                 </TableHead>
                 <TableHead className="text-right">Est. earnings/day</TableHead>
+                <TableHead className="text-right" title="Median players per server, now">
+                  Typical server
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -189,6 +203,15 @@ export default async function GenresPage(props: PageProps<"/genres">) {
                         </Badge>
                       </span>
                     </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {row.genreId && serverSize[row.genreId]?.median != null ? (
+                        <Link href={`/genres/${row.slug}#servers`} className="hover:underline">
+                          {formatCompact(serverSize[row.genreId].median!)}
+                        </Link>
+                      ) : (
+                        "—"
+                      )}
+                    </TableCell>
                   </TableRow>
                 );
               })}
@@ -199,8 +222,49 @@ export default async function GenresPage(props: PageProps<"/genres">) {
 
       <p className="text-sm text-muted-foreground">
         {rows.length} genre{rows.length === 1 ? "" : "s"} · {totalGames} game
-        {totalGames === 1 ? "" : "s"} total
+        {totalGames === 1 ? "" : "s"} total. Typical server is the median max players per server
+        across the genre&apos;s games right now, whatever the range.
       </p>
+
+      {passRows.length > 0 && (
+        <section id="passes" className="flex scroll-mt-6 flex-col gap-3">
+          <div>
+            <h2 className="font-medium">Game pass pricing by genre</h2>
+            <p className="text-sm text-muted-foreground">
+              The passes on sale in each genre&apos;s games, from the{" "}
+              {formatCompact(passPricing.all.checkedGames)} games whose pass list we&apos;ve checked
+              so far (about once a week each). List prices in Robux, not sales. Highest median price
+              first.
+            </p>
+          </div>
+          <div className="overflow-x-auto rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Genre</TableHead>
+                  <TableHead className="text-right">Games checked</TableHead>
+                  <TableHead className="text-right">With passes</TableHead>
+                  <TableHead className="text-right">Passes / game</TableHead>
+                  <TableHead className="text-right">Median price</TableHead>
+                  <TableHead className="text-right">Middle half</TableHead>
+                  <TableHead className="text-right">All passes, median game</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {passRows.map((r) => (
+                  <PassRow key={r.slug} href={`/genres/${r.slug}#passes`} name={r.name} p={r.p} />
+                ))}
+                <PassRow name="All genres" p={passPricing.all} />
+              </TableBody>
+            </Table>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Passes per game is the median over checked games, counting games with none as 0. The
+            last column is the median Robux to buy every pass in a game once, over games with
+            passes. Developer products aren&apos;t listed publicly, so they aren&apos;t here.
+          </p>
+        </section>
+      )}
 
       {cohorts && cohorts.cohorts.length > 0 && (
         <section className="flex flex-col gap-3">
@@ -219,5 +283,37 @@ export default async function GenresPage(props: PageProps<"/genres">) {
         </section>
       )}
     </div>
+  );
+}
+
+function robux(value: number | null): string {
+  return value === null ? "—" : `R$${formatCompact(Math.round(value))}`;
+}
+
+function PassRow({ name, href, p }: { name: string; href?: string; p: PassPricing }) {
+  return (
+    <TableRow className={href ? undefined : "bg-muted/40"}>
+      <TableCell className="font-medium">
+        {href ? (
+          <Link href={href} className="hover:underline">
+            {name}
+          </Link>
+        ) : (
+          name
+        )}
+      </TableCell>
+      <TableCell className="text-right tabular-nums">{formatCompact(p.checkedGames)}</TableCell>
+      <TableCell className="text-right tabular-nums">
+        {Math.round((p.gamesWithPasses / p.checkedGames) * 100)}%
+      </TableCell>
+      <TableCell className="text-right tabular-nums">{p.medianPassesPerGame ?? "—"}</TableCell>
+      <TableCell className="text-right font-medium tabular-nums">{robux(p.medianPrice)}</TableCell>
+      <TableCell className="text-right text-muted-foreground tabular-nums">
+        {p.p25Price !== null
+          ? `${robux(p.p25Price)}–${formatCompact(Math.round(p.p75Price!))}`
+          : "—"}
+      </TableCell>
+      <TableCell className="text-right tabular-nums">{robux(p.medianTotalRobux)}</TableCell>
+    </TableRow>
   );
 }

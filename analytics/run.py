@@ -37,6 +37,8 @@ import forecast
 import update_impact
 import launch_benchmark
 import game_status
+import concentration
+import rank_ladder
 
 JOBS = [
     ("survival_km", survival.run),
@@ -51,6 +53,8 @@ JOBS = [
     ("forecast", forecast.run),
     ("update_impact", update_impact.run),
     ("launch_benchmark", launch_benchmark.run),
+    ("concentration", concentration.run),
+    ("rank_ladder", rank_ladder.run),
 ]
 
 

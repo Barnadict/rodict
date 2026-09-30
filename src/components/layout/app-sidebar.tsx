@@ -14,6 +14,7 @@ import {
   Trophy,
   Skull,
   Users,
+  RefreshCw,
 } from "lucide-react";
 
 import {
@@ -38,6 +39,7 @@ const browseItems = [
   { title: "Saturation", href: "/saturation", icon: Scale, color: "text-rose-500" },
   { title: "Creators", href: "/creators", icon: Users, color: "text-indigo-500" },
   { title: "Records", href: "/records", icon: Trophy, color: "text-yellow-500" },
+  { title: "Updates", href: "/updates", icon: RefreshCw, color: "text-teal-500" },
   { title: "Graveyard", href: "/graveyard", icon: Skull, color: "text-stone-500" },
 ];
 

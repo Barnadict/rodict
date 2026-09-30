@@ -10,6 +10,7 @@ import {
   type EngagementReading,
 } from "@/lib/engagement";
 import { LIKE_RATIO_MIN_VOTES } from "@/lib/games-list";
+import { serverSizeByGenre, type ServerSize, type ServerSizeGame } from "@/lib/server-size";
 
 export interface GameSession {
   id: string;
@@ -31,6 +32,8 @@ export interface EngagementIndex {
   windowEnd: string | null;
   games: GameSession[];
   genres: GenreEngagement[];
+  /** Server size (maxPlayers) per genre id, from each game's latest reading in the window (Task #91). */
+  serverSize: Record<string, ServerSize>;
 }
 
 /**
@@ -39,18 +42,19 @@ export interface EngagementIndex {
  * time (one index seek), the snapshots of the last SESSION_ESTIMATE.windowHours
  * (a range on the collectedAt index; ~a day of readings, about 30K rows at 7K
  * games), and every game's genre and cumulative counters. Callers cache it:
- * every page that shows these shares one computation.
+ * every page that shows these shares one computation. The same day of readings
+ * also gives each game's latest server size (Task #91), so that costs no reads.
  */
 export async function getEngagementIndex(): Promise<EngagementIndex> {
   const latest = await prisma.gameSnapshot.aggregate({ _max: { collectedAt: true } });
   const end = latest._max.collectedAt;
-  if (!end) return { windowEnd: null, games: [], genres: [] };
+  if (!end) return { windowEnd: null, games: [], genres: [], serverSize: {} };
   const from = new Date(end.getTime() - SESSION_ESTIMATE.windowHours * 3_600_000);
 
   const [snapshots, games] = await Promise.all([
     prisma.gameSnapshot.findMany({
       where: { collectedAt: { gte: from } },
-      select: { gameId: true, collectedAt: true, playing: true, visits: true },
+      select: { gameId: true, collectedAt: true, playing: true, visits: true, maxPlayers: true },
     }),
     prisma.game.findMany({
       select: {
@@ -60,17 +64,24 @@ export async function getEngagementIndex(): Promise<EngagementIndex> {
         currentVisits: true,
         currentUpVotes: true,
         currentDownVotes: true,
+        currentPlaying: true,
       },
     }),
   ]);
 
   const readings = new Map<string, EngagementReading[]>();
+  const latestSize = new Map<string, { t: number; maxPlayers: number }>();
   for (const s of snapshots) {
     const list = readings.get(s.gameId) ?? [];
     list.push({ t: s.collectedAt.getTime(), playing: s.playing, visits: Number(s.visits) });
     readings.set(s.gameId, list);
+    const t = s.collectedAt.getTime();
+    if (s.maxPlayers && s.maxPlayers > 0 && t >= (latestSize.get(s.gameId)?.t ?? -Infinity)) {
+      latestSize.set(s.gameId, { t, maxPlayers: s.maxPlayers });
+    }
   }
 
+  const sizes: ServerSizeGame[] = [];
   const sessions: GameSession[] = [];
   const byGenre = new Map<
     string,
@@ -87,6 +98,14 @@ export async function getEngagementIndex(): Promise<EngagementIndex> {
     const sums = sumSessionPairs(readings.get(g.id) ?? []);
     const minutes = sessionMinutes(sums);
     if (minutes !== null) sessions.push({ id: g.id, minutes });
+    const size = latestSize.get(g.id);
+    if (size) {
+      sizes.push({
+        genreId: g.currentGenreId,
+        maxPlayers: size.maxPlayers,
+        playing: g.currentPlaying,
+      });
+    }
     if (!g.currentGenreId) continue;
     const entry = byGenre.get(g.currentGenreId) ?? {
       sums: EMPTY_SESSION_SUMS,
@@ -122,5 +141,6 @@ export async function getEngagementIndex(): Promise<EngagementIndex> {
       favoritesPer1k: favoritesPer1kVisits(e.favorites, e.visits),
       likeRatio: likeRatio(e.up, e.down, LIKE_RATIO_MIN_VOTES),
     })),
+    serverSize: serverSizeByGenre(sizes),
   };
 }

@@ -249,3 +249,82 @@ export interface LaunchBenchmark {
 export function getLaunchBenchmarkForGenre(genreId: string) {
   return getPayload<LaunchBenchmark>("launch_benchmark", "genre", genreId);
 }
+
+// --- Market concentration (Task #87) ---
+
+export interface ConcentrationDay {
+  /** UTC day, YYYY-MM-DD. */
+  day: string;
+  /** Games with a reading that day. */
+  n: number;
+  /** Sum of the games' daily average players. */
+  total: number;
+  top1: number;
+  top5: number;
+  top10: number;
+  /** Herfindahl-Hirschman index: the sum of squared shares, 0–1. */
+  hhi: number;
+}
+export interface ConcentrationGenre {
+  minGames: number;
+  days: ConcentrationDay[];
+}
+export function getConcentrationForGenre(genreId: string) {
+  return getPayload<ConcentrationGenre>("concentration", "genre", genreId);
+}
+
+/** Every genre's concentration series, keyed by genre id (~20 rows). */
+export async function getConcentrationAll(): Promise<Map<string, ConcentrationGenre>> {
+  const rows = await prisma.analyticsResult.findMany({
+    where: { kind: "concentration", scopeType: "genre" },
+    select: { scopeId: true, payload: true },
+  });
+  const out = new Map<string, ConcentrationGenre>();
+  for (const r of rows) {
+    if (!r.scopeId) continue;
+    try {
+      out.set(r.scopeId, JSON.parse(r.payload) as ConcentrationGenre);
+    } catch {
+      // A malformed payload leaves that genre out rather than failing the page.
+    }
+  }
+  return out;
+}
+
+// --- Rank ladders (Task #90) ---
+
+export interface RankLadder {
+  /** UTC day, YYYY-MM-DD. */
+  day: string;
+  /** Latest reading the day's ladder includes. */
+  until: Date;
+  minPlayers: number;
+  /** Games with a reading that day, by genre id ("_" = unclassified). */
+  n: Record<string, number>;
+  /** Rounded daily averages >= minPlayers, descending, by genre id. */
+  v: Record<string, number[]>;
+}
+
+/** The stored daily ladders from `fromDay` (YYYY-MM-DD) on, oldest first. */
+export async function getRankLadders(fromDay?: string): Promise<RankLadder[]> {
+  const rows = await prisma.analyticsResult.findMany({
+    where: {
+      kind: "rank_ladder",
+      scopeType: "global",
+      ...(fromDay ? { scopeId: { gte: fromDay } } : {}),
+    },
+    select: { scopeId: true, periodEnd: true, payload: true },
+    orderBy: { scopeId: "asc" },
+  });
+  const out: RankLadder[] = [];
+  for (const r of rows) {
+    if (!r.scopeId || !r.periodEnd) continue;
+    try {
+      const p = JSON.parse(r.payload) as Omit<RankLadder, "day" | "until">;
+      out.push({ day: r.scopeId, until: r.periodEnd, minPlayers: p.minPlayers, n: p.n, v: p.v });
+    } catch {
+      // Skip a malformed day.
+    }
+  }
+  return out;
+}

@@ -19,6 +19,8 @@ reads the results — nothing statistical runs in the browser or a request.
 | `forecast.py` | #29 | `forecast` — Holt exponential-smoothing projection + uncertainty band |
 | `update_impact.py` | #63 | `update_impact` — per-genre players 24h/72h after vs. before a recorded update (median, quartiles, share up) |
 | `launch_benchmark.py` | #83 | `launch_benchmark` — per-genre p5…p95 of daily average players at each day 0–90 since launch, from games tracked since near launch |
+| `concentration.py` | #87 | `concentration` — per-genre daily top-1/5/10 share of players and HHI, from each game's daily average |
+| `rank_ladder.py` | #90 | `rank_ladder` — one row per day (last 90): every genre's sorted daily averages, so the game page can rank a game overall and in its genre |
 
 `run.py` loads the data **once** (`db.load_all`) and hands it to every job as
 `run(con, data)`; no job reads the snapshot tables itself (Task #44). Each job

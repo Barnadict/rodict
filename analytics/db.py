@@ -153,6 +153,7 @@ class AnalyticsData:
         default_factory=lambda: pd.DataFrame({"gameId": [], "updatedAt": []})
     )
     _by_game: dict[str, pd.DataFrame] | None = field(default=None, init=False, repr=False)
+    _daily: pd.DataFrame | None = field(default=None, init=False, repr=False)
 
     @property
     def now(self) -> pd.Timestamp:
@@ -166,6 +167,27 @@ class AnalyticsData:
         if self._by_game is None:
             self._by_game = {gid: df for gid, df in self.game_snapshots.groupby("gameId", sort=False)}
         return self._by_game
+
+    def daily_game_averages(self) -> pd.DataFrame:
+        """Each game's mean players per UTC day: gameId, day (tz-aware midnight), avg.
+
+        A busy game is collected ~8 times a day and a quiet one once, so jobs
+        that compare games on the same day (concentration, rank ladders) compare
+        daily averages. Built once and shared.
+        """
+        if self._daily is None:
+            s = self.game_snapshots
+            if s.empty:
+                self._daily = pd.DataFrame({"gameId": [], "day": [], "avg": []})
+            else:
+                day = s["collectedAt"].dt.floor("D")
+                self._daily = (
+                    s.groupby([s["gameId"], day.rename("day")], sort=False)["playing"]
+                    .mean()
+                    .rename("avg")
+                    .reset_index()
+                )
+        return self._daily
 
     def recent_game_snapshots(self, days: int) -> pd.DataFrame:
         """Only the last `days` of game snapshots, relative to `now`."""
