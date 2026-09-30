@@ -34,7 +34,7 @@ Ask me which task to start. Remind me before any task that needs something only 
 - Close GitHub issues #1 and #2 if they're still open (their causes were fixed in #49/#74).
 - After 2026-10-04, check `logs/discovery.log` for the first weekly discovery run.
 - The keepalive workflow (#51) is unproven until 60 quiet days pass.
-- After the #95–#101 deploy: enable Speed Insights in Vercel → Project → Speed Insights, check `x-vercel-id` shows `hnd1`, re-measure the pages from #101 and record the numbers there, and check the build log for its time and the Runtime Cache usage in Observability.
+- After the #95–#101 deploy: run `npm run speed`, check the regions column shows `hnd1`, record the numbers under #101, and check the build time and Runtime Cache usage (Observability) in Vercel.
 - `db:retention` must not run in production until the last-of-day bucket is replaced by a write-once daily stat (`GameDailyStat`), as noted in `src/lib/retention/policy.ts`.
 
 ---
@@ -122,7 +122,7 @@ Full notes for each task are in git history (this file before 2026-10-01) and in
 - [x] **98.** `"use cache: remote"` (Vercel Runtime Cache, included in Hobby usage) on home, genres list, trending, records, weekly and status loaders.
 - [x] **99.** `/weekly` already used a cached loader; `/weekly`, `/about` and `/watchlist` all build as static shells. No change needed.
 - [x] **100.** Roblox icon sizes per use (`ICON_SIZE`: 128 for lists and headers, 256 for the grid, 512 for share images). Popular games' icons come from one shared batched call.
-- [x] **101.** `@vercel/speed-insights` added. Baseline (curl from SEA, 2026-10-01, `iad1`): game page 3.0–4.2 s to last byte, genre page 13.4 s cold / 6.9 s warm, trending 2.4 s. Shell TTFB 0.1–0.7 s everywhere.
+- [x] **101.** Speed Insights is paid, so `npm run speed` measures the live site from one machine instead (TTFB, last byte, region, cache). Baseline (SEA, 2026-10-01, `iad1`): game page 2.8–4.2 s to last byte, genre page 11–17.6 s cold / 6.7–11 s warm, trending 1.2–2.4 s. Shell TTFB ≤0.7 s.
 
 #### 10b — UI & visual polish
 
@@ -162,4 +162,4 @@ One line per session or phase. Details are in git history.
 - **2026-09-29 – 30:** Phase 7 (#42–#73): write budget measured and guarded, data-correctness fixes, analytics shown in the UI, many new pages. Phase 8 (#74–#78): pipeline reliability.
 - **2026-09-30:** Phase 9 (#79–#94): pacing, analytics guard, Turso usage check, weekly discovery, new stats pages, `/weekly`, badge.
 - **2026-10-01:** Plan cleaned up (done tasks cut to one line each; lessons moved to "Things to remember"). Phase 10 (#95–#115) planned: page speed, UI polish, new features. Discord webhooks moved to Later.
-- **2026-10-01:** 10a page speed (#95–#101): Tokyo region, prerendered game/genre/theme pages, streamed detail sections, remote cache for shared loaders, right-sized icons, Speed Insights.
+- **2026-10-01:** 10a page speed (#95–#101): Tokyo region, prerendered game/genre/theme pages, streamed detail sections, remote cache for shared loaders, right-sized icons, `npm run speed`.
