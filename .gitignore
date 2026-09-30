@@ -48,6 +48,9 @@ next-env.d.ts
 prisma/*.db
 prisma/*.db-journal
 
+# local run logs (scripts/windows/run-discovery.ps1)
+/logs/
+
 # db backups (local dumps)
 /backups/
 
