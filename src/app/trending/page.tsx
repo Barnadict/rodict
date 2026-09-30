@@ -3,6 +3,7 @@ import { cacheLife } from "next/cache";
 
 import { RISING, getRisingGames, getRisingGenres } from "@/lib/db/trends";
 import { getRecentAnomalies } from "@/lib/db/analytics";
+import { getUniverseIds } from "@/lib/db/games";
 import { formatCompact } from "@/lib/format";
 import { formatGrowthPct } from "@/lib/stats";
 
@@ -28,6 +29,9 @@ import {
 
 export const metadata = { title: "Trending — rodict" };
 
+/** Flagged changes listed under the boards. */
+const RECENT_SHOWN = 12;
+
 /**
  * Keyed on the range KEY, not the cutoff Date — deriving the cutoff inside is
  * what makes this cacheable at all. A `Date` computed from `now` and passed in
@@ -45,17 +49,26 @@ async function getTrendingData(range: RangeKey) {
     getRecentAnomalies(),
   ]);
 
-  return { games, genres, anomalies };
+  // Anomalies are keyed by Game.id; game pages by universe id.
+  const recent = anomalies?.recent.slice(0, RECENT_SHOWN) ?? [];
+  const universe = await getUniverseIds(recent.filter((a) => a.scope === "game").map((a) => a.id));
+  return {
+    games,
+    genres,
+    recent: recent.map((a) => ({
+      ...a,
+      universeId: a.scope === "game" ? (universe[a.id] ?? null) : null,
+    })),
+  };
 }
 
 export default async function TrendingPage(props: PageProps<"/trending">) {
   const sp = await props.searchParams;
   const range = parseRangeKey(Array.isArray(sp.range) ? sp.range[0] : sp.range);
 
-  const { games, genres, anomalies } = await getTrendingData(range);
+  const { games, genres, recent } = await getTrendingData(range);
 
   const hasData = games.length > 0 || genres.length > 0;
-  const recent = anomalies?.recent ?? [];
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
@@ -182,7 +195,7 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
             </p>
           </div>
           <div className="flex flex-col divide-y rounded-lg border">
-            {recent.slice(0, 12).map((a, i) => (
+            {recent.map((a, i) => (
               <div
                 key={`${a.id}-${a.at}-${i}`}
                 className="flex items-center justify-between gap-3 p-3 text-sm"
@@ -191,8 +204,11 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
                   <Badge variant="outline" className="text-[10px]">
                     {a.scope}
                   </Badge>
-                  {a.scope === "game" ? (
-                    <Link href={`/games/${a.id}`} className="truncate font-medium hover:underline">
+                  {a.universeId ? (
+                    <Link
+                      href={`/games/${a.universeId}`}
+                      className="truncate font-medium hover:underline"
+                    >
                       {a.name}
                     </Link>
                   ) : (

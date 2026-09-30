@@ -1,8 +1,8 @@
 import { cacheLife } from "next/cache";
 
-import { prisma } from "@/lib/prisma";
 import { getGameWindowGrowth, getRisingGames, getRisingGenres } from "@/lib/db/trends";
 import { getWeeklyDeaths, getWeeklyEntrants } from "@/lib/db/weekly";
+import { getUniverseIds } from "@/lib/db/games";
 import { getEngagementIndex } from "@/lib/db/engagement";
 import { getConcentrationAll, getRankLadders, getRecentAnomalies } from "@/lib/db/analytics";
 import { getPassPricingIndex } from "@/lib/db/pass-pricing";
@@ -99,17 +99,7 @@ export async function getWeeklyRecap(): Promise<{ data: WeeklyData; now: Date }>
     getRecentAnomalies(),
   ]);
   const spikes = weeklySpikes(anomalies?.recent ?? [], now);
-  const gameIds = spikes.filter((a) => a.scope === "game").map((a) => a.id);
-  const universe = new Map(
-    gameIds.length
-      ? (
-          await prisma.game.findMany({
-            where: { id: { in: gameIds } },
-            select: { id: true, universeId: true },
-          })
-        ).map((g) => [g.id, g.universeId.toString()])
-      : [],
-  );
+  const universe = await getUniverseIds(spikes.filter((a) => a.scope === "game").map((a) => a.id));
 
   return {
     now,
@@ -151,7 +141,7 @@ export async function getWeeklyRecap(): Promise<{ data: WeeklyData; now: Date }>
       },
       spikes: spikes.map((a) => ({
         ...a,
-        universeId: a.scope === "game" ? (universe.get(a.id) ?? null) : null,
+        universeId: a.scope === "game" ? (universe[a.id] ?? null) : null,
       })),
     },
   };

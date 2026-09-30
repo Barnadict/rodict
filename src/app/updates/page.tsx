@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cacheLife } from "next/cache";
 
 import { getUpdateCadence } from "@/lib/cached-queries";
 import { getAllGenres } from "@/lib/db/genres";
@@ -27,8 +28,20 @@ export const metadata = {
 const pct = (v: number | null) => (v === null ? "—" : `${Math.round(v * 100)}%`);
 const days = (v: number | null, digits = 0) => (v === null ? "—" : v.toFixed(digits));
 
+/**
+ * The genre list must be read inside `use cache` too: during prerender, a
+ * query outside a cache scope never resolves, and since the libSQL adapter runs
+ * one query at a time, it would stall every other cache fill in the build
+ * worker until they time out.
+ */
+async function getUpdatesPageData() {
+  "use cache";
+  cacheLife("hours");
+  return Promise.all([getUpdateCadence(), getAllGenres()]);
+}
+
 export default async function UpdatesPage() {
-  const [cadence, genres] = await Promise.all([getUpdateCadence(), getAllGenres()]);
+  const [cadence, genres] = await getUpdatesPageData();
   const genreById = new Map(genres.map((g) => [g.id, g]));
   const { all, recentDays } = cadence;
   const genreRows = cadence.genres
