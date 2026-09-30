@@ -84,6 +84,13 @@ async function main() {
   console.log(
     `\nMeasured writes to date: ${fmt(report.measuredWritesToDate)} (${pct(report.measuredWritesToDate, cap)} of cap)`,
   );
+  console.log(
+    `Turso's counter (Task #81): ${fmt(report.tursoRowsWritten)}` +
+      (report.tursoRowsWritten === null
+        ? " (needs TURSO_API_TOKEN + TURSO_ORG, or the billing period hasn't turned over yet)"
+        : ` (${pct(report.tursoRowsWritten, cap)} of cap)`) +
+      `; the guard uses ${fmt(report.writesToDate)}.`,
+  );
   if (report.unmeasuredRuns) {
     console.log(
       `  + ${report.unmeasuredRuns} run(s) from before write counting (Task #42) — not included. ` +

@@ -85,7 +85,9 @@ def _analytics_writes(written: dict[str, dict]) -> dict[str, dict]:
 
 def skip_for_budget(con: db.Connection, started_at: datetime) -> bool:
     """Record a skipped run and return True when the write budget is past the pause line."""
-    reason = budget.pause_reason(budget.month_writes_to_date(con, started_at))
+    measured = budget.month_writes_to_date(con, started_at)
+    turso = budget.fetch_turso_rows_written(started_at) if db.is_remote() else None
+    reason = budget.pause_reason(max(measured, turso or 0))
     if reason is None:
         return False
     print(f"::warning::{reason}")

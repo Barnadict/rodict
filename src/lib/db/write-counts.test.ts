@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
+import { parseTursoUsage } from "./turso-usage";
 import {
   addWrites,
+  applyTursoUsage,
   mergeWrites,
   summarizeBudget,
   totalWrites,
@@ -113,5 +115,60 @@ describe("summarizeBudget", () => {
     );
     expect(r.jobs).toEqual({});
     expect(r.projectedMonthWrites).toBe(0);
+  });
+});
+
+describe("Turso usage (Task #81)", () => {
+  const now = new Date(Date.UTC(2026, 9, 10));
+  const base = () =>
+    summarizeBudget(
+      [
+        {
+          job: "collect",
+          startedAt: new Date(Date.UTC(2026, 9, 2)),
+          summary: { writesTotal: 999 },
+        },
+      ],
+      now,
+      { collect: 1 },
+    );
+  const inPeriod = new Date("2026-10-01T04:00:00+00:00");
+
+  it("uses Turso's count when it is higher, and shifts the projection by the gap", () => {
+    const r = applyTursoUsage(base(), { rowsWritten: 5000, periodStart: inPeriod });
+    expect(r.measuredWritesToDate).toBe(1000);
+    expect(r.tursoRowsWritten).toBe(5000);
+    expect(r.writesToDate).toBe(5000);
+    expect(r.projectedMonthWrites).toBe(base().projectedMonthWrites! + 4000);
+  });
+
+  it("keeps our count when it is higher", () => {
+    const r = applyTursoUsage(base(), { rowsWritten: 10, periodStart: inPeriod });
+    expect(r.writesToDate).toBe(1000);
+    expect(r.projectedMonthWrites).toBe(base().projectedMonthWrites);
+  });
+
+  it("ignores a billing period that doesn't line up with this month", () => {
+    const lastMonth = new Date("2026-09-01T04:00:00+00:00");
+    const r = applyTursoUsage(base(), { rowsWritten: 9_000_000, periodStart: lastMonth });
+    expect(r.tursoRowsWritten).toBeNull();
+    expect(r.writesToDate).toBe(1000);
+  });
+
+  it("falls back to the measured count without Turso data", () => {
+    expect(applyTursoUsage(base(), null)).toEqual(base());
+  });
+
+  it("parses the API responses and rejects malformed ones", () => {
+    const usage = { organization: { usage: { rows_written: 287_550 } } };
+    const sub = { subscription: { current_billing_period_start: "2026-09-01T04:00:00+00:00" } };
+    expect(parseTursoUsage(usage, sub)).toEqual({
+      rowsWritten: 287_550,
+      periodStart: new Date("2026-09-01T04:00:00Z"),
+    });
+    expect(parseTursoUsage({}, sub)).toBeNull();
+    expect(
+      parseTursoUsage(usage, { subscription: { current_billing_period_start: "x" } }),
+    ).toBeNull();
   });
 });

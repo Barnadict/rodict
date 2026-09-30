@@ -17,6 +17,8 @@ function report(
     daysElapsed,
     jobs: {},
     measuredWritesToDate,
+    tursoRowsWritten: null,
+    writesToDate: measuredWritesToDate,
     unmeasuredRuns: 0,
     projectedMonthWrites,
     fullMonthWritesAtSchedule: null,

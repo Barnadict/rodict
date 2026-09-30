@@ -166,7 +166,7 @@ const GUARD_LABEL: Record<BudgetGuardMode, { text: string; tone: Tone }> = {
 
 function BudgetSection({ data }: { data: Awaited<ReturnType<typeof getStatusData>> }) {
   const { budget, guard, cap, dbBytes } = data;
-  const used = share(budget.measuredWritesToDate, cap) ?? 0;
+  const used = share(budget.writesToDate, cap) ?? 0;
   const projected = budget.projectedMonthWrites;
   const monthName = budget.monthStart.toLocaleString("en-US", { month: "long", timeZone: "UTC" });
 
@@ -181,15 +181,21 @@ function BudgetSection({ data }: { data: Awaited<ReturnType<typeof getStatusData
           {Math.round(BUDGET_GUARD.reduceAt * 100)}% of the cap and pauses at{" "}
           {Math.round(BUDGET_GUARD.pauseAt * 100)}%. Scheduled runs also keep to an even line
           through the month, aimed at {Math.round(WRITE_PACE.margin * 100)}% of the cap: a run that
-          finds the month ahead of the line is skipped. The month resets on the 1st (UTC).
+          finds the month ahead of the line is skipped. The guard uses the higher of our own count
+          and Turso&apos;s, since backups and manual scripts write too. The month resets on the 1st
+          (UTC).
         </>
       }
     >
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile
           label={`Rows written in ${monthName}`}
-          value={formatCompact(budget.measuredWritesToDate)}
-          hint={`${formatShare(used)} of ${formatCompact(cap)}`}
+          value={formatCompact(budget.writesToDate)}
+          hint={
+            `${formatShare(used)} of ${formatCompact(cap)} · ours ` +
+            `${formatCompact(budget.measuredWritesToDate)}, Turso ` +
+            (budget.tursoRowsWritten === null ? "n/a" : formatCompact(budget.tursoRowsWritten))
+          }
         />
         <StatTile
           label="Projected month end"

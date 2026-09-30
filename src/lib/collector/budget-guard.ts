@@ -54,7 +54,8 @@ export type BudgetGuardMode = "normal" | "reduced" | "paced" | "paused";
 export interface BudgetGuardDecision {
   mode: BudgetGuardMode;
   cap: number;
-  measuredWritesToDate: number;
+  /** Writes this month: the higher of our count and Turso's (Task #81). */
+  writesToDate: number;
   /** Month-end estimate, or null before every scheduled job has a measured run. */
   projectedMonthWrites: number | null;
   /** Writes allowed by now on the even-pace line (Task #79), slack included. */
@@ -82,12 +83,13 @@ export function decideBudgetGuard(
   cap: number,
   opts: BudgetGuardOptions = {},
 ): BudgetGuardDecision {
-  const toDate = report.measuredWritesToDate;
+  // The higher of our measured count and Turso's own counter (Task #81).
+  const toDate = report.writesToDate;
   const projected = report.projectedMonthWrites;
   const allowance = paceAllowance(report, cap);
   const base = {
     cap,
-    measuredWritesToDate: toDate,
+    writesToDate: toDate,
     projectedMonthWrites: projected,
     paceAllowance: allowance,
   };

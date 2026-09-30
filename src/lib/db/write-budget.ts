@@ -2,7 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { COLLECTION_CADENCE } from "@/lib/collector/cadence";
 import { PASS_WRITE_CAP } from "@/lib/game-passes";
 
-import { summarizeBudget, type BudgetReport } from "./write-counts";
+import { fetchTursoUsage } from "./turso-usage";
+import { applyTursoUsage, summarizeBudget, type BudgetReport } from "./write-counts";
 
 /**
  * The production pipeline schedule, in runs per day: collect every
@@ -29,17 +30,24 @@ export const UNMEASURED_FALLBACK_WRITES: Record<string, number> = {
 /**
  * This month's write-budget report, summed from the `JobRun` rows of both
  * pipelines (Task #42). Read-only: one month of JobRuns is a few hundred rows.
+ * Against the hosted DB, Turso's own counter is folded in too (Task #81), so
+ * writes our jobs don't record still count.
  */
 export async function getMonthWriteBudget(
   now: Date,
   runsPerDay: Record<string, number> = PRODUCTION_SCHEDULE,
 ): Promise<BudgetReport> {
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const rows = await prisma.jobRun.findMany({
-    where: { startedAt: { gte: monthStart } },
-    select: { job: true, startedAt: true, summary: true },
-  });
-  return summarizeBudget(
+  // A local dev.db has nothing to do with the hosted org's counter.
+  const hosted = !(process.env.DATABASE_URL ?? "file:").startsWith("file:");
+  const [rows, turso] = await Promise.all([
+    prisma.jobRun.findMany({
+      where: { startedAt: { gte: monthStart } },
+      select: { job: true, startedAt: true, summary: true },
+    }),
+    hosted ? fetchTursoUsage() : null,
+  ]);
+  const report = summarizeBudget(
     rows.map((r) => {
       let summary = null;
       try {
@@ -53,6 +61,7 @@ export async function getMonthWriteBudget(
     runsPerDay,
     UNMEASURED_FALLBACK_WRITES,
   );
+  return applyTursoUsage(report, turso);
 }
 
 /** On-disk size of the database, from SQLite's page count (works on Turso). */

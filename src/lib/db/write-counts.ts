@@ -88,6 +88,11 @@ export interface BudgetReport {
   jobs: Record<string, JobBudget>;
   /** Writes measured so far this month. Runs from before #42 aren't included. */
   measuredWritesToDate: number;
+  /** Turso's own rows-written counter for this month (Task #81), or null when
+   * it couldn't be read or its billing period doesn't line up with this month. */
+  tursoRowsWritten: number | null;
+  /** The figure the guard uses: the higher of the measured and Turso counts. */
+  writesToDate: number;
   unmeasuredRuns: number;
   /** Month-end estimate = measured so far + remaining days on the given schedule. */
   projectedMonthWrites: number | null;
@@ -161,6 +166,8 @@ export function summarizeBudget(
     daysElapsed,
     jobs,
     measuredWritesToDate,
+    tursoRowsWritten: null,
+    writesToDate: measuredWritesToDate,
     unmeasuredRuns,
     projectedMonthWrites:
       perDay === null
@@ -171,5 +178,34 @@ export function summarizeBudget(
       analyticsLoad === null
         ? null
         : Math.round(analyticsLoad * (runsPerDay.analytics ?? 0) * daysInMonth),
+  };
+}
+
+/** Turso's usage counter for its current billing period (Task #81). */
+export interface TursoUsage {
+  rowsWritten: number;
+  periodStart: Date;
+}
+
+/**
+ * Pure: fold Turso's own counter into the report (Task #81). Our count only
+ * sees what our jobs record; backups, migrations and manual scripts write
+ * too, so the guard uses the higher of the two. Turso's period starts at
+ * 04:00 UTC on the 1st, not midnight, so a period that doesn't start within a
+ * day of this month's start (the first hours of a month, still showing last
+ * month's total) is ignored.
+ */
+export function applyTursoUsage(report: BudgetReport, usage: TursoUsage | null): BudgetReport {
+  if (!usage) return report;
+  const offset = Math.abs(usage.periodStart.getTime() - report.monthStart.getTime());
+  if (offset >= 86_400_000) return report;
+  const writesToDate = Math.max(report.measuredWritesToDate, usage.rowsWritten);
+  const extra = writesToDate - report.measuredWritesToDate;
+  return {
+    ...report,
+    tursoRowsWritten: usage.rowsWritten,
+    writesToDate,
+    projectedMonthWrites:
+      report.projectedMonthWrites === null ? null : report.projectedMonthWrites + extra,
   };
 }
