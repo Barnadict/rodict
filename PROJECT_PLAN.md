@@ -34,7 +34,7 @@ Ask me which task to start. Remind me before any task that needs something only 
 - Close GitHub issues #1 and #2 if they're still open (their causes were fixed in #49/#74).
 - After 2026-10-04, check `logs/discovery.log` for the first weekly discovery run.
 - The keepalive workflow (#51) is unproven until 60 quiet days pass.
-- After the #95–#101 deploy: run `npm run speed`, check the regions column shows `hnd1`, record the numbers under #101, and check the build time and Runtime Cache usage (Observability) in Vercel.
+- Check the build time and Runtime Cache usage (Vercel → Observability) after a few days of #95–#101 being live.
 - `db:retention` must not run in production until the last-of-day bucket is replaced by a write-once daily stat (`GameDailyStat`), as noted in `src/lib/retention/policy.ts`.
 
 ---
@@ -122,7 +122,7 @@ Full notes for each task are in git history (this file before 2026-10-01) and in
 - [x] **98.** `"use cache: remote"` (Vercel Runtime Cache, included in Hobby usage) on home, genres list, trending, records, weekly and status loaders.
 - [x] **99.** `/weekly` already used a cached loader; `/weekly`, `/about` and `/watchlist` all build as static shells. No change needed.
 - [x] **100.** Roblox icon sizes per use (`ICON_SIZE`: 128 for lists and headers, 256 for the grid, 512 for share images). Popular games' icons come from one shared batched call.
-- [x] **101.** Speed Insights is paid, so `npm run speed` measures the live site from one machine instead (TTFB, last byte, region, cache). Baseline (SEA, 2026-10-01, `iad1`): game page 2.8–4.2 s to last byte, genre page 11–17.6 s cold / 6.7–11 s warm, trending 1.2–2.4 s. Shell TTFB ≤0.7 s.
+- [x] **101.** Speed Insights is paid, so `npm run speed` measures the live site from one machine instead (TTFB, last byte, region, cache). Baseline (SEA, 2026-10-01, `iad1`): game page 2.8–4.2 s to last byte, genre page 11–17.6 s cold / 6.7–11 s warm, trending 1.2–2.4 s. Shell TTFB ≤0.7 s. After (2026-10-01, `hnd1`): genre pages 0.4–1.3 s, game page 1.9–2.9 s (6.7 s on the first hit after deploy), trending 1.3–1.8 s, records/weekly ≤1.9 s.
 
 #### 10b — UI & visual polish
 
