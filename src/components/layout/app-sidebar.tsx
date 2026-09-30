@@ -10,6 +10,7 @@ import {
   GitCompareArrows,
   Bookmark,
   Info,
+  Activity,
 } from "lucide-react";
 
 import {
@@ -38,6 +39,7 @@ const otherItems = [
   { title: "Watchlist", href: "/watchlist", icon: Bookmark },
   { title: "Compare", href: "/compare", icon: GitCompareArrows },
   { title: "About the data", href: "/about", icon: Info },
+  { title: "Status", href: "/status", icon: Activity },
 ];
 
 export function AppSidebar() {

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { connection } from "next/server";
 
 import { getPipelineHealth } from "@/lib/db/job-runs";
@@ -79,9 +80,14 @@ function FreshnessLine({
   title?: string;
 }) {
   return (
-    <p className="flex items-center gap-2" title={title}>
+    // Links to /status (Task #73), where the run history behind this line lives.
+    <Link
+      href="/status"
+      className="flex items-center gap-2 underline-offset-4 hover:underline"
+      title={title}
+    >
       <span aria-hidden="true" className={cn("size-1.5 shrink-0 rounded-full", TONE_DOT[tone])} />
       {text}
-    </p>
+    </Link>
   );
 }

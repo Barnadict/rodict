@@ -354,10 +354,16 @@ async function recordGameUpdates(
 ): Promise<number> {
   const valid = events.filter((e) => !Number.isNaN((e.updatedAt as Date).getTime()));
   if (valid.length === 0) return 0;
+  // Read by a flat `gameId IN (...)` and match the exact pairs here. An `OR` of
+  // (gameId, updatedAt) pairs nests one level per term in SQLite's expression
+  // tree and fails past depth 100 ("Expression tree is too large"), which broke
+  // every collect run with more than ~100 updated games. A game has only a
+  // handful of stored updates, so the extra rows read are negligible.
   const stored = new Set<string>();
-  for (const group of chunk(valid, IN_CHUNK)) {
+  const gameIds = [...new Set(valid.map((e) => e.gameId))];
+  for (const ids of chunk(gameIds, IN_CHUNK)) {
     const rows = await prisma.gameUpdate.findMany({
-      where: { OR: group.map((e) => ({ gameId: e.gameId, updatedAt: e.updatedAt })) },
+      where: { gameId: { in: ids } },
       select: { gameId: true, updatedAt: true },
     });
     for (const r of rows) stored.add(`${r.gameId}|${r.updatedAt.getTime()}`);

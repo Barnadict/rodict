@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -49,6 +50,21 @@ import {
   rangeToCutoff,
   type RangeKey,
 } from "@/lib/date-range";
+
+import { pageMetadata } from "@/lib/site";
+
+import { getGameShare } from "./share";
+
+export async function generateMetadata(props: PageProps<"/games/[universeId]">): Promise<Metadata> {
+  const { universeId } = await props.params;
+  const share = await getGameShare(universeId);
+  if (!share) return { title: "Game — rodict" };
+  return pageMetadata({
+    title: `${share.game.name} — rodict`,
+    description: share.description,
+    path: `/games/${universeId}`,
+  });
+}
 
 /**
  * Caching this also puts the game's icon behind a cache. That request goes to

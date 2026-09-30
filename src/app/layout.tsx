@@ -8,6 +8,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
+import { SITE_NAME, SITE_URL } from "@/lib/site";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   variable: "--font-sans",
@@ -19,10 +20,21 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const SITE_DESCRIPTION =
+  "Statistics on Roblox game genres, trends, and estimated earnings — for developers deciding what to build next.";
+
 export const metadata: Metadata = {
+  // Lets pages and the generated share images (Task #72) use relative URLs.
+  metadataBase: new URL(SITE_URL),
   title: "rodict — Roblox game trends & statistics",
-  description:
-    "Statistics on Roblox game genres, trends, and estimated earnings — for developers deciding what to build next.",
+  description: SITE_DESCRIPTION,
+  openGraph: {
+    siteName: SITE_NAME,
+    type: "website",
+    title: "rodict — Roblox game trends & statistics",
+    description: SITE_DESCRIPTION,
+  },
+  twitter: { card: "summary_large_image" },
 };
 
 export default function RootLayout({

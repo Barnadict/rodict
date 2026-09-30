@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cacheLife } from "next/cache";
@@ -50,11 +51,19 @@ import {
   rangeToCutoff,
   type RangeKey,
 } from "@/lib/date-range";
+import { pageMetadata } from "@/lib/site";
 
-export async function generateMetadata(props: PageProps<"/genres/[slug]">) {
+import { getGenreShare } from "./share";
+
+export async function generateMetadata(props: PageProps<"/genres/[slug]">): Promise<Metadata> {
   const { slug } = await props.params;
-  const genre = await getGenreBySlug(slug);
-  return { title: genre ? `${genre.name} — rodict` : "Genre — rodict" };
+  const share = await getGenreShare(slug);
+  if (!share) return { title: "Genre — rodict" };
+  return pageMetadata({
+    title: `${share.genre.name} — rodict`,
+    description: share.description,
+    path: `/genres/${slug}`,
+  });
 }
 
 /**
