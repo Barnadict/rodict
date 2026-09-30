@@ -8,6 +8,8 @@ import { HIT_PEAK_PLAYERS } from "@/lib/creators";
 import { FAVORITES_MIN_VISITS, SESSION_ESTIMATE } from "@/lib/engagement";
 import { LIKE_RATIO_MIN_VOTES } from "@/lib/games-list";
 import { NEAR_LAUNCH_DAYS } from "@/lib/launch-benchmark";
+import { RANK_CHANGE } from "@/lib/game-timeline";
+import { THEME_MIN_GAMES } from "@/lib/niche-finder";
 import { BIG_MOVE_MIN_PCT, BIG_MOVE_MIN_PLAYERS, FEED_WINDOW_DAYS } from "@/lib/feed";
 import Link from "next/link";
 
@@ -513,6 +515,39 @@ export default function AboutPage() {
                   current genre. Games averaging under 1 player that day are unranked. Ranks cover
                   the last 90 days. Only games we track are ranked, so &ldquo;#50&rdquo; means 50th
                   among rodict&apos;s games, not all of Roblox.
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">Game timeline</TableCell>
+                <TableCell className="text-muted-foreground">
+                  A game page&apos;s timeline merges what is already recorded above: updates,
+                  flagged spikes and drops, and the latest change to its game-pass list (earlier
+                  lists aren&apos;t kept), plus big rank moves: days its overall rank at least{" "}
+                  {RANK_CHANGE.minRatio === 2
+                    ? "halved or doubled"
+                    : `changed ${RANK_CHANGE.minRatio}×`}{" "}
+                  from the previous ranked day, by at least {RANK_CHANGE.minPlaces} places. Days
+                  more than {RANK_CHANGE.maxGapDays} apart aren&apos;t compared, so a collection
+                  pause isn&apos;t read as a jump. Events that land together happened together; the
+                  timeline doesn&apos;t say one caused another.
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">Niche finder</TableCell>
+                <TableCell className="text-muted-foreground">
+                  <Link href="/opportunities" className="underline underline-offset-2">
+                    /opportunities
+                  </Link>{" "}
+                  filters genres and themes by size and crowding (thirds of the list), 7-day growth,
+                  concentration band and Est. session length, then ranks them by the opportunity
+                  score. Genres use the stored score and concentration. Themes have no stored
+                  analytics, so their score uses the same formula among themes only, their
+                  concentration is the HHI of players now (at least {THEME_MIN_GAMES.concentration}{" "}
+                  games), their growth is the combined 7-day change of their games busy enough for
+                  Trending (at least {THEME_MIN_GAMES.growth}), and their session length pools their
+                  games&apos; estimates (at least {THEME_MIN_GAMES.session}). Each row lists the
+                  parts of the score it sits above the middle on. It describes the data; it
+                  doesn&apos;t recommend a niche.
                 </TableCell>
               </TableRow>
               <TableRow>

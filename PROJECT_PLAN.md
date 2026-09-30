@@ -3,7 +3,7 @@
 ## ▶️ SESSION START — paste this at the beginning of every new session
 
 ```
-Read PROJECT_PLAN.md. Tasks #1–#109 are done. Phase 10 continues with 10c (#110–#115).
+Read PROJECT_PLAN.md. Tasks #1–#111 are done. Phase 10 continues with 10c (#112–#115).
 The Turso free plan's monthly WRITE limit is a hard constraint on every task (see "Rules").
 Ask me which task to start. Remind me before any task that needs something only I can provide.
 ```
@@ -137,8 +137,8 @@ Full notes for each task are in git history (this file before 2026-10-01) and in
 
 #### 10c — New features
 
-- [ ] **110.** 🟡 **Game timeline.** A "Timeline" section on the game page that combines updates (#63), flagged spikes and drops (#62), big rank changes (#90) and pass price changes (#69), newest first. Built from data we already store.
-- [ ] **111.** 🔴 **Niche finder.** `/opportunities`: the user sets constraints (genre size, how crowded, growth, market concentration, typical session length) and gets a ranked list of genres and themes, with the reason for each. Builds on the #24 opportunity score and #87 concentration. Every estimated input is labeled.
+- [x] **110.** Game page "Timeline" (`buildTimeline`, `lib/game-timeline.ts`): updates with 24h change, spikes/drops, days the overall rank halved or doubled (`RANK_CHANGE`), latest pass-list change. Replaces "Notable changes"; reads the cached "all" series.
+- [x] **111.** `/opportunities` niche finder (`lib/niche-finder.ts`): size/crowding thirds, 7-day growth, concentration band, Est. session; ranked by the #24 score with per-row reasons. Themes scored with a TS port of the same formula among themes only. One remote-cached loader.
 - [ ] **112.** 🟢 **Metric glossary tooltips.** A small "?" next to every derived stat (Est. earnings, Est. session length, engagement ratios, concentration, opportunity score, launch benchmarks). It shows a one-line definition and links to the matching `/about` section. Keep the definitions in one place so the tooltips and `/about` can't disagree.
 - [ ] **113.** 🟢 **Shareable watchlists.** A "Share" button that turns the watchlist into a URL (`/watchlist?games=…&genres=…`). Opening the link shows that list and offers "Save to my watchlist". Still no accounts.
 - [ ] **114.** 🟡 **Market overview chart.** Total players across all tracked games over time, on `/` or its own page, with the Aug–Sep gap shaded (#109). Say plainly that it counts tracked games only, not all of Roblox. Build it from genre snapshots (already summed per time slice, #52), so it doesn't scan game snapshots.
@@ -164,3 +164,4 @@ One line per session or phase. Details are in git history.
 - **2026-10-01:** Plan cleaned up (done tasks cut to one line each; lessons moved to "Things to remember"). Phase 10 (#95–#115) planned: page speed, UI polish, new features. Discord webhooks moved to Later.
 - **2026-10-01:** 10a page speed (#95–#101): Tokyo region, prerendered game/genre/theme pages, streamed detail sections, remote cache for shared loaders, right-sized icons, `npm run speed`.
 - **2026-10-01:** 10b UI polish (#102–#109): sparklines, list thumbnails, phone cards and sticky headers, dashboard redesign, genre colors, page transitions, `PageHeader` with breadcrumbs, synced chart crosshairs and the outage band. Writes: none.
+- **2026-10-01:** #110 game timeline and #111 niche finder (`/opportunities`). Writes: none.

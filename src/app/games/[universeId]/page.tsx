@@ -4,7 +4,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cacheLife } from "next/cache";
 import { Suspense, cache } from "react";
-import { ExternalLink } from "lucide-react";
+import {
+  ArrowUpDown,
+  ExternalLink,
+  RefreshCw,
+  Ticket,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
 
 import {
   getGameByUniverseId,
@@ -20,7 +27,6 @@ import { getGamePassCatalog } from "@/lib/db/game-passes";
 import { PRERENDER_GAMES, getPrerenderUniverseIds, getSmallIcons } from "@/lib/game-icons";
 import { deriveSnapshotMetrics, PASS_TIER_NOTE } from "@/lib/earnings/estimate";
 import { formatCompact, formatExact, formatRelativeTime, formatUsdRange } from "@/lib/format";
-import { formatGrowthPct } from "@/lib/stats";
 import { creatorPath } from "@/lib/creators";
 import { getAllRankLadders, getEngagement } from "@/lib/cached-queries";
 import { UNCLASSIFIED_KEY, bestRank, rankHistory, rankRows } from "@/lib/rank-history";
@@ -32,6 +38,7 @@ import {
 } from "@/lib/engagement";
 import { LIKE_RATIO_MIN_VOTES } from "@/lib/games-list";
 import { measureUpdateImpacts, type UpdateWindowImpact } from "@/lib/update-impact";
+import { buildTimeline, type TimelineEvent } from "@/lib/game-timeline";
 import {
   DEFAULT_GAME_METRIC,
   GAME_METRICS,
@@ -232,6 +239,29 @@ async function getGameSeries(universeIdParam: string, range: RangeKey) {
   };
 }
 
+/**
+ * Updates, spikes and drops, big rank moves and the latest pass-list change in
+ * one list (Task #110). Range-independent, so it reads the "all" series: the
+ * same cache entry the default view of the chart uses.
+ */
+async function getGameTimeline(universeIdParam: string) {
+  "use cache";
+  cacheLife("hours");
+
+  const head = await getGameHead(universeIdParam);
+  if (!head) return null;
+  const [updates, series] = await Promise.all([
+    getGameUpdates(universeIdParam),
+    getGameSeries(universeIdParam, "all"),
+  ]);
+  return buildTimeline({
+    updates: updates?.impacts ?? [],
+    anomalies: head.anomalies?.anomalies ?? [],
+    ranks: series?.ranks ?? [],
+    passCatalog: head.passCatalog,
+  });
+}
+
 /** Similar games and their icons (Task #62). */
 async function getGameSimilar(universeIdParam: string) {
   "use cache";
@@ -298,7 +328,7 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
   const head = await getGameHead(universeIdParam);
   if (!head) notFound();
 
-  const { game, iconUrl, passCatalog, sessionMinutes, derived, anomalies, now } = head;
+  const { game, iconUrl, passCatalog, sessionMinutes, derived, now } = head;
   const passTier = derived?.estimatedDailyEarnings.passTier ?? null;
   const favoritesPer1k = favoritesPer1kVisits(game.currentFavorites, game.currentVisits);
 
@@ -495,33 +525,9 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
         />
       </Suspense>
 
-      {anomalies && anomalies.nAnomalies > 0 && (
-        <section className="flex flex-col gap-2">
-          <h2 className="font-medium">Notable changes</h2>
-          <p className="text-sm text-muted-foreground">
-            Automatically flagged spikes and drops — moves that are both large relative to this
-            game&apos;s typical step-to-step change and substantial in their own right. They&apos;re
-            also marked on the Players chart.
-          </p>
-          <div className="flex flex-col divide-y rounded-lg border">
-            {[...anomalies.anomalies].reverse().map((a) => (
-              <div key={a.at} className="flex items-center justify-between gap-3 p-3 text-sm">
-                <span className="text-muted-foreground">
-                  <LocalTime value={a.at} />
-                </span>
-                <span className="flex items-center gap-3 tabular-nums">
-                  <span className="text-muted-foreground">
-                    {formatCompact(a.prevValue)} → {formatCompact(a.value)}
-                  </span>
-                  <Badge variant={a.direction === "spike" ? "secondary" : "destructive"}>
-                    {a.direction === "spike" ? "▲" : "▼"} {formatGrowthPct(a.changePct)}
-                  </Badge>
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+      <Suspense fallback={<SectionSkeleton title="Timeline" className="h-32" />}>
+        <TimelineSection universeIdParam={universeIdParam} />
+      </Suspense>
 
       <Suspense fallback={<SectionSkeleton title="Updates" className="h-32" />}>
         <GameUpdatesSection universeIdParam={universeIdParam} />
@@ -789,6 +795,110 @@ async function GameSeriesSections({
       )}
     </>
   );
+}
+
+const TIMELINE_ICON = {
+  update: { icon: RefreshCw, className: "text-teal-500" },
+  spike: { icon: TrendingUp, className: "text-emerald-500" },
+  drop: { icon: TrendingDown, className: "text-red-500" },
+  rank: { icon: ArrowUpDown, className: "text-indigo-500" },
+  passes: { icon: Ticket, className: "text-amber-500" },
+} as const;
+
+const utcDay = (iso: string) =>
+  new Date(iso).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+
+async function TimelineSection({ universeIdParam }: { universeIdParam: string }) {
+  const timeline = await getGameTimeline(universeIdParam);
+  if (!timeline || timeline.events.length === 0) return null;
+  const { events, total } = timeline;
+
+  return (
+    <section id="timeline" className="flex flex-col gap-2">
+      <h2 className="font-medium">Timeline</h2>
+      <p className="text-sm text-muted-foreground">
+        What we recorded for this game, newest first: updates (Roblox&apos;s &ldquo;last
+        updated&rdquo; time changing), automatically flagged spikes and drops in players, days its
+        overall rank at least halved or doubled, and the latest change to its game-pass list
+        (earlier lists aren&apos;t kept). It shows what happened together, not what caused what.
+        {total > events.length && ` Showing the latest ${events.length} of ${total}.`}
+      </p>
+      <ol className="flex flex-col divide-y rounded-lg border">
+        {events.map((e) => {
+          const { icon: Icon, className } = TIMELINE_ICON[e.kind];
+          return (
+            <li key={`${e.kind}-${e.at}`} className="flex items-start gap-3 p-3 text-sm">
+              <Icon className={`mt-0.5 size-4 shrink-0 ${className}`} aria-hidden />
+              <div className="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                <TimelineText event={e} />
+                <span className="text-xs text-muted-foreground">
+                  {e.kind === "rank" ? `${utcDay(e.at)} (UTC day)` : <LocalTime value={e.at} />}
+                </span>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}
+
+function TimelineText({ event: e }: { event: TimelineEvent }) {
+  switch (e.kind) {
+    case "update":
+      return (
+        <span>
+          <span className="font-medium">Updated</span>
+          <span className="text-muted-foreground">
+            {e.pending
+              ? " · 24h after still measuring"
+              : e.change24h === null
+                ? ""
+                : " · avg players 24h after vs. before: "}
+          </span>
+          {e.change24h !== null && <GrowthBadge growth={e.change24h} />}
+        </span>
+      );
+    case "spike":
+    case "drop":
+      return (
+        <span className="tabular-nums">
+          <span className="font-medium">{e.kind === "spike" ? "Player spike" : "Player drop"}</span>{" "}
+          <span className="text-muted-foreground">
+            {`${formatCompact(e.from)} → ${formatCompact(e.to)}`}
+          </span>{" "}
+          <GrowthBadge growth={e.changePct} />
+        </span>
+      );
+    case "rank":
+      return (
+        <span className="tabular-nums">
+          <span className="font-medium">
+            {e.to < e.from ? "Climbed in overall rank" : "Fell in overall rank"}
+          </span>{" "}
+          <span className="text-muted-foreground">
+            {`#${formatExact(e.from)} → #${formatExact(e.to)} of ${formatExact(e.overallOf)}`}
+            {e.genre !== null && ` · #${formatExact(e.genre)} in genre`}
+          </span>
+        </span>
+      );
+    case "passes":
+      return (
+        <span className="tabular-nums">
+          <span className="font-medium">Game-pass list last changed</span>{" "}
+          <span className="text-muted-foreground">
+            {e.forSaleCount === 0
+              ? "· none on sale"
+              : `· ${formatExact(e.forSaleCount)} on sale, ${formatExact(e.totalRobux)} Robux for all`}
+          </span>
+        </span>
+      );
+  }
 }
 
 async function GameUpdatesSection({ universeIdParam }: { universeIdParam: string }) {

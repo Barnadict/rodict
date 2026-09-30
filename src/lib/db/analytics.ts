@@ -56,6 +56,24 @@ export function getOpportunityForGenre(genreId: string) {
   return getPayload<OpportunityGenre>("opportunity_score", "genre", genreId);
 }
 
+/** Every genre's score and components, keyed by genre id (~20 rows). */
+export async function getOpportunityAll(): Promise<Map<string, OpportunityGenre>> {
+  const rows = await prisma.analyticsResult.findMany({
+    where: { kind: "opportunity_score", scopeType: "genre" },
+    select: { scopeId: true, payload: true },
+  });
+  const out = new Map<string, OpportunityGenre>();
+  for (const r of rows) {
+    if (!r.scopeId) continue;
+    try {
+      out.set(r.scopeId, JSON.parse(r.payload) as OpportunityGenre);
+    } catch {
+      // A malformed payload leaves that genre out rather than failing the page.
+    }
+  }
+  return out;
+}
+
 // --- Survival (Task #21) ---
 
 export interface SurvivalResult {

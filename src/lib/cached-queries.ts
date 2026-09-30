@@ -21,7 +21,12 @@ export async function getGrowthRanking(range: RangeKey) {
   "use cache";
   cacheLife("hours");
   const rows = await getGameWindowGrowth(rangeToCutoff(range));
-  return rows.map((r) => ({ id: r.id, growthPct: r.growthPct }));
+  return rows.map((r) => ({
+    id: r.id,
+    growthPct: r.growthPct,
+    basePlaying: r.basePlaying,
+    currentPlaying: r.currentPlaying,
+  }));
 }
 
 /** growthPct by game id, games without a figure left out. */

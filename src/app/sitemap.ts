@@ -22,6 +22,7 @@ const STATIC_PATHS = [
   "/weekly",
   "/new",
   "/saturation",
+  "/opportunities",
   "/records",
   "/graveyard",
   "/creators",

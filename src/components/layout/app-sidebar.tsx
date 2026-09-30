@@ -16,6 +16,7 @@ import {
   Users,
   RefreshCw,
   CalendarDays,
+  Compass,
 } from "lucide-react";
 
 import {
@@ -39,6 +40,7 @@ const browseItems = [
   { title: "Weekly recap", href: "/weekly", icon: CalendarDays, color: "text-orange-500" },
   { title: "New releases", href: "/new", icon: Sparkles, color: "text-sky-500" },
   { title: "Saturation", href: "/saturation", icon: Scale, color: "text-rose-500" },
+  { title: "Niche finder", href: "/opportunities", icon: Compass, color: "text-lime-500" },
   { title: "Creators", href: "/creators", icon: Users, color: "text-indigo-500" },
   { title: "Records", href: "/records", icon: Trophy, color: "text-yellow-500" },
   { title: "Updates", href: "/updates", icon: RefreshCw, color: "text-teal-500" },
