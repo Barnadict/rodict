@@ -3,7 +3,7 @@
 ## ▶️ SESSION START — paste this at the beginning of every new session
 
 ```
-Read PROJECT_PLAN.md. Tasks #1–#113 and #115 are done. Phase 10 continues with 10c (#114).
+Read PROJECT_PLAN.md. Tasks #1–#115 are done. Phase 10 is complete; nothing is planned next.
 The Turso free plan's monthly WRITE limit is a hard constraint on every task (see "Rules").
 Ask me which task to start. Remind me before any task that needs something only I can provide.
 ```
@@ -141,7 +141,7 @@ Full notes for each task are in git history (this file before 2026-10-01) and in
 - [x] **111.** `/opportunities` niche finder (`lib/niche-finder.ts`): size/crowding thirds, 7-day growth, concentration band, Est. session; ranked by the #24 score with per-row reasons. Themes scored with a TS port of the same formula among themes only. One remote-cached loader.
 - [x] **112.** "?" popovers (`MetricHelp`, opens on hover or tap) on Est. earnings, Est. session, favorites per 1K, like ratio, concentration, opportunity score and launch benchmarks. Definitions live in `lib/glossary.ts`; `/about` rows open with them and use their anchors (a test checks every anchor exists).
 - [x] **113.** "Share" copies `/watchlist?games=…&genres=…` (same ids and 50-per-kind cap as the feed, `lib/watchlist/share.ts`). A shared link shows that list read-only with "Save to my watchlist" (adds only what isn't there yet).
-- [ ] **114.** 🟡 **Market overview chart.** Total players across all tracked games over time, on `/` or its own page, with the Aug–Sep gap shaded (#109). Say plainly that it counts tracked games only, not all of Roblox. Build it from genre snapshots (already summed per time slice, #52), so it doesn't scan game snapshots.
+- [x] **114.** `/market`: total players per collection run, summed from `GenreSnapshot` in SQL (`lib/db/market.ts`, no GameSnapshot scan), with range presets, the outage band, weighted coverage, and a plain "tracked games with a genre, not all of Roblox" note. Linked from the dashboard hero, sidebar, sitemap and `/about` limitations.
 - [x] **115.** `/api-docs`: export API (games/trending/snapshots, every param, limit and column), both Atom feeds and the badge, with copy buttons (`CopyCode`). Limits and options are imported from the code that enforces them (`EXPORT_GAME_SORTS` moved to `export-data.ts`). Linked from the footer, `/about` and the sitemap. Also: `SidebarInset` got `min-w-0`, so long code lines scroll instead of widening the page.
 
 ### Later (not planned)
@@ -167,3 +167,4 @@ One line per session or phase. Details are in git history.
 - **2026-10-01:** #110 game timeline and #111 niche finder (`/opportunities`). Writes: none.
 - **2026-10-01:** #112 metric glossary popovers and #113 shareable watchlists. Writes: none.
 - **2026-10-01:** #115 API docs page. Writes: none.
+- **2026-10-01:** #114 market overview (`/market`). Phase 10 done. Writes: none.

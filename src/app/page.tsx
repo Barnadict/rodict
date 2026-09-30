@@ -187,6 +187,12 @@ export default async function Home() {
                   </>
                 )}
               </span>
+              <Link
+                href="/market"
+                className="inline-flex w-fit items-center gap-1 text-sm text-primary hover:underline"
+              >
+                Players over time <ArrowRight className="size-3.5" />
+              </Link>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               <StatTile label="Games tracked" value={formatCompact(totalGames)} />

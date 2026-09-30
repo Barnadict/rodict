@@ -762,7 +762,12 @@ export default function AboutPage() {
           <li>
             <strong className="text-foreground">The dataset is a sample, not all of Roblox.</strong>{" "}
             rodict tracks the games it has discovered, not every game on the platform. Genre totals
-            are totals <em>of what we track</em>.
+            are totals <em>of what we track</em>, and so is the{" "}
+            <Link href="/market" className="underline underline-offset-2 hover:text-foreground">
+              market overview
+            </Link>
+            : it also leaves out games without a genre, and it grows when rodict starts tracking
+            more games, not only when more people play.
           </li>
           <li>
             <strong className="text-foreground">Snapshots are point-in-time.</strong> Players are

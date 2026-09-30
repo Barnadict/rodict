@@ -18,6 +18,7 @@ const STATIC_PATHS = [
   "/games",
   "/genres",
   "/themes",
+  "/market",
   "/trending",
   "/weekly",
   "/new",

@@ -17,6 +17,7 @@ import {
   RefreshCw,
   CalendarDays,
   Compass,
+  ChartLine,
 } from "lucide-react";
 
 import {
@@ -36,6 +37,7 @@ const browseItems = [
   { title: "Games", href: "/games", icon: Gamepad2, color: "text-purple-500" },
   { title: "Genres", href: "/genres", icon: Shapes, color: "text-amber-500" },
   { title: "Themes", href: "/themes", icon: Palette, color: "text-fuchsia-500" },
+  { title: "Market", href: "/market", icon: ChartLine, color: "text-cyan-500" },
   { title: "Trending", href: "/trending", icon: TrendingUp, color: "text-emerald-500" },
   { title: "Weekly recap", href: "/weekly", icon: CalendarDays, color: "text-orange-500" },
   { title: "New releases", href: "/new", icon: Sparkles, color: "text-sky-500" },
