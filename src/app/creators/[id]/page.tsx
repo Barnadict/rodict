@@ -57,6 +57,9 @@ export default async function CreatorPage(props: PageProps<"/creators/[id]">) {
     <div className="flex flex-1 flex-col gap-6 p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-1.5">
+          <Link href="/creators" className="text-sm text-muted-foreground hover:text-foreground">
+            ← All creators
+          </Link>
           <h1 className="text-2xl font-semibold tracking-tight wrap-break-word">{name}</h1>
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge variant="secondary">{creator.type === "Group" ? "Group" : "User"}</Badge>

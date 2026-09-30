@@ -21,6 +21,9 @@ const STATIC_PATHS = [
   "/trending",
   "/new",
   "/saturation",
+  "/records",
+  "/graveyard",
+  "/creators",
   "/about",
   "/status",
 ];

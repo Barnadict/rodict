@@ -8,6 +8,14 @@ import type { LaunchBenchmark, LaunchBenchmarkDay } from "@/lib/db/analytics";
 import type { DayPoint } from "@/lib/new-releases";
 
 /**
+ * A game counts as tracked "from launch" when its first reading came within
+ * this many days of its Roblox creation date. Same value as NEAR_LAUNCH_DAYS in
+ * analytics/launch_benchmark.py (the benchmarks) and used by /records' "fastest
+ * to" tables; keep them in step.
+ */
+export const NEAR_LAUNCH_DAYS = 7;
+
+/**
  * Share of the genre's launches (0–1) whose daily average was below `value`,
  * interpolated between the stored percentiles. Clamped to the outermost ones:
  * below the lowest stored percentile reads as that percentile, not 0.

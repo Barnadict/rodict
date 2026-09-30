@@ -37,5 +37,7 @@ export const ANALYTICS_KINDS = [
   "cohort", // launch-window cohorts (Task #27)
   "seasonality", // day-of-week / holiday effects (Task #28)
   "forecast", // near-term projections (Task #29)
+  "update_impact", // players after recorded updates (Task #63)
+  "launch_benchmark", // per-genre percentiles by day since launch (Task #83)
 ] as const;
 export type AnalyticsKind = (typeof ANALYTICS_KINDS)[number];

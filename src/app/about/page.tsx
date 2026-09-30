@@ -7,6 +7,7 @@ import { UPDATE_WINDOWS_HOURS } from "@/lib/update-impact";
 import { HIT_PEAK_PLAYERS } from "@/lib/creators";
 import { FAVORITES_MIN_VISITS, SESSION_ESTIMATE } from "@/lib/engagement";
 import { LIKE_RATIO_MIN_VOTES } from "@/lib/games-list";
+import { NEAR_LAUNCH_DAYS } from "@/lib/launch-benchmark";
 import { BIG_MOVE_MIN_PCT, BIG_MOVE_MIN_PLAYERS, FEED_WINDOW_DAYS } from "@/lib/feed";
 import Link from "next/link";
 
@@ -447,10 +448,10 @@ export default function AboutPage() {
                   daily average players, stored as every 5th percentile. A game page places the game
                   on its latest complete day (&ldquo;Day 14: above 82% of Simulator
                   launches&rdquo;), and the genre lifecycle chart shades the middle half. Only games
-                  we started tracking within 7 days of their Roblox creation date count: a game we
-                  found in week 6 was found <em>because</em> it was doing well, and would raise the
-                  bar. Games stay in after they die. A day needs at least 5 games. Recomputed after
-                  each collection.
+                  we started tracking within {NEAR_LAUNCH_DAYS} days of their Roblox creation date
+                  count: a game we found in week 6 was found <em>because</em> it was doing well, and
+                  would raise the bar. Games stay in after they die. A day needs at least 5 games.
+                  Recomputed after each collection.
                 </TableCell>
               </TableRow>
               <TableRow>
@@ -524,7 +525,13 @@ export default function AboutPage() {
               <strong>7 or more consecutive days</strong>. This is an operational rule we chose, not
               a Roblox status — a &quot;dead&quot; game is still online and playable. It&apos;s
               measured against each game&apos;s own peak, so a small game that was never popular
-              isn&apos;t counted as dead just for being small.
+              isn&apos;t counted as dead just for being small. A game&apos;s status is re-judged
+              after every collection at its latest reading, so one that recovers is active again
+              (the{" "}
+              <Link href="/graveyard" className="underline underline-offset-4">
+                graveyard
+              </Link>{" "}
+              lists the ones dead now). Survival analysis still counts its first death.
             </dd>
           </div>
           <div>

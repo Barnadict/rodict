@@ -27,7 +27,7 @@ from db import AnalyticsData, Connection, run_standalone, write_results
 
 KIND = "launch_benchmark"
 MAX_DAY = 90
-NEAR_LAUNCH_DAYS = 7
+NEAR_LAUNCH_DAYS = 7  # same as NEAR_LAUNCH_DAYS in src/lib/launch-benchmark.ts
 MIN_GAMES = 5
 # Percentiles stored per day; the frontend reads p25/p50/p75 at indexes 4/9/14.
 QUANTILES = list(range(5, 100, 5))

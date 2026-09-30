@@ -103,3 +103,64 @@ export function summarizeCreator(games: CreatorGame[]): CreatorSummary {
     unclassified,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Creator leaderboard (Task #86)
+// ---------------------------------------------------------------------------
+
+/** Creators listed on the leaderboard at once. */
+export const CREATORS_LIMIT = 100;
+/** Games a creator needs before their hit rate is ranked (1 of 1 is 100%). */
+export const HIT_RATE_MIN_GAMES = 3;
+
+export const CREATOR_SORTS = [
+  { value: "playing", label: "Players now" },
+  { value: "games", label: "Games tracked" },
+  { value: "active", label: "Active games" },
+  { value: "hits", label: "Hits" },
+  { value: "hitRate", label: "Hit rate" },
+] as const;
+export type CreatorSort = (typeof CREATOR_SORTS)[number]["value"];
+
+export function parseCreatorSort(raw: string | undefined): CreatorSort {
+  return CREATOR_SORTS.find((s) => s.value === raw)?.value ?? "playing";
+}
+
+export interface CreatorRow {
+  type: CreatorType;
+  id: bigint;
+  name: string | null;
+  games: number;
+  active: number;
+  totalPlaying: number;
+  hits: number;
+}
+
+/** Share of a creator's tracked games that are hits. */
+export function hitRate(row: Pick<CreatorRow, "games" | "hits">): number {
+  return row.games > 0 ? row.hits / row.games : 0;
+}
+
+/**
+ * Creators ordered by the chosen column, busiest first on ties. The hit-rate
+ * ranking leaves out creators with fewer than HIT_RATE_MIN_GAMES games.
+ */
+export function rankCreators<T extends CreatorRow>(rows: T[], sort: CreatorSort): T[] {
+  const value = (r: T): number => {
+    switch (sort) {
+      case "playing":
+        return r.totalPlaying;
+      case "games":
+        return r.games;
+      case "active":
+        return r.active;
+      case "hits":
+        return r.hits;
+      case "hitRate":
+        return hitRate(r);
+    }
+  };
+  return rows
+    .filter((r) => sort !== "hitRate" || r.games >= HIT_RATE_MIN_GAMES)
+    .sort((a, b) => value(b) - value(a) || b.totalPlaying - a.totalPlaying || b.games - a.games);
+}

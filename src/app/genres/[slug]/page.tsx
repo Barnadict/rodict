@@ -439,7 +439,7 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
       </section>
 
       {survival && (
-        <section className="flex flex-col gap-3">
+        <section id="survival" className="flex scroll-mt-6 flex-col gap-3">
           <div>
             <h2 className="font-medium">Survival</h2>
             <p className="text-sm text-muted-foreground">

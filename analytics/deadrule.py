@@ -53,3 +53,32 @@ def detect_death(snaps: pd.DataFrame, peak: int) -> pd.Timestamp | None:
         else:
             run_start = None
     return None
+
+
+def current_death(snaps: pd.DataFrame, peak: int) -> pd.Timestamp | None:
+    """When the game's CURRENT death began, or None if it isn't dead now.
+
+    Same rule as `detect_death`, but judged at the latest reading: the run of
+    below-threshold readings must reach the end of the series and span
+    >= DEAD_DAYS. A game that died and later recovered is alive again here
+    (while `detect_death` still reports its first death, which is the lifetime
+    event survival analysis counts). Backs Game.status / Game.deadSince.
+    """
+    if peak <= 0 or snaps.empty:
+        return None
+    threshold = DEAD_FRACTION * peak
+
+    run_start: pd.Timestamp | None = None
+    prev_t: pd.Timestamp | None = None
+    for t, playing in zip(snaps["collectedAt"].to_list(), snaps["playing"].to_list()):
+        if prev_t is not None and t - prev_t > timedelta(days=MAX_GAP_DAYS):
+            run_start = None
+        prev_t = t
+        if playing < threshold:
+            if run_start is None:
+                run_start = t
+        else:
+            run_start = None
+    if run_start is not None and prev_t - run_start >= timedelta(days=DEAD_DAYS):
+        return run_start
+    return None

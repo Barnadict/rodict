@@ -36,9 +36,11 @@ import seasonality
 import forecast
 import update_impact
 import launch_benchmark
+import game_status
 
 JOBS = [
     ("survival_km", survival.run),
+    ("game_status", game_status.run),
     ("trend_momentum", momentum.run),
     ("trajectory_cluster", clustering.run),
     ("opportunity_score", opportunity.run),
@@ -77,12 +79,19 @@ def main(con: db.Connection, data: db.AnalyticsData) -> tuple[list[str], dict[st
 
 
 def _analytics_writes(written: dict[str, dict]) -> dict[str, dict]:
-    """Per-table row writes (Task #42 accounting; the JobRun row itself excluded)."""
-    total = {"inserted": 0, "updated": 0, "deleted": 0}
+    """Per-table row writes (Task #42 accounting; the JobRun row itself excluded).
+
+    Jobs write AnalyticsResult unless their stats name another `table`
+    (game_status updates Game).
+    """
+    totals: dict[str, dict] = {}
     for stats in written.values():
+        total = totals.setdefault(
+            stats.get("table", "AnalyticsResult"), {"inserted": 0, "updated": 0, "deleted": 0}
+        )
         for k in total:
             total[k] += stats[k]
-    return {"AnalyticsResult": total}
+    return totals or {"AnalyticsResult": {"inserted": 0, "updated": 0, "deleted": 0}}
 
 
 def skip_for_budget(con: db.Connection, started_at: datetime) -> bool:

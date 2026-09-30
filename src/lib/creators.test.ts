@@ -6,6 +6,10 @@ import {
   parseCreatorParam,
   summarizeCreator,
   type CreatorGame,
+  hitRate,
+  parseCreatorSort,
+  rankCreators,
+  HIT_RATE_MIN_GAMES,
 } from "./creators";
 
 describe("parseCreatorParam", () => {
@@ -74,5 +78,48 @@ describe("summarizeCreator", () => {
 
   it("handles no games", () => {
     expect(summarizeCreator([])).toMatchObject({ name: null, games: 0, hits: 0, genres: [] });
+  });
+});
+
+describe("rankCreators", () => {
+  const creator = (
+    id: number,
+    games: number,
+    hits: number,
+    totalPlaying: number,
+    active = games,
+  ) => ({
+    type: "User" as const,
+    id: BigInt(id),
+    name: `c${id}`,
+    games,
+    active,
+    totalPlaying,
+    hits,
+  });
+  const rows = [
+    creator(1, 1, 1, 50), // 100% but one game
+    creator(2, 4, 2, 900, 3),
+    creator(3, HIT_RATE_MIN_GAMES, 3, 10),
+    creator(4, 10, 1, 900),
+  ];
+  const ids = (sort: Parameters<typeof rankCreators>[1]) =>
+    rankCreators(rows, sort).map((r) => Number(r.id));
+
+  it("ranks by each column, ties to the busier then larger creator", () => {
+    expect(ids("playing")).toEqual([4, 2, 1, 3]);
+    expect(ids("games")).toEqual([4, 2, 3, 1]);
+    expect(ids("active")).toEqual([4, 2, 3, 1]);
+    expect(ids("hits")).toEqual([3, 2, 4, 1]);
+  });
+
+  it("leaves small catalogs out of the hit-rate ranking", () => {
+    expect(ids("hitRate")).toEqual([3, 2, 4]);
+    expect(hitRate(rows[1])).toBe(0.5);
+  });
+
+  it("parses the sort param", () => {
+    expect(parseCreatorSort("hits")).toBe("hits");
+    expect(parseCreatorSort("x")).toBe("playing");
   });
 });

@@ -73,6 +73,11 @@ def iso_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
 
 
+def iso_prisma(ts: datetime | pd.Timestamp) -> str:
+    """A timestamp in Prisma's SQLite DateTime text format (UTC, milliseconds)."""
+    return pd.Timestamp(ts).tz_convert("UTC").to_pydatetime().isoformat(timespec="milliseconds")
+
+
 # --- loaders (as DataFrames) -------------------------------------------------
 
 
@@ -87,11 +92,11 @@ def load_games(con: Connection) -> pd.DataFrame:
         """SELECT id, universeId, name, currentGenreId, allTimePeakPlayers,
                   currentPlaying, currentVisits, currentFavorites,
                   currentUpVotes, currentDownVotes,
-                  robloxCreatedAt, firstSeenAt, status
+                  robloxCreatedAt, firstSeenAt, status, deadSince
            FROM Game""",
         con,
     )
-    for col in ("robloxCreatedAt", "firstSeenAt"):
+    for col in ("robloxCreatedAt", "firstSeenAt", "deadSince"):
         df[col] = _parse_times(df[col])
     return df
 
