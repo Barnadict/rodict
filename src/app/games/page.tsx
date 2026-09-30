@@ -7,7 +7,7 @@ import { getAllThemes } from "@/lib/db/themes";
 import { getGrowthForGames, RISING } from "@/lib/db/trends";
 import { getGrowthById, getSessionById } from "@/lib/cached-queries";
 import { SESSION_ESTIMATE, formatSessionMinutes } from "@/lib/engagement";
-import { getGameIcons } from "@/lib/roblox/client";
+import { ICON_SIZE, getGameIcons } from "@/lib/roblox/client";
 import { estimateDailyEarningsFromCcu } from "@/lib/earnings/estimate";
 import { formatCompact, formatUsdRange } from "@/lib/format";
 import { creatorPath } from "@/lib/creators";
@@ -147,7 +147,10 @@ async function getGamesPageData(q: GamesQuery) {
   // one per page view.
   let icons: Map<string, string | null> | null = null;
   if (q.view === "grid" && games.length > 0) {
-    const fetched = await getGameIcons(games.map((g) => g.universeId));
+    const fetched = await getGameIcons(
+      games.map((g) => g.universeId),
+      { size: ICON_SIZE.grid },
+    );
     icons = new Map(fetched.map((icon) => [String(icon.universeId), icon.imageUrl]));
   }
 

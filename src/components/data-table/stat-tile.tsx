@@ -12,7 +12,7 @@ export function StatTile({
   value: ReactNode;
   badge?: string;
   /** A short muted line under the value, e.g. what a count means. */
-  hint?: string;
+  hint?: ReactNode;
 }) {
   return (
     <div className="rounded-lg border p-3">

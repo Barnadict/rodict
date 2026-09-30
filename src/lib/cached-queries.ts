@@ -86,7 +86,8 @@ export async function getPassPricing() {
  * are mapped to universe ids with one small read (≤ WEEKLY_LIMIT ids).
  */
 export async function getWeeklyRecap(): Promise<{ data: WeeklyData; now: Date }> {
-  "use cache";
+  // Remote (Task #98): few distinct keys, so a cold instance reuses another's entry.
+  "use cache: remote";
   cacheLife("hours");
 
   const now = new Date();

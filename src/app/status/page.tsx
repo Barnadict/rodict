@@ -70,7 +70,8 @@ const JOB_SCHEDULES: Record<string, string> = {
  * and two PRAGMAs.
  */
 async function getStatusData() {
-  "use cache";
+  // Remote (Task #98): few distinct keys, so a cold instance reuses another's entry.
+  "use cache: remote";
   cacheLife("minutes");
 
   const now = new Date();

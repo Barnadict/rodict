@@ -37,7 +37,8 @@ export const metadata = {
 
 /** Every record table, cached like the pages: the data changes every few hours. */
 async function getRecords() {
-  "use cache";
+  // Remote (Task #98): few distinct keys, so a cold instance reuses another's entry.
+  "use cache: remote";
   cacheLife("hours");
 
   const [peaks, moves, longevity, ...speeds] = await Promise.all([

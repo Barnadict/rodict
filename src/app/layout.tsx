@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 
 import { AppSidebar } from "@/components/layout/app-sidebar";
@@ -61,6 +62,8 @@ export default function RootLayout({
             </SidebarProvider>
           </TooltipProvider>
         </ThemeProvider>
+        {/* Real-visitor page speed (Task #101); a no-op until enabled on Vercel. */}
+        <SpeedInsights />
       </body>
     </html>
   );

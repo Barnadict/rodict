@@ -3,19 +3,21 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cacheLife } from "next/cache";
+import { Suspense, cache } from "react";
 import { ExternalLink } from "lucide-react";
 
 import {
   getGameByUniverseId,
   getGameSnapshots,
   getGameUpdateHistory,
+  getLatestSnapshots,
   getSimilarGames,
 } from "@/lib/db/games";
 import { getAnomaliesForGame, getLaunchBenchmarkForGenre } from "@/lib/db/analytics";
 import { completeDays, describeLaunchPosition, launchPosition } from "@/lib/launch-benchmark";
 import { dailyByAge } from "@/lib/new-releases";
 import { getGamePassCatalog } from "@/lib/db/game-passes";
-import { getGameIcons } from "@/lib/roblox/client";
+import { PRERENDER_GAMES, getPrerenderUniverseIds, getSmallIcons } from "@/lib/game-icons";
 import { deriveSnapshotMetrics, PASS_TIER_NOTE } from "@/lib/earnings/estimate";
 import { formatCompact, formatExact, formatRelativeTime, formatUsdRange } from "@/lib/format";
 import { formatGrowthPct } from "@/lib/stats";
@@ -51,6 +53,7 @@ import {
 import { DailyLinesChart } from "@/components/charts/daily-lines-chart";
 import { LocalTime } from "@/components/local-time";
 import { StatTile } from "@/components/data-table/stat-tile";
+import { SectionSkeleton } from "@/components/data-table/section-skeleton";
 import { GrowthBadge } from "@/components/data-table/growth-badge";
 import { ExportLinks } from "@/components/data-table/export-links";
 import { WatchlistButton } from "@/components/watchlist/watchlist-button";
@@ -68,6 +71,21 @@ import { SITE_URL, pageMetadata } from "@/lib/site";
 
 import { getGameShare } from "./share";
 
+type SearchParams = PageProps<"/games/[universeId]">["searchParams"];
+
+/**
+ * The busiest games are built at deploy (Task #96), so their first visitor
+ * after a deploy or cold start gets a finished page instead of waiting on every
+ * query. Other games render on first visit and are then kept the same way.
+ */
+export async function generateStaticParams() {
+  const ids = await getPrerenderUniverseIds();
+  // Cache Components needs at least one param; an empty DB gets a 404 page.
+  return ids.length > 0
+    ? ids.slice(0, PRERENDER_GAMES).map((universeId) => ({ universeId }))
+    : [{ universeId: "0" }];
+}
+
 export async function generateMetadata(props: PageProps<"/games/[universeId]">): Promise<Metadata> {
   const { universeId } = await props.params;
   const share = await getGameShare(universeId);
@@ -80,15 +98,18 @@ export async function generateMetadata(props: PageProps<"/games/[universeId]">):
 }
 
 /**
+ * Everything on the page that doesn't depend on the chosen range or metric:
+ * the header, stat tiles, notable changes and game passes. It only needs the
+ * route param, so it's part of the prerendered page (Task #96); the sections
+ * that read the query string stream in after it (Task #97).
+ *
  * Caching this also puts the game's icon behind a cache. That request goes to
- * Roblox's live API on render, so uncached it meant one third-party call per
- * page view of a page whose data only changes every 3h — exactly the kind of
- * traffic that earns a rate limit from a semi-official API.
+ * Roblox's live API, so uncached it meant one third-party call per page view.
  *
  * Returns null instead of calling notFound() so the caller decides: throwing a
  * navigation signal from inside a cached function would cache the throw.
  */
-async function getGameDetail(universeIdParam: string, range: RangeKey) {
+async function getGameHead(universeIdParam: string) {
   "use cache";
   cacheLife("hours");
 
@@ -102,34 +123,60 @@ async function getGameDetail(universeIdParam: string, range: RangeKey) {
   const game = await getGameByUniverseId(universeId);
   if (!game) return null;
 
-  // Similar games' icons ride along in the same Roblox icon request as this
-  // game's, so the page still makes one third-party call.
-  const similarWithIcons = getSimilarGames({
-    id: game.id,
-    currentGenreId: game.currentGenreId,
-    currentPlaying: game.currentPlaying,
-    themeIds: game.themes.map((t) => t.themeId),
-  }).then(async (similar) => {
-    const icons = await getGameIcons([universeId, ...similar.map((g) => g.universeId)]);
-    return { similar, icons: new Map(icons.map((i) => [String(i.universeId), i.imageUrl])) };
-  });
-
-  const [
-    snapshots,
-    anomalies,
-    updateHistory,
-    { similar, icons },
-    passCatalog,
-    engagement,
-    benchmark,
-    ladders,
-  ] = await Promise.all([
-    getGameSnapshots(game.id, { from: rangeToCutoff(range) }),
+  const [latestTwo, anomalies, passCatalog, engagement, icons] = await Promise.all([
+    getLatestSnapshots(game.id, 2),
     getAnomaliesForGame(game.id),
-    getGameUpdateHistory(game.id),
-    similarWithIcons,
     getGamePassCatalog(game.id),
     getEngagement(),
+    getSmallIcons([universeId]),
+  ]);
+  const latest = latestTwo.at(-1);
+  const previous = latestTwo.length > 1 ? latestTwo[0] : undefined;
+
+  return {
+    game,
+    anomalies,
+    passCatalog,
+    derived: latest ? deriveSnapshotMetrics(latest, previous, passCatalog) : null,
+    sessionMinutes: engagement.games.find((g) => g.id === game.id)?.minutes ?? null,
+    iconUrl: icons.get(universeIdParam) ?? null,
+    // Relative times ("3 days ago") are measured to when this was read.
+    now: new Date(),
+  };
+}
+
+/**
+ * Recorded updates with before/after players (Task #63). Measured against the
+ * clock inside the cache, so the entry doesn't depend on the request time.
+ */
+async function getGameUpdates(universeIdParam: string) {
+  "use cache";
+  cacheLife("hours");
+
+  const head = await getGameHead(universeIdParam);
+  if (!head) return null;
+  const history = await getGameUpdateHistory(head.game.id);
+  const now = new Date();
+  return {
+    updates: history.updates,
+    total: history.total,
+    impacts: measureUpdateImpacts(history.updates, history.snapshots, now),
+    now,
+  };
+}
+
+/** The range-dependent part: snapshot history, rank history, launch position. */
+async function getGameSeries(universeIdParam: string, range: RangeKey) {
+  "use cache";
+  cacheLife("hours");
+
+  const head = await getGameHead(universeIdParam);
+  if (!head) return null;
+  const { game } = head;
+
+  const [snapshots, updates, benchmark, ladders] = await Promise.all([
+    getGameSnapshots(game.id, { from: rangeToCutoff(range) }),
+    getGameUpdates(universeIdParam),
     game.currentGenreId && game.robloxCreatedAt
       ? getLaunchBenchmarkForGenre(game.currentGenreId)
       : null,
@@ -167,20 +214,51 @@ async function getGameDetail(universeIdParam: string, range: RangeKey) {
       : null;
 
   return {
-    game,
     snapshots,
-    anomalies,
-    updateHistory,
-    similar,
-    icons,
-    passCatalog,
+    updateTimes: updates?.updates ?? [],
     launch,
     launchNearDays: benchmark?.nearLaunchDays ?? null,
     ranks,
-    sessionMinutes: engagement.games.find((g) => g.id === game.id)?.minutes ?? null,
-    iconUrl: icons.get(String(universeId)) ?? null,
+    likeTrend: likeRatioTrend(
+      snapshots.map((s) => ({
+        t: s.collectedAt.getTime(),
+        upVotes: s.upVotes,
+        downVotes: s.downVotes,
+      })),
+      LIKE_RATIO_MIN_VOTES,
+    ),
   };
 }
+
+/** Similar games and their icons (Task #62). */
+async function getGameSimilar(universeIdParam: string) {
+  "use cache";
+  cacheLife("hours");
+
+  const head = await getGameHead(universeIdParam);
+  if (!head) return [];
+  const { game } = head;
+  const similar = await getSimilarGames({
+    id: game.id,
+    currentGenreId: game.currentGenreId,
+    currentPlaying: game.currentPlaying,
+    themeIds: game.themes.map((t) => t.themeId),
+  });
+  const icons = await getSmallIcons(similar.map((g) => g.universeId));
+  return similar.map((g) => ({ ...g, icon: icons.get(String(g.universeId)) ?? null }));
+}
+
+/** Range and metric from the query string. */
+async function readView(searchParams: SearchParams) {
+  const sp = await searchParams;
+  return {
+    range: parseRangeKey(Array.isArray(sp.range) ? sp.range[0] : sp.range),
+    metric: parseGameMetric(Array.isArray(sp.metric) ? sp.metric[0] : sp.metric),
+  };
+}
+
+/** One series load per request, shared by the sections that need it. */
+const loadSeries = cache(getGameSeries);
 
 /** Per-metric chart labels. Visits/day is derived from cumulative visits. */
 const METRIC_CHART: Record<
@@ -210,63 +288,18 @@ const METRIC_CHART: Record<
   },
 };
 
+type GameHead = NonNullable<Awaited<ReturnType<typeof getGameHead>>>;
+
 export default async function GameDetailPage(props: PageProps<"/games/[universeId]">) {
   const { universeId: universeIdParam } = await props.params;
-  const sp = await props.searchParams;
-  const range = parseRangeKey(Array.isArray(sp.range) ? sp.range[0] : sp.range);
-  const metric = parseGameMetric(Array.isArray(sp.metric) ? sp.metric[0] : sp.metric);
 
-  const data = await getGameDetail(universeIdParam, range);
-  if (!data) notFound();
+  const head = await getGameHead(universeIdParam);
+  if (!head) notFound();
 
-  const {
-    game,
-    snapshots,
-    anomalies,
-    updateHistory,
-    similar,
-    icons,
-    iconUrl,
-    passCatalog,
-    sessionMinutes,
-    launch,
-    launchNearDays,
-    ranks,
-  } = data;
-  const latestRank = ranks.at(-1);
-  const hasRanks = ranks.some((r) => r.overall !== null);
-  const latest = snapshots[snapshots.length - 1];
-  const previous = snapshots.length > 1 ? snapshots[snapshots.length - 2] : undefined;
-  const derived = latest ? deriveSnapshotMetrics(latest, previous, passCatalog) : null;
+  const { game, iconUrl, passCatalog, sessionMinutes, derived, anomalies, now } = head;
   const passTier = derived?.estimatedDailyEarnings.passTier ?? null;
   const favoritesPer1k = favoritesPer1kVisits(game.currentFavorites, game.currentVisits);
-  const likeTrend = likeRatioTrend(
-    snapshots.map((s) => ({
-      t: s.collectedAt.getTime(),
-      upVotes: s.upVotes,
-      downVotes: s.downVotes,
-    })),
-    LIKE_RATIO_MIN_VOTES,
-  );
-  const rangeLabel = RANGE_OPTIONS.find((o) => o.value === range)?.label ?? range;
 
-  const chart = METRIC_CHART[metric];
-  const chartData = buildMetricSeries(snapshots, metric);
-  // Anomalies are flagged on the CCU series, so they only belong on that chart.
-  const markers: TrendMarker[] =
-    metric === "players" && anomalies
-      ? anomalies.anomalies.map((a) => ({
-          date: a.at,
-          value: a.value,
-          direction: a.direction,
-          changePct: a.changePct,
-        }))
-      : [];
-
-  // Past the searchParams await the page renders per request, so reading the
-  // clock here can't bake a build-time value into a prerender.
-  const now = new Date();
-  const updateImpacts = measureUpdateImpacts(updateHistory.updates, updateHistory.snapshots, now);
   const gameUrl = robloxGameUrl(game.rootPlaceId);
   const creatorUrl = robloxCreatorUrl(game.creatorId, game.creatorType);
   const creatorPage = creatorPath(game.creatorId, game.creatorType);
@@ -400,9 +433,9 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
               : "—"
           }
           hint={
-            likeTrend !== null
-              ? `${likeTrend >= 0 ? "+" : "−"}${Math.abs(likeTrend * 100).toFixed(1)} pts over ${range === RANGE_CLEAR_VALUE ? "all history" : rangeLabel}`
-              : undefined
+            <Suspense fallback={null}>
+              <LikeTrendHint universeIdParam={universeIdParam} searchParams={props.searchParams} />
+            </Suspense>
           }
         />
         <StatTile
@@ -435,6 +468,159 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
         />
       </div>
 
+      <Suspense
+        fallback={
+          <div className="flex flex-col gap-6">
+            <SectionSkeleton className="h-72" />
+          </div>
+        }
+      >
+        <GameSeriesSections
+          universeIdParam={universeIdParam}
+          searchParams={props.searchParams}
+          head={head}
+        />
+      </Suspense>
+
+      {anomalies && anomalies.nAnomalies > 0 && (
+        <section className="flex flex-col gap-2">
+          <h2 className="font-medium">Notable changes</h2>
+          <p className="text-sm text-muted-foreground">
+            Automatically flagged spikes and drops — moves that are both large relative to this
+            game&apos;s typical step-to-step change and substantial in their own right. They&apos;re
+            also marked on the Players chart.
+          </p>
+          <div className="flex flex-col divide-y rounded-lg border">
+            {[...anomalies.anomalies].reverse().map((a) => (
+              <div key={a.at} className="flex items-center justify-between gap-3 p-3 text-sm">
+                <span className="text-muted-foreground">
+                  <LocalTime value={a.at} />
+                </span>
+                <span className="flex items-center gap-3 tabular-nums">
+                  <span className="text-muted-foreground">
+                    {formatCompact(a.prevValue)} → {formatCompact(a.value)}
+                  </span>
+                  <Badge variant={a.direction === "spike" ? "secondary" : "destructive"}>
+                    {a.direction === "spike" ? "▲" : "▼"} {formatGrowthPct(a.changePct)}
+                  </Badge>
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <Suspense fallback={<SectionSkeleton title="Updates" className="h-32" />}>
+        <GameUpdatesSection universeIdParam={universeIdParam} />
+      </Suspense>
+
+      {passCatalog && (
+        <section className="flex flex-col gap-2">
+          <h2 className="font-medium">Game passes</h2>
+          <p className="text-sm text-muted-foreground">
+            {passCatalog.forSaleCount === 0
+              ? "No game passes on sale. "
+              : `${passCatalog.forSaleCount} on sale; buying every one costs ${formatExact(passCatalog.totalRobux)} Robux. `}
+            Prices are public, but sales aren&apos;t, and developer products aren&apos;t listed at
+            all, so this only places the earnings estimate within its range (see{" "}
+            <Link href="/about" className="underline underline-offset-2">
+              About
+            </Link>
+            ). List last changed <LocalTime value={passCatalog.changedAt} />; checked weekly.
+          </p>
+          {passCatalog.passes.length > 0 && (
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="px-3 py-1.5 text-left font-medium">Pass</th>
+                    <th className="px-3 py-1.5 text-right font-medium">Price (Robux)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...passCatalog.passes]
+                    .sort((a, b) => b.price - a.price)
+                    .map((p) => (
+                      <tr key={p.id} className="border-t">
+                        <td className="px-3 py-1.5">{p.name}</td>
+                        <td className="px-3 py-1.5 text-right tabular-nums">
+                          {formatExact(p.price)}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      <Suspense fallback={<SectionSkeleton title="Similar games" className="h-24" />}>
+        <SimilarGamesSection universeIdParam={universeIdParam} />
+      </Suspense>
+
+      <section id="badge" className="flex flex-col gap-2">
+        <h2 className="font-medium">Embed a live badge</h2>
+        <p className="text-sm text-muted-foreground">
+          Show this game&apos;s players now or its rank on your own page or README. It links back
+          here and refreshes within the hour.
+        </p>
+        <BadgeEmbed universeId={game.universeId.toString()} origin={SITE_URL} />
+      </section>
+    </div>
+  );
+}
+
+/** The like-ratio tile's trend line, over the chosen range. */
+async function LikeTrendHint({
+  universeIdParam,
+  searchParams,
+}: {
+  universeIdParam: string;
+  searchParams: SearchParams;
+}) {
+  const { range } = await readView(searchParams);
+  const series = await loadSeries(universeIdParam, range);
+  const likeTrend = series?.likeTrend ?? null;
+  if (likeTrend === null) return null;
+  const rangeLabel = RANGE_OPTIONS.find((o) => o.value === range)?.label ?? range;
+  return `${likeTrend >= 0 ? "+" : "−"}${Math.abs(likeTrend * 100).toFixed(1)} pts over ${range === RANGE_CLEAR_VALUE ? "all history" : rangeLabel}`;
+}
+
+/** Launch position, the metric chart and rank history: all follow the range. */
+async function GameSeriesSections({
+  universeIdParam,
+  searchParams,
+  head,
+}: {
+  universeIdParam: string;
+  searchParams: SearchParams;
+  head: GameHead;
+}) {
+  const { range, metric } = await readView(searchParams);
+  const series = await loadSeries(universeIdParam, range);
+  if (!series) return null;
+
+  const { game, anomalies } = head;
+  const { snapshots, updateTimes, launch, launchNearDays, ranks } = series;
+  const latestRank = ranks.at(-1);
+  const hasRanks = ranks.some((r) => r.overall !== null);
+
+  const chart = METRIC_CHART[metric];
+  const chartData = buildMetricSeries(snapshots, metric);
+  // Anomalies are flagged on the CCU series, so they only belong on that chart.
+  const markers: TrendMarker[] =
+    metric === "players" && anomalies
+      ? anomalies.anomalies.map((a) => ({
+          date: a.at,
+          value: a.value,
+          direction: a.direction,
+          changePct: a.changePct,
+        }))
+      : [];
+
+  return (
+    <>
       {launch && game.currentGenre && (
         <div className="flex flex-col gap-1 rounded-lg border p-3 text-sm">
           <span>
@@ -496,7 +682,7 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
             unit={chart.unit}
             valueFormat={chart.format}
             markers={markers}
-            events={metric === "players" ? updateHistory.updates.map((u) => u.toISOString()) : []}
+            events={metric === "players" ? updateTimes.map((u) => u.toISOString()) : []}
             eventLabel="Update"
             emptyMessage={
               metric === "visits" && snapshots.length > 0
@@ -587,173 +773,101 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
           </div>
         </section>
       )}
+    </>
+  );
+}
 
-      {anomalies && anomalies.nAnomalies > 0 && (
-        <section className="flex flex-col gap-2">
-          <h2 className="font-medium">Notable changes</h2>
-          <p className="text-sm text-muted-foreground">
-            Automatically flagged spikes and drops — moves that are both large relative to this
-            game&apos;s typical step-to-step change and substantial in their own right. They&apos;re
-            also marked on the Players chart.
-          </p>
-          <div className="flex flex-col divide-y rounded-lg border">
-            {[...anomalies.anomalies].reverse().map((a) => (
-              <div key={a.at} className="flex items-center justify-between gap-3 p-3 text-sm">
-                <span className="text-muted-foreground">
-                  <LocalTime value={a.at} />
-                </span>
-                <span className="flex items-center gap-3 tabular-nums">
+async function GameUpdatesSection({ universeIdParam }: { universeIdParam: string }) {
+  const data = await getGameUpdates(universeIdParam);
+  if (!data || data.impacts.length === 0) return null;
+  const { impacts, total, now } = data;
+
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="flex items-center gap-2 font-medium">
+        Updates <Badge variant="outline">Observational</Badge>
+      </h2>
+      <p className="text-sm text-muted-foreground">
+        Each time Roblox&apos;s &ldquo;last updated&rdquo; time changed (a publish, or some settings
+        edits), with average players in the 24 and 72 hours before vs. after. This shows what
+        happened around an update, not what it caused: weekends, events and other changes land in
+        the same windows. History starts with the time each game showed when update tracking began;
+        earlier updates weren&apos;t kept.
+        {total > impacts.length && ` Showing the latest ${impacts.length} of ${total}.`}
+      </p>
+      <div className="overflow-x-auto rounded-lg border">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50">
+            <tr>
+              <th className="px-3 py-1.5 text-left font-medium">Updated</th>
+              <th className="px-3 py-1.5 text-right font-medium">24h before → after</th>
+              <th className="px-3 py-1.5 text-right font-medium">72h before → after</th>
+            </tr>
+          </thead>
+          <tbody>
+            {impacts.map((u) => (
+              <tr key={u.updatedAt.toISOString()} className="border-t">
+                <td className="px-3 py-1.5">
+                  <LocalTime value={u.updatedAt} />{" "}
                   <span className="text-muted-foreground">
-                    {formatCompact(a.prevValue)} → {formatCompact(a.value)}
+                    ({formatRelativeTime(u.updatedAt, now)})
                   </span>
-                  <Badge variant={a.direction === "spike" ? "secondary" : "destructive"}>
-                    {a.direction === "spike" ? "▲" : "▼"} {formatGrowthPct(a.changePct)}
-                  </Badge>
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {updateImpacts.length > 0 && (
-        <section className="flex flex-col gap-2">
-          <h2 className="flex items-center gap-2 font-medium">
-            Updates <Badge variant="outline">Observational</Badge>
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Each time Roblox&apos;s &ldquo;last updated&rdquo; time changed (a publish, or some
-            settings edits), with average players in the 24 and 72 hours before vs. after. This
-            shows what happened around an update, not what it caused: weekends, events and other
-            changes land in the same windows. History starts with the time each game showed when
-            update tracking began; earlier updates weren&apos;t kept.
-            {updateHistory.total > updateImpacts.length &&
-              ` Showing the latest ${updateImpacts.length} of ${updateHistory.total}.`}
-          </p>
-          <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50">
-                <tr>
-                  <th className="px-3 py-1.5 text-left font-medium">Updated</th>
-                  <th className="px-3 py-1.5 text-right font-medium">24h before → after</th>
-                  <th className="px-3 py-1.5 text-right font-medium">72h before → after</th>
-                </tr>
-              </thead>
-              <tbody>
-                {updateImpacts.map((u) => (
-                  <tr key={u.updatedAt.toISOString()} className="border-t">
-                    <td className="px-3 py-1.5">
-                      <LocalTime value={u.updatedAt} />{" "}
-                      <span className="text-muted-foreground">
-                        ({formatRelativeTime(u.updatedAt, now)})
-                      </span>
-                    </td>
-                    {u.windows.map((w) => (
-                      <td key={w.hours} className="px-3 py-1.5 text-right tabular-nums">
-                        <ImpactCell window={w} />
-                      </td>
-                    ))}
-                  </tr>
+                </td>
+                {u.windows.map((w) => (
+                  <td key={w.hours} className="px-3 py-1.5 text-right tabular-nums">
+                    <ImpactCell window={w} />
+                  </td>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
 
-      {passCatalog && (
-        <section className="flex flex-col gap-2">
-          <h2 className="font-medium">Game passes</h2>
-          <p className="text-sm text-muted-foreground">
-            {passCatalog.forSaleCount === 0
-              ? "No game passes on sale. "
-              : `${passCatalog.forSaleCount} on sale; buying every one costs ${formatExact(passCatalog.totalRobux)} Robux. `}
-            Prices are public, but sales aren&apos;t, and developer products aren&apos;t listed at
-            all, so this only places the earnings estimate within its range (see{" "}
-            <Link href="/about" className="underline underline-offset-2">
-              About
-            </Link>
-            ). List last changed <LocalTime value={passCatalog.changedAt} />; checked weekly.
-          </p>
-          {passCatalog.passes.length > 0 && (
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50">
-                  <tr>
-                    <th className="px-3 py-1.5 text-left font-medium">Pass</th>
-                    <th className="px-3 py-1.5 text-right font-medium">Price (Robux)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...passCatalog.passes]
-                    .sort((a, b) => b.price - a.price)
-                    .map((p) => (
-                      <tr key={p.id} className="border-t">
-                        <td className="px-3 py-1.5">{p.name}</td>
-                        <td className="px-3 py-1.5 text-right tabular-nums">
-                          {formatExact(p.price)}
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
+async function SimilarGamesSection({ universeIdParam }: { universeIdParam: string }) {
+  const similar = await getGameSimilar(universeIdParam);
+  if (similar.length === 0) return null;
+
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="font-medium">Similar games</h2>
+      <p className="text-sm text-muted-foreground">
+        Same genre and a similar number of players right now; games sharing more themes come first.
+      </p>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {similar.map((g) => (
+          <Link
+            key={g.id}
+            href={`/games/${g.universeId}`}
+            className="flex items-center gap-3 rounded-lg border p-2 transition-colors hover:border-primary/50"
+          >
+            {g.icon ? (
+              <Image
+                src={g.icon}
+                alt=""
+                width={40}
+                height={40}
+                className="shrink-0 rounded-md border"
+                unoptimized
+              />
+            ) : (
+              <div className="size-10 shrink-0 rounded-md border bg-muted" />
+            )}
+            <div className="flex min-w-0 flex-col">
+              <span className="truncate text-sm font-medium">{g.name}</span>
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {formatCompact(g.currentPlaying)} playing
+                {g.sharedThemes > 0 &&
+                  ` · ${g.sharedThemes} shared theme${g.sharedThemes > 1 ? "s" : ""}`}
+              </span>
             </div>
-          )}
-        </section>
-      )}
-
-      {similar.length > 0 && (
-        <section className="flex flex-col gap-2">
-          <h2 className="font-medium">Similar games</h2>
-          <p className="text-sm text-muted-foreground">
-            Same genre and a similar number of players right now; games sharing more themes come
-            first.
-          </p>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {similar.map((g) => {
-              const icon = icons.get(String(g.universeId)) ?? null;
-              return (
-                <Link
-                  key={g.id}
-                  href={`/games/${g.universeId}`}
-                  className="flex items-center gap-3 rounded-lg border p-2 transition-colors hover:border-primary/50"
-                >
-                  {icon ? (
-                    <Image
-                      src={icon}
-                      alt=""
-                      width={40}
-                      height={40}
-                      className="shrink-0 rounded-md border"
-                      unoptimized
-                    />
-                  ) : (
-                    <div className="size-10 shrink-0 rounded-md border bg-muted" />
-                  )}
-                  <div className="flex min-w-0 flex-col">
-                    <span className="truncate text-sm font-medium">{g.name}</span>
-                    <span className="text-xs text-muted-foreground tabular-nums">
-                      {formatCompact(g.currentPlaying)} playing
-                      {g.sharedThemes > 0 &&
-                        ` · ${g.sharedThemes} shared theme${g.sharedThemes > 1 ? "s" : ""}`}
-                    </span>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      <section id="badge" className="flex flex-col gap-2">
-        <h2 className="font-medium">Embed a live badge</h2>
-        <p className="text-sm text-muted-foreground">
-          Show this game&apos;s players now or its rank on your own page or README. It links back
-          here and refreshes within the hour.
-        </p>
-        <BadgeEmbed universeId={game.universeId.toString()} origin={SITE_URL} />
-      </section>
-    </div>
+          </Link>
+        ))}
+      </div>
+    </section>
   );
 }
 

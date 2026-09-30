@@ -19,6 +19,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { StatTile } from "@/components/data-table/stat-tile";
+import { THEMES } from "@/lib/taxonomy/themes";
+
+/** Every theme is built at deploy (Task #96); the list is the fixed taxonomy. */
+export function generateStaticParams() {
+  return THEMES.map((t) => ({ slug: t.slug }));
+}
 
 export async function generateMetadata(props: PageProps<"/themes/[slug]">) {
   const { slug } = await props.params;

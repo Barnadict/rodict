@@ -130,13 +130,28 @@ export interface GameIcon {
   state: string;
 }
 
+/**
+ * Icon sizes the site asks Roblox for (Task #100), so a 40px list icon doesn't
+ * download a 512px PNG. Each is about twice the largest CSS size it's shown at,
+ * for high-DPI screens. Roblox only serves fixed sizes: 50, 128, 150, 256, 420
+ * and 512 square.
+ */
+export const ICON_SIZE = {
+  /** List rows, similar games and the 64px game header. */
+  small: "128x128",
+  /** The /games grid tiles (up to ~200px wide). */
+  grid: "256x256",
+  /** Share images, drawn large on a 1200×630 card. */
+  large: "512x512",
+} as const;
+
 /** Fetch game icon image URLs for any number of universe ids (chunked). */
 export async function getGameIcons(
   universeIds: (number | bigint)[],
   opts?: RobloxGetOptions & { size?: string },
 ): Promise<GameIcon[]> {
   const ids = dedupe(universeIds);
-  const size = opts?.size ?? "512x512";
+  const size = opts?.size ?? ICON_SIZE.large;
   const results: GameIcon[] = [];
   for (const group of chunk(ids, BATCH_SIZE)) {
     const data = await robloxGet<RobloxDataList<RobloxThumbnail & { targetId: number }>>(

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cacheLife } from "next/cache";
+import { Suspense, cache } from "react";
 
 import { getGenreBySlug } from "@/lib/db/genres";
 import { getGenreStatBySlug, getGenreLifecycle } from "@/lib/db/genre-stats";
@@ -36,6 +37,7 @@ import { SERVER_SIZE } from "@/lib/server-size";
 import { SESSION_ESTIMATE, formatSessionMinutes } from "@/lib/engagement";
 import { formatCompact, formatUsdRange } from "@/lib/format";
 import { LOW_COVERAGE, buildProjection, formatGrowthPct } from "@/lib/stats";
+import { GENRES } from "@/lib/taxonomy/genres";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -55,6 +57,7 @@ import { SeasonalityHeatmap } from "@/components/charts/seasonality-heatmap";
 import { GrowthBadge } from "@/components/data-table/growth-badge";
 import { CohortTable } from "@/components/data-table/cohort-table";
 import { StatTile } from "@/components/data-table/stat-tile";
+import { SectionSkeleton } from "@/components/data-table/section-skeleton";
 import { ExportLinks } from "@/components/data-table/export-links";
 import { WatchlistButton } from "@/components/watchlist/watchlist-button";
 import { CompareButton } from "@/components/compare/compare-button";
@@ -70,6 +73,13 @@ import { pageMetadata } from "@/lib/site";
 
 import { getGenreShare } from "./share";
 
+type SearchParams = PageProps<"/genres/[slug]">["searchParams"];
+
+/** Every genre is built at deploy (Task #96); the list is the fixed taxonomy. */
+export function generateStaticParams() {
+  return GENRES.map((g) => ({ slug: g.slug }));
+}
+
 export async function generateMetadata(props: PageProps<"/genres/[slug]">): Promise<Metadata> {
   const { slug } = await props.params;
   const share = await getGenreShare(slug);
@@ -81,26 +91,43 @@ export async function generateMetadata(props: PageProps<"/genres/[slug]">): Prom
   });
 }
 
-/**
- * The heaviest read on the site — 13 queries for one page. Uncached, every view
- * paid all of them to render numbers the analytics jobs only refresh after a
- * collection. Returns null rather than calling notFound() so the navigation
- * signal isn't thrown (and cached) from inside the cache.
+/*
+ * The heaviest page on the site: 13+ queries. They used to sit behind one
+ * cached loader, so every section waited for the slowest. Now the header needs
+ * only the route param (and is prerendered, Task #96), and each section below
+ * streams in behind its own <Suspense> (Task #97). Loaders return null rather
+ * than calling notFound() so the navigation signal isn't thrown (and cached)
+ * from inside the cache.
  */
-async function getGenreDetail(slug: string, range: RangeKey) {
+
+/** Title, stat tiles and engagement: the part of the page built at deploy. */
+async function getGenreHead(slug: string) {
   "use cache";
   cacheLife("hours");
 
-  const genre = await getGenreBySlug(slug);
+  const [genre, stat, engagementIndex] = await Promise.all([
+    getGenreBySlug(slug),
+    getGenreStatBySlug(slug),
+    getEngagement(),
+  ]);
   if (!genre) return null;
 
-  const cutoff = rangeToCutoff(range);
+  return {
+    genre,
+    stat,
+    engagement: engagementIndex.genres.find((g) => g.genreId === genre.id) ?? null,
+    serverSize: engagementIndex.serverSize[genre.id] ?? null,
+    // Priced inside the cache so the entry doesn't depend on when it's read.
+    earnings: stat ? estimateDailyEarningsFromCcu(stat.totalPlaying, new Date()) : null,
+  };
+}
+
+/** The precomputed analytics rows (one small read each). */
+async function getGenreAnalytics(genreId: string) {
+  "use cache";
+  cacheLife("hours");
 
   const [
-    stat,
-    series,
-    lifecycle,
-    topGames,
     survival,
     clustering,
     opportunity,
@@ -110,131 +137,94 @@ async function getGenreDetail(slug: string, range: RangeKey) {
     forecast,
     updateImpact,
     analyticsAt,
-    engagementIndex,
     launchBenchmark,
     concentration,
-    cadence,
-    passPricing,
   ] = await Promise.all([
-    getGenreStatBySlug(slug),
-    getGenreSnapshots(genre.id, { from: cutoff }),
-    getGenreLifecycle(genre.id),
-    getGamesList({ genreSlug: slug, sort: "currentPlaying", order: "desc", limit: 10 }),
-    getSurvivalForGenre(genre.id),
-    getClusteringForGenre(genre.id),
-    getOpportunityForGenre(genre.id),
-    getMomentumForGenre(genre.id),
-    getCohortsForGenre(genre.id),
-    getSeasonalityForGenre(genre.id),
-    getForecastForGenre(genre.id),
-    getUpdateImpactForGenre(genre.id),
+    getSurvivalForGenre(genreId),
+    getClusteringForGenre(genreId),
+    getOpportunityForGenre(genreId),
+    getMomentumForGenre(genreId),
+    getCohortsForGenre(genreId),
+    getSeasonalityForGenre(genreId),
+    getForecastForGenre(genreId),
+    getUpdateImpactForGenre(genreId),
     getAnalyticsComputedAt(),
-    getEngagement(),
-    getLaunchBenchmarkForGenre(genre.id),
-    getConcentrationForGenre(genre.id),
-    getUpdateCadence(),
-    getPassPricing(),
+    getLaunchBenchmarkForGenre(genreId),
+    getConcentrationForGenre(genreId),
   ]);
 
-  // A range narrower than "all" adds a Δ column to top games, scoped to just
-  // these 10 rows (Task #19) — same pattern as the games list.
+  // Top movers are stored by internal id; links need the universeId.
+  const moverUniverseIds = await getUniverseIds((momentum?.topMovers ?? []).map((m) => m.gameId));
+
+  return {
+    survival,
+    clustering,
+    opportunity,
+    momentum,
+    cohorts,
+    seasonality,
+    forecast,
+    updateImpact,
+    analyticsAt,
+    launchBenchmark,
+    concentration,
+    moverUniverseIds,
+  };
+}
+
+async function getGenreLifecycleCached(genreId: string) {
+  "use cache";
+  cacheLife("hours");
+  return getGenreLifecycle(genreId);
+}
+
+async function getGenreSeries(genreId: string, range: RangeKey) {
+  "use cache";
+  cacheLife("hours");
+  return getGenreSnapshots(genreId, { from: rangeToCutoff(range) });
+}
+
+/**
+ * Top 10 games. A range narrower than "all" adds a Δ column, scoped to just
+ * these 10 rows (Task #19) — same pattern as the games list.
+ */
+async function getGenreTopGames(slug: string, range: RangeKey) {
+  "use cache";
+  cacheLife("hours");
+
+  const cutoff = rangeToCutoff(range);
+  const topGames = await getGamesList({
+    genreSlug: slug,
+    sort: "currentPlaying",
+    order: "desc",
+    limit: 10,
+  });
   const growthByGame = cutoff
     ? await getGrowthForGames(
         topGames.games.map((g) => g.id),
         cutoff,
       )
     : null;
-
-  // Top movers are stored by internal id; links need the universeId.
-  const moverUniverseIds = await getUniverseIds((momentum?.topMovers ?? []).map((m) => m.gameId));
-
-  return {
-    genre,
-    stat,
-    series,
-    lifecycle,
-    topGames,
-    survival,
-    clustering,
-    opportunity,
-    momentum,
-    cohorts,
-    seasonality,
-    forecast,
-    updateImpact,
-    analyticsAt,
-    growthByGame,
-    moverUniverseIds,
-    launchBenchmark,
-    engagement: engagementIndex.genres.find((g) => g.genreId === genre.id) ?? null,
-    serverSize: engagementIndex.serverSize[genre.id] ?? null,
-    concentration,
-    cadence: cadence.genres.find((g) => g.genreId === genre.id) ?? null,
-    cadenceTop: cadence.topByGenre[genre.id] ?? [],
-    cadenceDays: cadence.recentDays,
-    passPricing: passPricing.genres[genre.id] ?? null,
-    // Priced at the as-of date rather than "now" so the cached entry doesn't
-    // depend on when it happens to be read.
-    earnings: stat ? estimateDailyEarningsFromCcu(stat.totalPlaying, cutoff ?? new Date()) : null,
-  };
+  return { topGames, growthByGame };
 }
+
+/** One analytics load per request, shared by the sections that use it. */
+const loadAnalytics = cache(getGenreAnalytics);
+
+async function readRange(searchParams: SearchParams) {
+  const sp = await searchParams;
+  return parseRangeKey(Array.isArray(sp.range) ? sp.range[0] : sp.range);
+}
+
+type GenreHead = NonNullable<Awaited<ReturnType<typeof getGenreHead>>>;
 
 export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">) {
   const { slug } = await props.params;
-  const sp = await props.searchParams;
-  const range = parseRangeKey(Array.isArray(sp.range) ? sp.range[0] : sp.range);
+  const head = await getGenreHead(slug);
+  if (!head) notFound();
 
-  const data = await getGenreDetail(slug, range);
-  if (!data) notFound();
-
-  const {
-    genre,
-    stat,
-    series,
-    lifecycle,
-    topGames,
-    survival,
-    clustering,
-    opportunity,
-    momentum,
-    cohorts,
-    seasonality,
-    forecast,
-    updateImpact,
-    analyticsAt,
-    growthByGame,
-    moverUniverseIds,
-    engagement,
-    launchBenchmark,
-    earnings,
-    serverSize,
-    concentration,
-    cadence,
-    cadenceTop,
-    cadenceDays,
-    passPricing,
-  } = data;
-  const conc = concentration ? latestWithBaseline(concentration.days) : null;
-  const launchBand = benchmarkBand(launchBenchmark);
-
-  const hasAnalytics = !!(survival || clustering || opportunity || momentum);
-
-  const trendData: TrendPoint[] = series.map((s) => ({
-    date: s.collectedAt.toISOString(),
-    value: s.totalPlaying,
-    coverage: s.coverage,
-  }));
-  const projection =
-    forecast?.status === "ok"
-      ? buildProjection(
-          forecast,
-          series.map((s) => ({ t: s.collectedAt.getTime(), value: s.totalPlaying })),
-        )
-      : [];
-  const lastForecast = forecast?.status === "ok" ? forecast.points.at(-1) : undefined;
-  const survivalCurve =
-    survival?.status === "ok" && survival.curve.length >= 2 ? survival.curve : null;
-  const topMovers = (momentum?.topMovers ?? []).filter((m) => moverUniverseIds[m.gameId]);
+  const { genre, stat, engagement, earnings, serverSize } = head;
+  const id = genre.id;
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
@@ -303,6 +293,95 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
         </p>
       </div>
 
+      <Suspense fallback={<SectionSkeleton title="Insights" className="h-24" />}>
+        <InsightsSection genreId={id} />
+      </Suspense>
+
+      <Suspense fallback={<SectionSkeleton title="Players over time" className="h-72" />}>
+        <PlayersSection head={head} searchParams={props.searchParams} />
+      </Suspense>
+
+      <Suspense fallback={<SectionSkeleton title="Market concentration" className="h-64" />}>
+        <ConcentrationSection head={head} />
+      </Suspense>
+
+      <Suspense fallback={<SectionSkeleton title="Lifecycle" className="h-72" />}>
+        <LifecycleSection head={head} />
+      </Suspense>
+
+      <Suspense fallback={<SectionSkeleton title="Survival" className="h-72" />}>
+        <AnalyticsSections head={head} />
+      </Suspense>
+
+      <Suspense fallback={<SectionSkeleton title="Update cadence" className="h-32" />}>
+        <CadenceSection genreId={id} />
+      </Suspense>
+
+      <Suspense fallback={<SectionSkeleton title="Players after updates" className="h-32" />}>
+        <UpdateImpactSection genreId={id} />
+      </Suspense>
+
+      <Suspense fallback={<SectionSkeleton title="Game pass pricing" className="h-48" />}>
+        <PassPricingSection head={head} />
+      </Suspense>
+
+      {serverSize && serverSize.games > 0 && (
+        <section id="servers" className="flex scroll-mt-6 flex-col gap-3">
+          <div>
+            <h2 className="font-medium">Server size</h2>
+            <p className="text-sm text-muted-foreground">
+              Players per server (the developer&apos;s max-players setting), from each game&apos;s
+              latest reading in the last {SESSION_ESTIMATE.windowHours}h.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatTile
+              label="Typical server size"
+              value={serverSize.median !== null ? formatCompact(serverSize.median) : "—"}
+              hint={
+                serverSize.p25 !== null
+                  ? `Middle half ${formatCompact(serverSize.p25)}–${formatCompact(serverSize.p75!)} · ${formatCompact(serverSize.games)} games`
+                  : undefined
+              }
+            />
+            <StatTile
+              label={`Busy games (${SERVER_SIZE.busyPlayers}+ playing)`}
+              value={serverSize.medianBusy !== null ? formatCompact(serverSize.medianBusy) : "—"}
+              hint={`Median of ${formatCompact(serverSize.busyGames)} games`}
+            />
+            <StatTile
+              label="Size vs. players (Spearman)"
+              value={serverSize.spearman !== null ? serverSize.spearman.toFixed(2) : "—"}
+              hint={
+                serverSize.spearman !== null
+                  ? `${formatCompact(serverSize.spearmanGames)} games with players`
+                  : `Needs ${SERVER_SIZE.minCorrelationGames}+ games with players`
+              }
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            The correlation runs from −1 to 1: above 0 means this genre&apos;s games with bigger
+            servers tend to have more players, below 0 fewer. It&apos;s a rank correlation across
+            games and says nothing about cause: popular kinds of game may simply use bigger servers.
+          </p>
+        </section>
+      )}
+
+      <Suspense fallback={<SectionSkeleton title="Top games" className="h-96" />}>
+        <TopGamesSection slug={slug} searchParams={props.searchParams} />
+      </Suspense>
+    </div>
+  );
+}
+
+async function InsightsSection({ genreId }: { genreId: string }) {
+  const { survival, clustering, opportunity, momentum, analyticsAt, moverUniverseIds } =
+    await loadAnalytics(genreId);
+  const hasAnalytics = !!(survival || clustering || opportunity || momentum);
+  const topMovers = (momentum?.topMovers ?? []).filter((m) => moverUniverseIds[m.gameId]);
+
+  return (
+    <>
       {hasAnalytics && (
         <section className="flex flex-col gap-3">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -378,7 +457,40 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
           )}
         </section>
       )}
+    </>
+  );
+}
 
+async function PlayersSection({
+  head,
+  searchParams,
+}: {
+  head: GenreHead;
+  searchParams: SearchParams;
+}) {
+  const { genre } = head;
+  const range = await readRange(searchParams);
+  const [series, { forecast }] = await Promise.all([
+    getGenreSeries(genre.id, range),
+    loadAnalytics(genre.id),
+  ]);
+
+  const trendData: TrendPoint[] = series.map((s) => ({
+    date: s.collectedAt.toISOString(),
+    value: s.totalPlaying,
+    coverage: s.coverage,
+  }));
+  const projection =
+    forecast?.status === "ok"
+      ? buildProjection(
+          forecast,
+          series.map((s) => ({ t: s.collectedAt.getTime(), value: s.totalPlaying })),
+        )
+      : [];
+  const lastForecast = forecast?.status === "ok" ? forecast.points.at(-1) : undefined;
+
+  return (
+    <>
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <h2 className="font-medium">Players over time</h2>
@@ -440,7 +552,17 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
           )
         )}
       </section>
+    </>
+  );
+}
 
+async function ConcentrationSection({ head }: { head: GenreHead }) {
+  const { genre } = head;
+  const { concentration } = await loadAnalytics(genre.id);
+  const conc = concentration ? latestWithBaseline(concentration.days) : null;
+
+  return (
+    <>
       {conc && concentration && (
         <section id="concentration" className="flex scroll-mt-6 flex-col gap-3">
           <div>
@@ -497,7 +619,20 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
           </p>
         </section>
       )}
+    </>
+  );
+}
 
+async function LifecycleSection({ head }: { head: GenreHead }) {
+  const { genre } = head;
+  const [lifecycle, { launchBenchmark }] = await Promise.all([
+    getGenreLifecycleCached(genre.id),
+    loadAnalytics(genre.id),
+  ]);
+  const launchBand = benchmarkBand(launchBenchmark);
+
+  return (
+    <>
       <section id="lifecycle" className="flex scroll-mt-6 flex-col gap-3">
         <div>
           <h2 className="font-medium">Lifecycle</h2>
@@ -524,7 +659,19 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
           />
         </div>
       </section>
+    </>
+  );
+}
 
+/** Survival, launch cohorts and weekday/hour patterns. */
+async function AnalyticsSections({ head }: { head: GenreHead }) {
+  const { genre } = head;
+  const { survival, cohorts, seasonality } = await loadAnalytics(genre.id);
+  const survivalCurve =
+    survival?.status === "ok" && survival.curve.length >= 2 ? survival.curve : null;
+
+  return (
+    <>
       {survival && (
         <section id="survival" className="flex scroll-mt-6 flex-col gap-3">
           <div>
@@ -616,7 +763,18 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
           </div>
         </section>
       )}
+    </>
+  );
+}
 
+async function CadenceSection({ genreId }: { genreId: string }) {
+  const index = await getUpdateCadence();
+  const cadence = index.genres.find((g) => g.genreId === genreId) ?? null;
+  const cadenceTop = index.topByGenre[genreId] ?? [];
+  const cadenceDays = index.recentDays;
+
+  return (
+    <>
       {cadence && (
         <section id="updates" className="flex scroll-mt-6 flex-col gap-3">
           <div>
@@ -691,7 +849,15 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
           </p>
         </section>
       )}
+    </>
+  );
+}
 
+async function UpdateImpactSection({ genreId }: { genreId: string }) {
+  const { updateImpact } = await loadAnalytics(genreId);
+
+  return (
+    <>
       {updateImpact && (
         <section className="flex flex-col gap-3">
           <div>
@@ -734,7 +900,16 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
           </div>
         </section>
       )}
+    </>
+  );
+}
 
+async function PassPricingSection({ head }: { head: GenreHead }) {
+  const { stat } = head;
+  const passPricing = (await getPassPricing()).genres[head.genre.id] ?? null;
+
+  return (
+    <>
       {passPricing && passPricing.checkedGames > 0 && (
         <section id="passes" className="flex scroll-mt-6 flex-col gap-3">
           <div>
@@ -806,49 +981,22 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
           )}
         </section>
       )}
+    </>
+  );
+}
 
-      {serverSize && serverSize.games > 0 && (
-        <section id="servers" className="flex scroll-mt-6 flex-col gap-3">
-          <div>
-            <h2 className="font-medium">Server size</h2>
-            <p className="text-sm text-muted-foreground">
-              Players per server (the developer&apos;s max-players setting), from each game&apos;s
-              latest reading in the last {SESSION_ESTIMATE.windowHours}h.
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatTile
-              label="Typical server size"
-              value={serverSize.median !== null ? formatCompact(serverSize.median) : "—"}
-              hint={
-                serverSize.p25 !== null
-                  ? `Middle half ${formatCompact(serverSize.p25)}–${formatCompact(serverSize.p75!)} · ${formatCompact(serverSize.games)} games`
-                  : undefined
-              }
-            />
-            <StatTile
-              label={`Busy games (${SERVER_SIZE.busyPlayers}+ playing)`}
-              value={serverSize.medianBusy !== null ? formatCompact(serverSize.medianBusy) : "—"}
-              hint={`Median of ${formatCompact(serverSize.busyGames)} games`}
-            />
-            <StatTile
-              label="Size vs. players (Spearman)"
-              value={serverSize.spearman !== null ? serverSize.spearman.toFixed(2) : "—"}
-              hint={
-                serverSize.spearman !== null
-                  ? `${formatCompact(serverSize.spearmanGames)} games with players`
-                  : `Needs ${SERVER_SIZE.minCorrelationGames}+ games with players`
-              }
-            />
-          </div>
-          <p className="text-xs text-muted-foreground">
-            The correlation runs from −1 to 1: above 0 means this genre&apos;s games with bigger
-            servers tend to have more players, below 0 fewer. It&apos;s a rank correlation across
-            games and says nothing about cause: popular kinds of game may simply use bigger servers.
-          </p>
-        </section>
-      )}
+async function TopGamesSection({
+  slug,
+  searchParams,
+}: {
+  slug: string;
+  searchParams: SearchParams;
+}) {
+  const range = await readRange(searchParams);
+  const { topGames, growthByGame } = await getGenreTopGames(slug, range);
 
+  return (
+    <>
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-medium">Top games</h2>
@@ -901,6 +1049,6 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
           </Table>
         </div>
       </section>
-    </div>
+    </>
   );
 }

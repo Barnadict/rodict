@@ -552,6 +552,29 @@ export function countGames(where: Prisma.GameWhereInput = {}) {
   return prisma.game.count({ where });
 }
 
+/**
+ * The most-played games' universe ids, busiest first (Task #96). One indexed
+ * read of `limit` rows on currentPlaying.
+ */
+export async function getTopUniverseIds(limit: number): Promise<bigint[]> {
+  const rows = await prisma.game.findMany({
+    orderBy: { currentPlaying: "desc" },
+    take: limit,
+    select: { universeId: true },
+  });
+  return rows.map((r) => r.universeId);
+}
+
+/** The latest `n` snapshots of one game, oldest-first. */
+export async function getLatestSnapshots(gameId: string, n: number) {
+  const rows = await prisma.gameSnapshot.findMany({
+    where: { gameId },
+    orderBy: { collectedAt: "desc" },
+    take: n,
+  });
+  return rows.reverse();
+}
+
 /** universeId (as a string, for links) by internal game id. Unknown ids are left out. */
 export async function getUniverseIds(gameIds: string[]): Promise<Record<string, string>> {
   if (gameIds.length === 0) return {};

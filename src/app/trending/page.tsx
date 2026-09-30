@@ -39,7 +39,8 @@ const RECENT_SHOWN = 12;
  * never hit and the work would be repeated behind a cache that only ever grew.
  */
 async function getTrendingData(range: RangeKey) {
-  "use cache";
+  // Remote (Task #98): few distinct keys, so a cold instance reuses another's entry.
+  "use cache: remote";
   cacheLife("hours");
 
   const cutoff = rangeToCutoff(range);

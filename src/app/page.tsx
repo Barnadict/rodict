@@ -23,7 +23,8 @@ import { LocalTime } from "@/components/local-time";
  * answers "is the pipeline healthy?", not "how old is this table?".)
  */
 async function getDashboardData() {
-  "use cache";
+  // Remote (Task #98): few distinct keys, so a cold instance reuses another's entry.
+  "use cache: remote";
   cacheLife("hours");
 
   const cutoff = rangeToCutoff("7d");

@@ -46,7 +46,8 @@ function isSortField(value: string | undefined): value is GenreStatsSort {
 // is returned so the page can price earnings at the as-of date and tell the two
 // empty states apart without recomputing it (and re-reading the clock).
 async function getGenreRows(range: RangeKey, sort: GenreStatsSort, order: "asc" | "desc") {
-  "use cache";
+  // Remote (Task #98): few distinct keys, so a cold instance reuses another's entry.
+  "use cache: remote";
   cacheLife("hours");
 
   const asOf = rangeToCutoff(range);
@@ -55,7 +56,8 @@ async function getGenreRows(range: RangeKey, sort: GenreStatsSort, order: "asc" 
 
 // Not range-dependent: cohorts compare launch quarters at the latest analytics run.
 async function getGlobalCohorts() {
-  "use cache";
+  // Remote (Task #98): few distinct keys, so a cold instance reuses another's entry.
+  "use cache: remote";
   cacheLife("hours");
   return getCohortsGlobal();
 }
