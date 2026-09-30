@@ -90,6 +90,7 @@ model Game {
   genreHistory GameGenreHistory[]
   themes       GameTheme[]
   updates      GameUpdate[]
+  passCatalog  GamePassCatalog?
 
   // One index per user-sortable column on the games list (GameSortField in
   // src/lib/db/games.ts). Without one, SQLite falls back to a full scan plus a
@@ -102,6 +103,10 @@ model Game {
   @@index([currentPlaying])
   @@index([currentVisits])
   @@index([currentFavorites])
+  // Creator pages (Task #67) read one creator's games. Index upkeep doesn't
+  // add to Turso's rows-written count (Task #42 measured ~2 rows per game per
+  // collect with seven indexes already on this table).
+  @@index([creatorId])
 }
 
 /// Our own normalized, gameplay-based genre (NOT Roblox's deprecated thematic
@@ -184,6 +189,21 @@ model GameUpdate {
 
   @@id([gameId, updatedAt]) // one row per distinct timestamp; also serves per-game reads
   @@index([updatedAt])
+}
+
+/// A game's public game-pass price list (Task #69): the passes on sale and
+/// their Robux prices. Refreshed weekly (one seventh of the games per daily
+/// run) and rewritten ONLY when the list changes, so an unchanged catalog costs
+/// no writes. A row with forSaleCount = 0 means "checked, nothing on sale";
+/// no row means "not checked yet". Feeds the earnings model's band position.
+model GamePassCatalog {
+  gameId       String   @id
+  passes       String // JSON [{ id, name, price }] of on-sale passes, sorted by id
+  forSaleCount Int
+  totalRobux   Int // Robux to buy every on-sale pass once
+  changedAt    DateTime // when this list was last written (first seen or changed)
+
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
 }
 
 // ---------------------------------------------------------------------------

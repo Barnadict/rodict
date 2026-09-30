@@ -48,10 +48,11 @@ async function main() {
   const { BUDGET_GUARD } = await import("../src/lib/collector/budget-guard");
 
   // Default schedule = what the workflows run today (collect every 3h,
-  // analytics twice a day).
+  // analytics twice a day, game passes daily).
   const runsPerDay = {
     collect: numArg("collect-per-day", PRODUCTION_SCHEDULE.collect),
     analytics: numArg("analytics-per-day", PRODUCTION_SCHEDULE.analytics),
+    gamepasses: numArg("gamepasses-per-day", PRODUCTION_SCHEDULE.gamepasses),
   };
 
   const now = new Date();

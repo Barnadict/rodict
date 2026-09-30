@@ -82,28 +82,30 @@ build — and so without needing `DATABASE_URL`.
 
 ## Scripts
 
-| Script                   | What it does                                                                  |
-| ------------------------ | ----------------------------------------------------------------------------- |
-| `npm run dev`            | Start the dev server                                                          |
-| `npm run build`          | Production build                                                              |
-| `npm run lint`           | ESLint                                                                        |
-| `npm run typecheck`      | `next typegen && tsc --noEmit` — use this, not bare `tsc`                     |
-| `npm test`               | Run the Vitest suite (`npm run test:watch` to watch)                          |
-| `npm run test:py`        | Run the Python analytics tests (pytest)                                       |
-| `npm run collect`        | Run the data collector once (`-- --max=N`, `--known-only`)                    |
-| `npm run analytics`      | Run all 9 Python analytics jobs                                               |
-| `npm run db:migrate`     | Create/apply a local migration                                                |
-| `npm run db:deploy`      | Apply pending migrations to the hosted Turso DB                               |
-| `npm run db:seed`        | Seed the genre/theme taxonomy                                                 |
-| `npm run db:backup`      | Back up the local SQLite file                                                 |
-| `npm run db:backup:prod` | Back up the hosted Turso DB to a verified, gzipped SQLite file (weekly in CI) |
-| `npm run db:retention`   | Downsample old snapshots (local only; `--dry-run` for cost)                   |
+| Script                       | What it does                                                                  |
+| ---------------------------- | ----------------------------------------------------------------------------- |
+| `npm run dev`                | Start the dev server                                                          |
+| `npm run build`              | Production build                                                              |
+| `npm run lint`               | ESLint                                                                        |
+| `npm run typecheck`          | `next typegen && tsc --noEmit` — use this, not bare `tsc`                     |
+| `npm test`                   | Run the Vitest suite (`npm run test:watch` to watch)                          |
+| `npm run test:py`            | Run the Python analytics tests (pytest)                                       |
+| `npm run collect`            | Run the data collector once (`-- --max=N`, `--known-only`)                    |
+| `npm run collect:gamepasses` | Refresh today's seventh of game-pass price lists (`-- --shard=N --max=N`)     |
+| `npm run analytics`          | Run all 9 Python analytics jobs                                               |
+| `npm run db:migrate`         | Create/apply a local migration                                                |
+| `npm run db:deploy`          | Apply pending migrations to the hosted Turso DB                               |
+| `npm run db:seed`            | Seed the genre/theme taxonomy                                                 |
+| `npm run db:backup`          | Back up the local SQLite file                                                 |
+| `npm run db:backup:prod`     | Back up the hosted Turso DB to a verified, gzipped SQLite file (weekly in CI) |
+| `npm run db:retention`       | Downsample old snapshots (local only; `--dry-run` for cost)                   |
 
 ## Deployment
 
 - **DB:** hosted on Turso; `DATABASE_URL`/`DATABASE_AUTH_TOKEN` live **only** in GitHub Actions secrets and Vercel's env vars — never in a local `.env`, never committed.
 - **Migrations:** `npm run db:migrate` only touches your local SQLite file. To apply a migration to Turso, run the **"Deploy migrations"** workflow ([`migrate.yml`](.github/workflows/migrate.yml)) from the Actions tab — manual trigger, idempotent, and the credentials never leave GitHub. Running `npm run db:deploy` locally fails by design (`DATABASE_URL must point at the hosted Turso DB`), because a dev machine has no Turso URL. (`prisma migrate deploy` can't be used against a `libsql://` URL at all — see the comment atop `scripts/deploy-migrations.ts`.)
 - **Collector:** runs on a schedule via [`.github/workflows/collect.yml`](.github/workflows/collect.yml).
+- **Game passes:** refreshed daily, one seventh of the games per run, via [`.github/workflows/gamepasses.yml`](.github/workflows/gamepasses.yml).
 - **Frontend:** deployed on Vercel from this repo.
 
 ## License

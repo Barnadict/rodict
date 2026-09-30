@@ -1,18 +1,30 @@
 import { prisma } from "@/lib/prisma";
 import { COLLECTION_CADENCE } from "@/lib/collector/cadence";
+import { PASS_WRITE_CAP } from "@/lib/game-passes";
 
 import { summarizeBudget, type BudgetReport } from "./write-counts";
 
 /**
  * The production pipeline schedule, in runs per day: collect every
- * `runIntervalHours` (collect.yml) and analytics twice a day (analytics.yml,
- * Task #45). The write-budget report and the collector's budget guard (#47)
+ * `runIntervalHours` (collect.yml), analytics twice a day (analytics.yml,
+ * Task #45) and the game-pass refresh once a day (gamepasses.yml, Task #69). The write-budget report and the collector's budget guard (#47)
  * both project the month with it.
  */
 export const PRODUCTION_SCHEDULE = {
   collect: 24 / COLLECTION_CADENCE.runIntervalHours,
   analytics: 2,
+  /** Game-pass refresh, daily (gamepasses.yml, Task #69). */
+  gamepasses: 1,
 } as const;
+
+/**
+ * Worst-case rows per run for a scheduled job before its first measured run
+ * (its write cap + the JobRun row), so a new job raises the projection instead
+ * of blanking it.
+ */
+export const UNMEASURED_FALLBACK_WRITES: Record<string, number> = {
+  gamepasses: PASS_WRITE_CAP + 1,
+};
 
 /**
  * This month's write-budget report, summed from the `JobRun` rows of both
@@ -39,6 +51,7 @@ export async function getMonthWriteBudget(
     }),
     now,
     runsPerDay,
+    UNMEASURED_FALLBACK_WRITES,
   );
 }
 

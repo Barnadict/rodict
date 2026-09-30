@@ -33,6 +33,8 @@ export interface CollectionSummary {
   finishedAt: Date;
   durationMs: number;
   discovered: number;
+  /** Whether keyword/chart discovery ran this run (false for known-only runs). */
+  discoveryRan: boolean;
   /** How many of the newly discovered ids came from the explore-api charts. */
   chartsDiscovered: number;
   knownReCollected: number;
@@ -167,6 +169,7 @@ export async function runCollection(opts: CollectOptions = {}): Promise<Collecti
     finishedAt,
     durationMs: finishedAt.getTime() - startedAt.getTime(),
     discovered: discovery.discoveredCount,
+    discoveryRan: discovery.discoveryRan,
     chartsDiscovered: discovery.chartCount,
     knownReCollected: discovery.knownCount,
     deferredLowActivity: discovery.deferredCount,
@@ -196,6 +199,7 @@ function pausedSummary(startedAt: Date, budgetGuard: BudgetGuardDecision): Colle
     finishedAt,
     durationMs: finishedAt.getTime() - startedAt.getTime(),
     discovered: 0,
+    discoveryRan: false,
     chartsDiscovered: 0,
     knownReCollected: 0,
     deferredLowActivity: 0,
@@ -236,6 +240,7 @@ export function collectionJobError(summary: CollectionSummary): string | null {
 export function collectionJobSummary(summary: CollectionSummary) {
   return {
     discovered: summary.discovered,
+    discoveryRan: summary.discoveryRan,
     chartsDiscovered: summary.chartsDiscovered,
     knownReCollected: summary.knownReCollected,
     deferredLowActivity: summary.deferredLowActivity,

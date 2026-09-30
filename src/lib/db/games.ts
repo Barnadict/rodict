@@ -5,6 +5,7 @@ import { addWrites, type WriteCounts } from "@/lib/db/write-counts";
 import { collectionTier, isDueForCollection } from "@/lib/collector/cadence";
 import { rankSimilarGames, similarCcuBand } from "@/lib/game-metrics";
 import { impactSnapshotRange } from "@/lib/update-impact";
+import { rankByGrowth, rankByLikeRatio } from "@/lib/games-list";
 
 // ---------------------------------------------------------------------------
 // Write path (used by the collector, Task #8)
@@ -417,50 +418,95 @@ export async function getLastCollectedAt(): Promise<Date | null> {
   return result._max.lastCollectedAt;
 }
 
-export type GameSortField =
+/** Sorts on an indexed Game column (see the @@index list in schema.prisma). */
+export type ColumnSortField =
   "currentPlaying" | "currentVisits" | "currentFavorites" | "allTimePeakPlayers" | "firstSeenAt";
+
+/** Column sorts plus two computed ones ranked in memory (Task #70). */
+export type GameSortField = ColumnSortField | "likeRatio" | "growth";
 
 export interface GamesListParams {
   genreSlug?: string;
+  themeSlug?: string;
   status?: string;
   search?: string;
+  /** Minimum current players. */
+  minPlaying?: number;
+  /** Bounds on the Roblox creation date. */
+  created?: { gte?: Date; lt?: Date };
   sort?: GameSortField;
   order?: "asc" | "desc";
   limit?: number;
   offset?: number;
+  /** growthPct by game id; required for sort "growth" (see getGameWindowGrowth). */
+  growthById?: Map<string, number>;
 }
+
+const LIST_INCLUDE = {
+  currentGenre: true,
+  passCatalog: { select: { forSaleCount: true, totalRobux: true } },
+} as const;
 
 /** The core games-list query — reads denormalized current metrics only, no
  * per-row snapshot join. */
 export async function getGamesList(params: GamesListParams = {}) {
   const {
     genreSlug,
+    themeSlug,
     status,
     search,
+    minPlaying,
+    created,
     sort = "currentPlaying",
     order = "desc",
     limit = 50,
     offset = 0,
   } = params;
+  // Pages ask for 25; exports (Task #71) for up to 1,000.
+  const take = Math.min(limit, 1000);
 
   const where: Prisma.GameWhereInput = {
     ...(genreSlug ? { currentGenre: { slug: genreSlug } } : {}),
+    ...(themeSlug ? { themes: { some: { theme: { slug: themeSlug } } } } : {}),
     ...(status ? { status } : {}),
     ...(search ? { name: { contains: search } } : {}),
+    ...(minPlaying ? { currentPlaying: { gte: minPlaying } } : {}),
+    ...(created ? { robloxCreatedAt: created } : {}),
   };
 
-  const [games, total] = await Promise.all([
-    prisma.game.findMany({
-      where,
-      orderBy: { [sort]: order },
-      take: Math.min(limit, 200),
-      skip: offset,
-      include: { currentGenre: true },
-    }),
-    prisma.game.count({ where }),
-  ]);
+  if (sort !== "likeRatio" && sort !== "growth") {
+    const [games, total] = await Promise.all([
+      prisma.game.findMany({
+        where,
+        orderBy: { [sort]: order },
+        take,
+        skip: offset,
+        include: LIST_INCLUDE,
+      }),
+      prisma.game.count({ where }),
+    ]);
+    return { games, total };
+  }
 
-  return { games, total };
+  // Computed sorts: rank the matching games in memory, then load one page.
+  const rows = await prisma.game.findMany({
+    where,
+    select: { id: true, currentUpVotes: true, currentDownVotes: true, currentPlaying: true },
+  });
+  const ranked =
+    sort === "likeRatio"
+      ? rankByLikeRatio(rows, order)
+      : rankByGrowth(rows, params.growthById ?? new Map(), order);
+  const pageIds = ranked.slice(offset, offset + take);
+  const byId = new Map(
+    (await prisma.game.findMany({ where: { id: { in: pageIds } }, include: LIST_INCLUDE })).map(
+      (g) => [g.id, g],
+    ),
+  );
+  return {
+    games: pageIds.flatMap((id) => byId.get(id) ?? []),
+    total: ranked.length,
+  };
 }
 
 export function getGameByUniverseId(universeId: bigint | number) {

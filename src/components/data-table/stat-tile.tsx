@@ -6,10 +6,13 @@ export function StatTile({
   label,
   value,
   badge,
+  hint,
 }: {
   label: string;
   value: ReactNode;
   badge?: string;
+  /** A short muted line under the value, e.g. what a count means. */
+  hint?: string;
 }) {
   return (
     <div className="rounded-lg border p-3">
@@ -22,6 +25,7 @@ export function StatTile({
           </Badge>
         )}
       </div>
+      {hint && <div className="mt-0.5 text-xs text-muted-foreground">{hint}</div>}
     </div>
   );
 }

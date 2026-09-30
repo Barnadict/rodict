@@ -11,10 +11,12 @@ import {
   getSimilarGames,
 } from "@/lib/db/games";
 import { getAnomaliesForGame } from "@/lib/db/analytics";
+import { getGamePassCatalog } from "@/lib/db/game-passes";
 import { getGameIcons } from "@/lib/roblox/client";
-import { deriveSnapshotMetrics } from "@/lib/earnings/estimate";
+import { deriveSnapshotMetrics, PASS_TIER_NOTE } from "@/lib/earnings/estimate";
 import { formatCompact, formatExact, formatRelativeTime, formatUsdRange } from "@/lib/format";
 import { formatGrowthPct } from "@/lib/stats";
+import { creatorPath } from "@/lib/creators";
 import { measureUpdateImpacts, type UpdateWindowImpact } from "@/lib/update-impact";
 import {
   DEFAULT_GAME_METRIC,
@@ -37,7 +39,9 @@ import {
 import { LocalTime } from "@/components/local-time";
 import { StatTile } from "@/components/data-table/stat-tile";
 import { GrowthBadge } from "@/components/data-table/growth-badge";
+import { ExportLinks } from "@/components/data-table/export-links";
 import { WatchlistButton } from "@/components/watchlist/watchlist-button";
+import { CompareButton } from "@/components/compare/compare-button";
 import {
   RANGE_OPTIONS,
   RANGE_CLEAR_VALUE,
@@ -81,11 +85,12 @@ async function getGameDetail(universeIdParam: string, range: RangeKey) {
     return { similar, icons: new Map(icons.map((i) => [String(i.universeId), i.imageUrl])) };
   });
 
-  const [snapshots, anomalies, updateHistory, { similar, icons }] = await Promise.all([
+  const [snapshots, anomalies, updateHistory, { similar, icons }, passCatalog] = await Promise.all([
     getGameSnapshots(game.id, { from: rangeToCutoff(range) }),
     getAnomaliesForGame(game.id),
     getGameUpdateHistory(game.id),
     similarWithIcons,
+    getGamePassCatalog(game.id),
   ]);
 
   return {
@@ -95,6 +100,7 @@ async function getGameDetail(universeIdParam: string, range: RangeKey) {
     updateHistory,
     similar,
     icons,
+    passCatalog,
     iconUrl: icons.get(String(universeId)) ?? null,
   };
 }
@@ -136,10 +142,11 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
   const data = await getGameDetail(universeIdParam, range);
   if (!data) notFound();
 
-  const { game, snapshots, anomalies, updateHistory, similar, icons, iconUrl } = data;
+  const { game, snapshots, anomalies, updateHistory, similar, icons, iconUrl, passCatalog } = data;
   const latest = snapshots[snapshots.length - 1];
   const previous = snapshots.length > 1 ? snapshots[snapshots.length - 2] : undefined;
-  const derived = latest ? deriveSnapshotMetrics(latest, previous) : null;
+  const derived = latest ? deriveSnapshotMetrics(latest, previous, passCatalog) : null;
+  const passTier = derived?.estimatedDailyEarnings.passTier ?? null;
 
   const chart = METRIC_CHART[metric];
   const chartData = buildMetricSeries(snapshots, metric);
@@ -160,6 +167,7 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
   const updateImpacts = measureUpdateImpacts(updateHistory.updates, updateHistory.snapshots, now);
   const gameUrl = robloxGameUrl(game.rootPlaceId);
   const creatorUrl = robloxCreatorUrl(game.creatorId, game.creatorType);
+  const creatorPage = creatorPath(game.creatorId, game.creatorType);
   const description = cleanDescription(game.description);
   const descriptionPreview = description?.split("\n")[0].slice(0, 120);
   const lifecycle: { label: string; at: Date | null }[] = [
@@ -189,7 +197,11 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
             <div className="flex flex-wrap items-center gap-1.5">
               {game.currentGenre && <Badge variant="secondary">{game.currentGenre.name}</Badge>}
               {game.themes.map((t) => (
-                <Badge key={t.themeId} variant="outline">
+                <Badge
+                  key={t.themeId}
+                  variant="outline"
+                  render={<Link href={`/themes/${t.theme.slug}`} />}
+                >
                   {t.theme.name}
                 </Badge>
               ))}
@@ -198,23 +210,33 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
             {game.creatorName && (
               <p className="text-sm text-muted-foreground">
                 by{" "}
-                {creatorUrl ? (
+                {creatorPage ? (
+                  <Link
+                    href={creatorPage}
+                    className="underline-offset-4 hover:text-foreground hover:underline"
+                  >
+                    {game.creatorName}
+                  </Link>
+                ) : (
+                  game.creatorName
+                )}
+                {creatorUrl && (
                   <a
                     href={creatorUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="underline-offset-4 hover:text-foreground hover:underline"
+                    className="ml-1 inline-flex align-middle hover:text-foreground"
+                    title="Creator on Roblox"
                   >
-                    {game.creatorName}
+                    <ExternalLink className="size-3" aria-hidden />
+                    <span className="sr-only">Creator on Roblox</span>
                   </a>
-                ) : (
-                  game.creatorName
                 )}
               </p>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {gameUrl && (
             <a
               href={gameUrl}
@@ -225,6 +247,7 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
               Open on Roblox <ExternalLink className="size-3.5" aria-hidden />
             </a>
           )}
+          <CompareButton kind="game" id={game.universeId.toString()} name={game.name} />
           <WatchlistButton kind="game" id={game.universeId.toString()} name={game.name} />
         </div>
       </div>
@@ -286,6 +309,7 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
               : "—"
           }
           badge="Est."
+          hint={passTier ? PASS_TIER_NOTE[passTier] : "Game passes not checked yet"}
         />
       </div>
 
@@ -313,6 +337,13 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
           </div>
         </div>
         {chart.note && <p className="text-sm text-muted-foreground">{chart.note}</p>}
+        <div className="flex justify-end">
+          <ExportLinks
+            dataset="snapshots"
+            params={{ game: universeIdParam, range }}
+            label="Export snapshot history"
+          />
+        </div>
         <div className="rounded-lg border p-4">
           <TrendChart
             data={chartData}
@@ -432,6 +463,47 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
               </tbody>
             </table>
           </div>
+        </section>
+      )}
+
+      {passCatalog && (
+        <section className="flex flex-col gap-2">
+          <h2 className="font-medium">Game passes</h2>
+          <p className="text-sm text-muted-foreground">
+            {passCatalog.forSaleCount === 0
+              ? "No game passes on sale. "
+              : `${passCatalog.forSaleCount} on sale; buying every one costs ${formatExact(passCatalog.totalRobux)} Robux. `}
+            Prices are public, but sales aren&apos;t, and developer products aren&apos;t listed at
+            all, so this only places the earnings estimate within its range (see{" "}
+            <Link href="/about" className="underline underline-offset-2">
+              About
+            </Link>
+            ). List last changed <LocalTime value={passCatalog.changedAt} />; checked weekly.
+          </p>
+          {passCatalog.passes.length > 0 && (
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="px-3 py-1.5 text-left font-medium">Pass</th>
+                    <th className="px-3 py-1.5 text-right font-medium">Price (Robux)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...passCatalog.passes]
+                    .sort((a, b) => b.price - a.price)
+                    .map((p) => (
+                      <tr key={p.id} className="border-t">
+                        <td className="px-3 py-1.5">{p.name}</td>
+                        <td className="px-3 py-1.5 text-right tabular-nums">
+                          {formatExact(p.price)}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
       )}
 

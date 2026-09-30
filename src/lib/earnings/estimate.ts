@@ -3,7 +3,8 @@
  *
  * Roblox publishes no per-game revenue, and gamepass/dev-product sale counts
  * have been private since July 2020. So we estimate from the public signals we
- * DO collect (concurrent players, visits, visit growth) times a configurable
+ * DO collect (concurrent players, visits, visit growth, and — Task #69 — which
+ * game passes are on sale and at what price) times a configurable
  * revenue-per-metric assumption, converted Robux->USD via the DevEx rate
  * (devex.ts). Every output is a LABELED RANGE and must be shown as "Est." — it
  * is never a real revenue figure.
@@ -27,7 +28,45 @@ export const EARNINGS_ASSUMPTIONS = {
   robuxPerCcuPerDay: { low: 8, mid: 20, high: 45 },
   /** Estimated Robux earned per new visit. */
   robuxPerVisit: { low: 0.05, mid: 0.15, high: 0.4 },
+  /**
+   * Game-pass catalog position (Task #69). A game's public on-sale passes
+   * place its CCU estimate inside the band above, never outside it: none on
+   * sale -> the lower half, a catalog costing >= `richTotalRobux` to buy
+   * outright -> the upper half, anything between -> the full band. A guess,
+   * not a measurement: pass SALES are private, and developer products (often
+   * most of a game's revenue) aren't listed publicly at all.
+   */
+  gamePasses: { richTotalRobux: 2000 },
 } as const;
+
+/** Where a game's pass catalog places its estimate in the band (Task #69). */
+export type PassTier = "none" | "some" | "rich";
+
+/** The part of a stored pass catalog the earnings model reads. */
+export interface PassCatalogSummary {
+  forSaleCount: number;
+  totalRobux: number;
+}
+
+export function passTier(catalog: PassCatalogSummary): PassTier {
+  if (catalog.forSaleCount === 0) return "none";
+  return catalog.totalRobux >= EARNINGS_ASSUMPTIONS.gamePasses.richTotalRobux ? "rich" : "some";
+}
+
+/** A short note on where a pass tier puts the estimate, for UI hints. */
+export const PASS_TIER_NOTE: Record<PassTier, string> = {
+  none: "No game passes on sale: lower half of the range",
+  some: "Some game passes on sale: full range",
+  rich: "Many or pricey game passes: upper half of the range",
+};
+
+/** The Robux/CCU/day band for a pass tier: a half of the full band, or all of it. */
+export function ccuBandForTier(tier: PassTier | null): { low: number; mid: number; high: number } {
+  const a = EARNINGS_ASSUMPTIONS.robuxPerCcuPerDay;
+  if (tier === "none") return { low: a.low, mid: (a.low + a.mid) / 2, high: a.mid };
+  if (tier === "rich") return { low: a.mid, mid: (a.mid + a.high) / 2, high: a.high };
+  return { low: a.low, mid: a.mid, high: a.high };
+}
 
 export interface EarningsEstimate {
   low: number;
@@ -36,25 +75,32 @@ export interface EarningsEstimate {
   currency: "USD";
   /** Which signal produced this estimate. */
   basis: "ccu" | "visit-growth";
+  /** The pass-catalog tier that positioned a CCU estimate; null when the game
+   * has no checked catalog yet, or for totals over many games. */
+  passTier?: PassTier | null;
   /** Always true — a flag for UI to render the "Est." badge. */
   isEstimate: true;
 }
 
 /**
  * Estimated USD/day from concurrent players. The most broadly available signal
- * (present on every snapshot).
+ * (present on every snapshot). Pass a single game's checked pass catalog to
+ * position the band (Task #69); totals over many games leave it out.
  */
 export function estimateDailyEarningsFromCcu(
   playing: number,
   date: Date = new Date(),
+  passes?: PassCatalogSummary | null,
 ): EarningsEstimate {
-  const a = EARNINGS_ASSUMPTIONS.robuxPerCcuPerDay;
+  const tier = passes ? passTier(passes) : null;
+  const a = ccuBandForTier(tier);
   return {
     low: robuxToUsd(playing * a.low, date),
     mid: robuxToUsd(playing * a.mid, date),
     high: robuxToUsd(playing * a.high, date),
     currency: "USD",
     basis: "ccu",
+    passTier: tier,
     isEstimate: true,
   };
 }
@@ -112,6 +158,7 @@ export interface DerivedMetrics {
 export function deriveSnapshotMetrics(
   snapshot: SnapshotLike,
   previous?: SnapshotLike,
+  passes?: PassCatalogSummary | null,
 ): DerivedMetrics {
   const totalVotes = snapshot.upVotes + snapshot.downVotes;
   const likeRatio = totalVotes > 0 ? snapshot.upVotes / totalVotes : null;
@@ -131,7 +178,11 @@ export function deriveSnapshotMetrics(
   return {
     likeRatio,
     totalVotes,
-    estimatedDailyEarnings: estimateDailyEarningsFromCcu(snapshot.playing, snapshot.collectedAt),
+    estimatedDailyEarnings: estimateDailyEarningsFromCcu(
+      snapshot.playing,
+      snapshot.collectedAt,
+      passes,
+    ),
     estimatedEarningsFromGrowth,
   };
 }

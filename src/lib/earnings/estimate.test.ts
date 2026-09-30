@@ -2,7 +2,9 @@ import { describe, it, expect } from "vitest";
 
 import {
   EARNINGS_ASSUMPTIONS,
+  ccuBandForTier,
   estimateDailyEarningsFromCcu,
+  passTier,
   estimateEarningsFromVisitGrowth,
   deriveSnapshotMetrics,
   type SnapshotLike,
@@ -155,5 +157,47 @@ describe("deriveSnapshotMetrics", () => {
       10_000 * EARNINGS_ASSUMPTIONS.robuxPerVisit.mid * 0.0038,
       10,
     );
+  });
+});
+
+describe("game-pass tier (Task #69)", () => {
+  const a = EARNINGS_ASSUMPTIONS.robuxPerCcuPerDay;
+  const rich = EARNINGS_ASSUMPTIONS.gamePasses.richTotalRobux;
+
+  it("classifies catalogs by on-sale count and total price", () => {
+    expect(passTier({ forSaleCount: 0, totalRobux: 0 })).toBe("none");
+    expect(passTier({ forSaleCount: 3, totalRobux: rich - 1 })).toBe("some");
+    expect(passTier({ forSaleCount: 6, totalRobux: rich })).toBe("rich");
+  });
+
+  it("keeps every tier's band inside the full band", () => {
+    for (const tier of ["none", "some", "rich", null] as const) {
+      const b = ccuBandForTier(tier);
+      expect(b.low).toBeGreaterThanOrEqual(a.low);
+      expect(b.high).toBeLessThanOrEqual(a.high);
+      expect(b.low).toBeLessThanOrEqual(b.mid);
+      expect(b.mid).toBeLessThanOrEqual(b.high);
+    }
+    expect(ccuBandForTier("none")).toEqual({ low: a.low, mid: (a.low + a.mid) / 2, high: a.mid });
+    expect(ccuBandForTier("rich")).toEqual({ low: a.mid, mid: (a.mid + a.high) / 2, high: a.high });
+  });
+
+  it("leaves the estimate unchanged without a catalog, and tags the tier with one", () => {
+    const plain = estimateDailyEarningsFromCcu(1000, AT);
+    expect(plain.passTier).toBeNull();
+    expect(estimateDailyEarningsFromCcu(1000, AT, null)).toEqual(plain);
+
+    const none = estimateDailyEarningsFromCcu(1000, AT, { forSaleCount: 0, totalRobux: 0 });
+    expect(none.passTier).toBe("none");
+    expect(none.high).toBeCloseTo(plain.mid, 10);
+
+    const withRich = estimateDailyEarningsFromCcu(1000, AT, { forSaleCount: 5, totalRobux: 5500 });
+    expect(withRich.low).toBeCloseTo(plain.mid, 10);
+    expect(withRich.high).toBeCloseTo(plain.high, 10);
+  });
+
+  it("threads the catalog through deriveSnapshotMetrics", () => {
+    const d = deriveSnapshotMetrics(snapshot(), undefined, { forSaleCount: 0, totalRobux: 0 });
+    expect(d.estimatedDailyEarnings.passTier).toBe("none");
   });
 });

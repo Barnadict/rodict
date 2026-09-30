@@ -22,6 +22,7 @@
     "db:write-budget": "tsx scripts/write-budget.ts",
     "collect": "tsx scripts/collect.ts",
     "collect:prod": "tsx scripts/collect-prod.ts",
+    "collect:gamepasses": "tsx scripts/collect-gamepasses.ts",
     "analytics": "analytics\\.venv\\Scripts\\python analytics/run.py",
     "test": "vitest run",
     "test:watch": "vitest",

@@ -1,4 +1,5 @@
 import { WatchlistView } from "./_components/watchlist-view";
+import { CopyFeedUrl } from "./_components/copy-feed-url";
 
 export const metadata = { title: "Watchlist — rodict" };
 
@@ -11,6 +12,7 @@ export default function WatchlistPage() {
           Games and genres you&apos;re tracking — saved to this device only, no account needed.
         </p>
       </div>
+      <CopyFeedUrl />
       <WatchlistView />
     </div>
   );

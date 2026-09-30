@@ -13,6 +13,8 @@ import type {
   RobloxExploreSortContentResponse,
   RobloxExploreSortsResponse,
   RobloxGameDetail,
+  RobloxGamePass,
+  RobloxGamePassesResponse,
   RobloxGameThumbnails,
   RobloxGameVotes,
   RobloxOmniSearchResponse,
@@ -268,4 +270,34 @@ export async function getExploreSortUniverseIds(
   }
 
   return [...ids];
+}
+
+/** Pages followed per game-pass list. 100 per page; a game with more than
+ * 500 passes is vanishingly rare, and the cap bounds a runaway token loop. */
+const GAME_PASS_MAX_PAGES = 5;
+
+/**
+ * Every game pass a universe lists, on sale or not (Task #69). Public and
+ * unauthenticated; the endpoint allows 50 req/s per IP (x-ratelimit-limit),
+ * far above the shared limiter's pace. Not cached: the weekly refresh reads
+ * each universe once.
+ */
+export async function getGamePasses(
+  universeId: number | bigint,
+  opts?: RobloxGetOptions,
+): Promise<RobloxGamePass[]> {
+  const passes: RobloxGamePass[] = [];
+  let pageToken: string | null = null;
+  for (let page = 0; page < GAME_PASS_MAX_PAGES; page++) {
+    let url = `${APIS}/game-passes/v1/universes/${universeId}/game-passes?passView=Full&pageSize=100`;
+    if (pageToken) url += `&pageToken=${encodeURIComponent(pageToken)}`;
+    const data: RobloxGamePassesResponse = await robloxGet<RobloxGamePassesResponse>(url, {
+      ttlMs: 0,
+      ...opts,
+    });
+    passes.push(...(data.gamePasses ?? []));
+    if (!data.nextPageToken) break;
+    pageToken = data.nextPageToken;
+  }
+  return passes;
 }

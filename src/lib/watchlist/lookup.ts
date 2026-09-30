@@ -51,11 +51,14 @@ export async function fetchWatchlistGames(universeIds: string[]): Promise<Watchl
 
   const games = await prisma.game.findMany({
     where: { universeId: { in: ids } },
-    include: { currentGenre: true },
+    include: {
+      currentGenre: true,
+      passCatalog: { select: { forSaleCount: true, totalRobux: true } },
+    },
   });
 
   return games.map((g) => {
-    const est = estimateDailyEarningsFromCcu(g.currentPlaying);
+    const est = estimateDailyEarningsFromCcu(g.currentPlaying, undefined, g.passCatalog);
     return jsonSafe({
       universeId: g.universeId,
       name: g.name,

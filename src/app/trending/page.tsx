@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/table";
 import { PresetLinks } from "@/components/filters/preset-links";
 import { GrowthBadge } from "@/components/data-table/growth-badge";
+import { ExportLinks } from "@/components/data-table/export-links";
 import {
   RANGE_OPTIONS,
   RANGE_CLEAR_VALUE,
@@ -84,7 +85,10 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
       ) : (
         <div className="grid gap-6 lg:grid-cols-2">
           <section className="flex min-w-0 flex-col gap-3">
-            <h2 className="font-medium">Rising games</h2>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="font-medium">Rising games</h2>
+              <ExportLinks dataset="trending" params={{ kind: "games", range }} />
+            </div>
             <div className="overflow-x-auto rounded-lg border">
               <Table>
                 <TableHeader>
@@ -126,7 +130,10 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
           </section>
 
           <section className="flex min-w-0 flex-col gap-3">
-            <h2 className="font-medium">Rising genres</h2>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="font-medium">Rising genres</h2>
+              <ExportLinks dataset="trending" params={{ kind: "genres", range }} />
+            </div>
             <div className="overflow-x-auto rounded-lg border">
               <Table>
                 <TableHeader>

@@ -37,7 +37,7 @@ export const RISING = {
 
 const AVG_DAYS = RISING.avgWindowHours / 24;
 /** Prisma's SQLite DateTime text format, so computed bounds compare as text. */
-const TS_FORMAT = "%Y-%m-%dT%H:%M:%f+00:00";
+export const TS_FORMAT = "%Y-%m-%dT%H:%M:%f+00:00";
 
 export interface RisingGameRow {
   id: string;
@@ -73,6 +73,30 @@ function toGrowth<T extends { basePlaying: number; currentPlaying: number }>(r: 
 
 export async function getRisingGames(params: RisingParams): Promise<RisingGameRow[]> {
   const { cutoff, limit = 25 } = params;
+  return queryGameWindowGrowth(cutoff, { onlyGrowing: true, limit });
+}
+
+/**
+ * Window growth for EVERY rankable game, rising or falling (Task #70's growth
+ * sort on /games): the same daily-average rule and baseline floor as
+ * getRisingGames, so the two never disagree. Unordered; callers rank it.
+ */
+export function getGameWindowGrowth(cutoff: Date | undefined): Promise<RisingGameRow[]> {
+  return queryGameWindowGrowth(cutoff, { onlyGrowing: false });
+}
+
+async function queryGameWindowGrowth(
+  cutoff: Date | undefined,
+  opts: { onlyGrowing: boolean; limit?: number },
+): Promise<RisingGameRow[]> {
+  const grew = opts.onlyGrowing
+    ? Prisma.sql`AND a."currentPlaying" > a."basePlaying"`
+    : Prisma.empty;
+  const tail =
+    opts.limit !== undefined
+      ? Prisma.sql`ORDER BY (a."currentPlaying" - a."basePlaying") / a."basePlaying" DESC
+    LIMIT ${opts.limit}`
+      : Prisma.empty;
   const inWindow = cutoff ? Prisma.sql`AND s."collectedAt" >= ${cutoff}` : Prisma.empty;
   const seenInWindow = cutoff ? Prisma.sql`AND g."lastSnapshotAt" >= ${cutoff}` : Prisma.empty;
 
@@ -123,9 +147,8 @@ export async function getRisingGames(params: RisingParams): Promise<RisingGameRo
       a."currentPlaying"
     FROM avgs a
     LEFT JOIN "Genre" gen ON gen.id = a."currentGenreId"
-    WHERE a."basePlaying" >= ${RISING.minBaseline} AND a."currentPlaying" > a."basePlaying"
-    ORDER BY (a."currentPlaying" - a."basePlaying") / a."basePlaying" DESC
-    LIMIT ${limit}
+    WHERE a."basePlaying" >= ${RISING.minBaseline} ${grew}
+    ${tail}
   `;
 
   return rows.map(toGrowth);

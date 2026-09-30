@@ -1,5 +1,16 @@
 import Link from "next/link";
-import { LayoutDashboard, Gamepad2, Shapes, TrendingUp, Scale, Bookmark, Info } from "lucide-react";
+import {
+  LayoutDashboard,
+  Gamepad2,
+  Shapes,
+  Palette,
+  TrendingUp,
+  Sparkles,
+  Scale,
+  GitCompareArrows,
+  Bookmark,
+  Info,
+} from "lucide-react";
 
 import {
   Sidebar,
@@ -17,12 +28,15 @@ const browseItems = [
   { title: "Dashboard", href: "/", icon: LayoutDashboard, color: "text-blue-500" },
   { title: "Games", href: "/games", icon: Gamepad2, color: "text-purple-500" },
   { title: "Genres", href: "/genres", icon: Shapes, color: "text-amber-500" },
+  { title: "Themes", href: "/themes", icon: Palette, color: "text-fuchsia-500" },
   { title: "Trending", href: "/trending", icon: TrendingUp, color: "text-emerald-500" },
+  { title: "New releases", href: "/new", icon: Sparkles, color: "text-sky-500" },
   { title: "Saturation", href: "/saturation", icon: Scale, color: "text-rose-500" },
 ];
 
 const otherItems = [
   { title: "Watchlist", href: "/watchlist", icon: Bookmark },
+  { title: "Compare", href: "/compare", icon: GitCompareArrows },
   { title: "About the data", href: "/about", icon: Info },
 ];
 

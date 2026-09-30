@@ -39,7 +39,9 @@ import { SeasonalityHeatmap } from "@/components/charts/seasonality-heatmap";
 import { GrowthBadge } from "@/components/data-table/growth-badge";
 import { CohortTable } from "@/components/data-table/cohort-table";
 import { StatTile } from "@/components/data-table/stat-tile";
+import { ExportLinks } from "@/components/data-table/export-links";
 import { WatchlistButton } from "@/components/watchlist/watchlist-button";
+import { CompareButton } from "@/components/compare/compare-button";
 import { PresetLinks } from "@/components/filters/preset-links";
 import {
   RANGE_OPTIONS,
@@ -192,7 +194,10 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
           <h1 className="text-2xl font-semibold tracking-tight">{genre.name}</h1>
           {genre.description && <p className="text-muted-foreground">{genre.description}</p>}
         </div>
-        <WatchlistButton kind="genre" id={genre.slug} name={genre.name} />
+        <div className="flex items-center gap-2">
+          <CompareButton kind="genre" id={genre.slug} name={genre.name} />
+          <WatchlistButton kind="genre" id={genre.slug} name={genre.name} />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -495,7 +500,10 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
       )}
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-medium">Top games</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-medium">Top games</h2>
+          <ExportLinks dataset="games" params={{ genre: slug }} label="Export all games in genre" />
+        </div>
         <div className="overflow-x-auto rounded-lg border">
           <Table>
             <TableHeader>

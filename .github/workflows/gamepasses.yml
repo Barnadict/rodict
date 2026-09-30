@@ -1,0 +1,53 @@
+name: Game passes
+
+# Refreshes game-pass price lists (Task #69). Each daily run checks one seventh
+# of the active games (universe id mod 7 = the UTC day's shard), so every game
+# is re-checked weekly, and only lists that changed are written. Skips itself
+# when the write-budget guard leaves "normal" (Task #47).
+
+on:
+  schedule:
+    - cron: "40 4 * * *" # 04:40 UTC daily, clear of the 3-hourly collect runs
+  workflow_dispatch:
+    inputs:
+      shard:
+        description: "Shard to check (0-6); empty = today's"
+        type: string
+        default: ""
+
+jobs:
+  gamepasses:
+    runs-on: ubuntu-latest
+    # ~760 games at the shared limiter's ≤5 req/s is ~3 min; room for 429 retries.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Refresh game passes
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+          SHARD: ${{ inputs.shard }}
+        run: |
+          if [ -n "${SHARD}" ]; then
+            npm run collect:gamepasses -- --shard="${SHARD}"
+          else
+            npm run collect:gamepasses
+          fi
+
+  alert:
+    needs: gamepasses
+    if: failure() || cancelled()
+    uses: ./.github/workflows/alert-on-failure.yml
+    with:
+      pipeline: gamepasses
+      run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    permissions:
+      issues: write

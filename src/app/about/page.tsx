@@ -4,6 +4,8 @@ import { GENRE_CARRY_MAX_AGE_HOURS } from "@/lib/db/genre-snapshots";
 import { RISING } from "@/lib/db/trends";
 import { SERIES_GAP_DAYS } from "@/lib/stats";
 import { UPDATE_WINDOWS_HOURS } from "@/lib/update-impact";
+import { HIT_PEAK_PLAYERS } from "@/lib/creators";
+import { BIG_MOVE_MIN_PCT, BIG_MOVE_MIN_PLAYERS, FEED_WINDOW_DAYS } from "@/lib/feed";
 import Link from "next/link";
 
 import { EARNINGS_ASSUMPTIONS } from "@/lib/earnings/estimate";
@@ -250,6 +252,40 @@ export default function AboutPage() {
           precision that does not exist.
         </p>
 
+        <h3 className="pt-2 font-medium">Game passes position the range</h3>
+        <p className="max-w-2xl text-muted-foreground">
+          Game-pass <em>prices</em> are public, even though sales aren&apos;t. Once a week rodict
+          reads each active game&apos;s on-sale passes and uses them to narrow a single game&apos;s
+          players-based estimate to part of the range above, never beyond it:
+        </p>
+        <ul className="max-w-2xl list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+          <li>
+            <strong>No passes on sale:</strong> the lower half (
+            {EARNINGS_ASSUMPTIONS.robuxPerCcuPerDay.low}–
+            {EARNINGS_ASSUMPTIONS.robuxPerCcuPerDay.mid} Robux per player per day).
+          </li>
+          <li>
+            <strong>
+              Buying every pass costs{" "}
+              {EARNINGS_ASSUMPTIONS.gamePasses.richTotalRobux.toLocaleString("en-US")} Robux or
+              more:
+            </strong>{" "}
+            the upper half ({EARNINGS_ASSUMPTIONS.robuxPerCcuPerDay.mid}–
+            {EARNINGS_ASSUMPTIONS.robuxPerCcuPerDay.high}).
+          </li>
+          <li>
+            <strong>Anything in between, or not checked yet:</strong> the full range.
+          </li>
+        </ul>
+        <p className="max-w-2xl text-sm text-muted-foreground">
+          This is an assumption, not a measurement. A price list says what a game offers, not how
+          much of it sells. Developer products (one-off purchases such as in-game currency) are
+          often most of a game&apos;s revenue and aren&apos;t listed publicly at all, so a game with
+          no passes can still earn well. Totals for genres, themes, creators and the dashboard use
+          the full range, since they add up many games. The game page lists the passes, and each
+          list is only re-saved when it changes.
+        </p>
+
         <h3 className="pt-2 font-medium">The DevEx rate</h3>
         <p className="max-w-2xl text-muted-foreground">
           Robux is converted to USD at the <strong>Developer Exchange (DevEx)</strong> rate — what
@@ -482,6 +518,25 @@ export default function AboutPage() {
               A cross-cutting tag ({`${THEMES.length} of them`}, e.g. Anime, Fantasy, Sci-Fi)
               tracked separately from genre — &quot;Anime Fighting Simulator&quot; is genre{" "}
               <em>Simulator</em>, theme <em>Anime</em>.
+            </dd>
+          </div>
+          <div>
+            <dt className="font-medium">Hit (creator pages)</dt>
+            <dd className="text-muted-foreground">
+              A game whose all-time peak, as we observed it, reached{" "}
+              <strong>{HIT_PEAK_PLAYERS.toLocaleString("en-US")} concurrent players</strong>. Our
+              own threshold, not a Roblox label. The peak only covers the time since we started
+              tracking the game, so an older game&apos;s launch peak can be missed.
+            </dd>
+          </div>
+          <div>
+            <dt className="font-medium">Watchlist feed</dt>
+            <dd className="text-muted-foreground">
+              The Atom feed on the watchlist page lists flagged spikes and drops from the last{" "}
+              {FEED_WINDOW_DAYS} days, plus <strong>big weekly moves</strong>: average players in
+              the last 24h vs. the same 24h a week earlier, when the change is at least{" "}
+              {`${Math.round(BIG_MOVE_MIN_PCT * 100)}% and ${BIG_MOVE_MIN_PLAYERS} players`}. The
+              watched ids live in the feed URL; nothing is stored about you.
             </dd>
           </div>
           <div>

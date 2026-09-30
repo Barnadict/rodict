@@ -114,3 +114,19 @@ export interface RobloxExploreSortContentResponse {
   games?: RobloxExploreGame[];
   nextPageToken?: string;
 }
+
+/** One pass from GET apis.roblox.com/game-passes/v1/universes/{id}/game-passes
+ * (Task #69). The older games.roblox.com/v1/games/{id}/game-passes returns 404
+ * as of 2026-09-30. `price` is absent/null when the pass isn't on sale. */
+export interface RobloxGamePass {
+  id: number;
+  name: string;
+  displayName?: string;
+  isForSale: boolean;
+  price?: number | null;
+}
+
+export interface RobloxGamePassesResponse {
+  gamePasses: RobloxGamePass[];
+  nextPageToken: string | null;
+}

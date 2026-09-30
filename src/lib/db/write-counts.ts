@@ -99,12 +99,15 @@ export interface BudgetReport {
 /**
  * Sum this month's run history into a write-budget report and project it to
  * month end. `runsPerDay` is the schedule to project with (e.g. collect 8/day).
- * Pure so it can be tested without a database.
+ * `fallbackPerRun` gives a worst-case rows-per-run for a scheduled job with no
+ * measured run yet (e.g. a newly added job), so it doesn't blank the whole
+ * projection. Pure so it can be tested without a database.
  */
 export function summarizeBudget(
   runs: BudgetRun[],
   now: Date,
   runsPerDay: Record<string, number>,
+  fallbackPerRun: Record<string, number> = {},
 ): BudgetReport {
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
@@ -145,7 +148,7 @@ export function summarizeBudget(
   // Per-day cost on the schedule; null if any scheduled job has no measurement yet.
   let perDay: number | null = 0;
   for (const [job, perDayRuns] of Object.entries(runsPerDay)) {
-    const avg = jobs[job]?.avgWritesPerRun ?? null;
+    const avg = jobs[job]?.avgWritesPerRun ?? fallbackPerRun[job] ?? null;
     if (perDayRuns > 0 && avg === null) perDay = null;
     else if (perDay !== null && avg !== null) perDay += avg * perDayRuns;
   }

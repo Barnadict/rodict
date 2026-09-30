@@ -84,6 +84,9 @@ export interface DiscoverResult {
   discoveredCount: number;
   /** How many of the discovered ids came from the explore-api charts. */
   chartCount: number;
+  /** True when keyword/chart discovery ran (not a known-only run), even if it
+   * found nothing new. /new shows when this last happened (Task #66). */
+  discoveryRan: boolean;
 }
 
 export async function discoverUniverseIds(opts: DiscoverOptions = {}): Promise<DiscoverResult> {
@@ -174,5 +177,6 @@ export async function discoverUniverseIds(opts: DiscoverOptions = {}): Promise<D
     chartPromotedCount,
     discoveredCount,
     chartCount,
+    discoveryRan: !knownOnly,
   };
 }

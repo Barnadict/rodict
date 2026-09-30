@@ -24,7 +24,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          for wf in collect.yml analytics.yml backup.yml keepalive.yml; do
+          for wf in collect.yml analytics.yml backup.yml gamepasses.yml keepalive.yml; do
             gh api --method PUT "repos/${GH_REPO}/actions/workflows/${wf}/enable"
             echo "Re-enabled ${wf}"
           done

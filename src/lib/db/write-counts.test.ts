@@ -81,6 +81,24 @@ describe("summarizeBudget", () => {
     expect(r.projectedMonthWrites).toBeNull();
   });
 
+  it("projects an unmeasured scheduled job at its fallback per-run cost", () => {
+    const withFallback = summarizeBudget(
+      [{ job: "collect", startedAt: at(2), summary: { writesTotal: 10 } }],
+      now,
+      { collect: 8, gamepasses: 1 },
+      { gamepasses: 1501 },
+    );
+    const collectOnly = summarizeBudget(
+      [{ job: "collect", startedAt: at(2), summary: { writesTotal: 10 } }],
+      now,
+      { collect: 8 },
+    );
+    expect(withFallback.projectedMonthWrites).not.toBeNull();
+    expect(withFallback.fullMonthWritesAtSchedule! - collectOnly.fullMonthWritesAtSchedule!).toBe(
+      1501 * withFallback.daysInMonth,
+    );
+  });
+
   it("ignores runs from other months", () => {
     const r = summarizeBudget(
       [

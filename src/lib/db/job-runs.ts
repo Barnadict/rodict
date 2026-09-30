@@ -8,7 +8,7 @@ import { prisma } from "@/lib/prisma";
  * last run failed", and so failures leave a trace beyond the CI logs.
  */
 
-export type JobName = "collect" | "analytics";
+export type JobName = "collect" | "analytics" | "gamepasses";
 export type JobStatus = "success" | "partial" | "failure";
 
 export interface JobRunRecord {
@@ -113,4 +113,37 @@ export function getRecentJobRuns(job: JobName, limit = 20): Promise<JobRunView[]
       error: true,
     },
   });
+}
+
+export interface DiscoveryRun {
+  startedAt: Date;
+  /** New games that run added (from its summary). */
+  newGames: number | null;
+}
+
+/**
+ * The latest collect run that did discovery (Task #66). New games only enter
+ * through discovery, and the scheduled collector runs known-only, so this is
+ * what "how fresh is the new-releases list" depends on. Runs record
+ * `discoveryRan` since Task #66; older rows count if they found anything.
+ */
+export async function getLastDiscoveryRun(): Promise<DiscoveryRun | null> {
+  const rows = await prisma.$queryRaw<{ startedAt: Date | string; newGames: number | null }[]>`
+    SELECT "startedAt", json_extract("summary", '$.newGames') AS "newGames"
+    FROM "JobRun"
+    WHERE "job" = 'collect' AND "status" IN ('success', 'partial') AND "summary" IS NOT NULL
+      AND (
+        json_extract("summary", '$.discoveryRan') = 1
+        OR (json_extract("summary", '$.discoveryRan') IS NULL
+            AND json_extract("summary", '$.discovered') > 0)
+      )
+    ORDER BY "startedAt" DESC
+    LIMIT 1
+  `;
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    startedAt: new Date(row.startedAt),
+    newGames: row.newGames === null ? null : Number(row.newGames),
+  };
 }
