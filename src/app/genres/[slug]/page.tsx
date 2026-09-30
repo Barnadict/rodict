@@ -39,6 +39,7 @@ import { formatCompact, formatUsdRange } from "@/lib/format";
 import { LOW_COVERAGE, buildProjection, formatGrowthPct } from "@/lib/stats";
 import { GENRES } from "@/lib/taxonomy/genres";
 
+import { LabelWithHelp } from "@/components/metric-help";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -255,6 +256,7 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
         <StatTile label="Total visits" value={formatCompact(stat?.totalVisits ?? 0)} />
         <StatTile
           label="Est. earnings/day"
+          help="earnings"
           value={earnings ? formatUsdRange(earnings.low, earnings.high) : "—"}
           badge="Est."
         />
@@ -264,6 +266,7 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatTile
             label="Est. session length"
+            help="session"
             value={formatSessionMinutes(engagement?.sessionMinutes ?? null)}
             badge="Est."
             hint={
@@ -274,10 +277,12 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
           />
           <StatTile
             label="Favorites per 1K visits"
+            help="favoritesPer1k"
             value={engagement?.favoritesPer1k != null ? engagement.favoritesPer1k.toFixed(1) : "—"}
           />
           <StatTile
             label="Like ratio"
+            help="likeRatio"
             value={
               engagement?.likeRatio != null ? `${Math.round(engagement.likeRatio * 100)}%` : "—"
             }
@@ -406,6 +411,7 @@ async function InsightsSection({ genreId }: { genreId: string }) {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatTile
               label="Opportunity score"
+              help="opportunity"
               value={opportunity ? `${opportunity.score.toFixed(1)}` : "—"}
               badge={opportunity ? `#${opportunity.rank}` : undefined}
             />
@@ -603,6 +609,7 @@ async function ConcentrationSection({ head }: { head: GenreHead }) {
             ))}
             <StatTile
               label="HHI"
+              help="concentration"
               value={formatCompact(hhiPoints(conc.latest.hhi))}
               hint={`Like ${effectiveGames(conc.latest.hhi)?.toFixed(1) ?? "—"} equal-sized games`}
             />
@@ -649,8 +656,11 @@ async function LifecycleSection({ head }: { head: GenreHead }) {
             {launchBand.length > 0 && launchBenchmark && (
               <>
                 {" "}
-                The shaded band is the <span className="text-foreground">launch benchmark</span>:
-                the middle half of daily average players at each day since launch, over the first{" "}
+                The shaded band is the{" "}
+                <LabelWithHelp term="launchBenchmark">
+                  <span className="text-foreground">launch benchmark</span>
+                </LabelWithHelp>
+                : the middle half of daily average players at each day since launch, over the first{" "}
                 {launchBenchmark.maxDay} days, from {formatCompact(launchBenchmark.nGames)} games we
                 started tracking within {launchBenchmark.nearLaunchDays} days of launch. Games found
                 later are left out, since they were found because they were doing well. A day needs{" "}

@@ -50,6 +50,7 @@ import {
   type GameMetric,
 } from "@/lib/game-metrics";
 
+import { LabelWithHelp } from "@/components/metric-help";
 import { Badge } from "@/components/ui/badge";
 import { PresetLinks } from "@/components/filters/preset-links";
 import {
@@ -470,6 +471,7 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
         <StatTile label="Favorites" value={formatCompact(game.currentFavorites)} />
         <StatTile
           label="Like ratio"
+          help="likeRatio"
           value={
             derived?.likeRatio !== null && derived?.likeRatio !== undefined
               ? `${Math.round(derived.likeRatio * 100)}%`
@@ -483,6 +485,7 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
         />
         <StatTile
           label="Est. session length"
+          help="session"
           value={formatSessionMinutes(sessionMinutes)}
           badge="Est."
           hint={
@@ -493,11 +496,13 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
         />
         <StatTile
           label="Favorites per 1K visits"
+          help="favoritesPer1k"
           value={favoritesPer1k !== null ? favoritesPer1k.toFixed(1) : "—"}
           hint="All-time favorites ÷ all-time visits"
         />
         <StatTile
           label="Est. earnings/day"
+          help="earnings"
           value={
             derived
               ? formatUsdRange(
@@ -643,7 +648,9 @@ async function GameSeriesSections({
       {launch && game.currentGenre && (
         <div className="flex flex-col gap-1 rounded-lg border p-3 text-sm">
           <span>
-            <span className="font-medium">Day {launch.day}:</span>{" "}
+            <LabelWithHelp term="launchBenchmark">
+              <span className="font-medium">Day {launch.day}:</span>
+            </LabelWithHelp>{" "}
             {describeLaunchPosition(launch, game.currentGenre.name)}{" "}
             <span className="text-muted-foreground tabular-nums">
               ({formatCompact(Math.round(launch.value))} avg players that day)

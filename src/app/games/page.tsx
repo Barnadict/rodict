@@ -24,6 +24,7 @@ import {
   type StatusFilter,
 } from "@/lib/games-list";
 
+import { LabelWithHelp } from "@/components/metric-help";
 import { Badge } from "@/components/ui/badge";
 import { GenreBadge } from "@/components/genre-badge";
 import { GameIcon } from "@/components/game-icon";
@@ -364,17 +365,21 @@ export default async function GamesPage(props: PageProps<"/games">) {
                     <SortableHeader
                       field="likeRatio"
                       label="Likes"
+                      help="likeRatio"
                       currentSort={sort}
                       currentOrder={order}
                       baseParams={headerParams}
                     />
                   </TableHead>
-                  <TableHead className="text-right">Est. earnings/day</TableHead>
+                  <TableHead className="text-right">
+                    <LabelWithHelp term="earnings">Est. earnings/day</LabelWithHelp>
+                  </TableHead>
                   {sessionByGame && (
                     <TableHead className="text-right">
                       <SortableHeader
                         field="session"
                         label="Est. session"
+                        help="session"
                         currentSort={sort}
                         currentOrder={order}
                         baseParams={headerParams}

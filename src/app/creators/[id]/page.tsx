@@ -104,6 +104,7 @@ export default async function CreatorPage(props: PageProps<"/creators/[id]">) {
         />
         <StatTile
           label="Est. earnings/day"
+          help="earnings"
           value={formatUsdRange(earnings.low, earnings.high)}
           badge="Est."
         />

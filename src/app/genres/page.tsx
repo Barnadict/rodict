@@ -8,6 +8,7 @@ import { getEngagement, getPassPricing } from "@/lib/cached-queries";
 import type { PassPricing } from "@/lib/pass-pricing";
 import { formatCompact, formatUsdRange } from "@/lib/format";
 
+import { LabelWithHelp } from "@/components/metric-help";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -179,7 +180,9 @@ export default async function GenresPage(props: PageProps<"/genres">) {
                       baseParams={{ range: baseParams.range }}
                     />
                   </TableHead>
-                  <TableHead className="text-right">Est. earnings/day</TableHead>
+                  <TableHead className="text-right">
+                    <LabelWithHelp term="earnings">Est. earnings/day</LabelWithHelp>
+                  </TableHead>
                   <TableHead className="text-right" title="Median players per server, now">
                     Typical server
                   </TableHead>

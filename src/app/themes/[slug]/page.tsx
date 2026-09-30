@@ -88,6 +88,7 @@ export default async function ThemeDetailPage(props: PageProps<"/themes/[slug]">
         />
         <StatTile
           label="Est. earnings/day"
+          help="earnings"
           value={earnings ? formatUsdRange(earnings.low, earnings.high) : "—"}
           badge="Est."
         />

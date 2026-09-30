@@ -7,6 +7,7 @@ import { estimateDailyEarningsFromCcu } from "@/lib/earnings/estimate";
 import { formatCompact, formatUsdRange } from "@/lib/format";
 import { MATRIX_MIN_N, buildGenreThemeMatrix, rollupThemes } from "@/lib/theme-matrix";
 
+import { LabelWithHelp } from "@/components/metric-help";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -107,7 +108,9 @@ export default async function ThemesPage() {
               <TableHead className="text-right">Players now</TableHead>
               <TableHead className="text-right">Median players/game</TableHead>
               <TableHead className="text-right">Visits</TableHead>
-              <TableHead className="text-right">Est. earnings/day</TableHead>
+              <TableHead className="text-right">
+                <LabelWithHelp term="earnings">Est. earnings/day</LabelWithHelp>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

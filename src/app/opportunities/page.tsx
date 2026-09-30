@@ -38,6 +38,7 @@ import {
   type ScoreWeights,
 } from "@/lib/niche-finder";
 
+import { LabelWithHelp, MetricHelp } from "@/components/metric-help";
 import { Badge } from "@/components/ui/badge";
 import { PresetLinks } from "@/components/filters/preset-links";
 import { GrowthBadge } from "@/components/data-table/growth-badge";
@@ -337,7 +338,7 @@ function NicheItem({
     { label: "Players / game", value: formatCompact(Math.round(r.playersPerGame)) },
     { label: "7-day growth", value: <GrowthBadge growth={r.growth7d} /> },
     {
-      label: "Concentration",
+      label: <LabelWithHelp term="concentration">Concentration</LabelWithHelp>,
       value:
         r.hhi === null
           ? "—"
@@ -347,6 +348,7 @@ function NicheItem({
       label: (
         <>
           Session <Badge variant="secondary">Est.</Badge>
+          <MetricHelp term="session" />
         </>
       ),
       value: formatSessionMinutes(r.sessionMinutes),
@@ -365,7 +367,9 @@ function NicheItem({
             {r.name}
           </Link>
           <span className="flex items-center gap-1.5 text-sm tabular-nums">
-            <span className="text-muted-foreground">Score</span>
+            <LabelWithHelp term="opportunity">
+              <span className="text-muted-foreground">Score</span>
+            </LabelWithHelp>
             <span className="font-medium">{r.score === null ? "—" : r.score.toFixed(1)}</span>
             <Badge variant="outline">Derived</Badge>
           </span>

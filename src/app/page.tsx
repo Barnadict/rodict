@@ -193,6 +193,7 @@ export default async function Home() {
               <StatTile label="Genres active" value={formatCompact(classifiedGenreCount)} />
               <StatTile
                 label="Est. earnings/day"
+                help="earnings"
                 value={formatUsdRange(totalEarnings.low, totalEarnings.high)}
                 badge="Est."
               />

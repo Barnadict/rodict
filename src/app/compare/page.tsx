@@ -37,6 +37,8 @@ import { GrowthBadge } from "@/components/data-table/growth-badge";
 import { CompareChart } from "@/components/charts/compare-chart";
 import { GenreBadge } from "@/components/genre-badge";
 import { PageHeader } from "@/components/page-header";
+import { LabelWithHelp } from "@/components/metric-help";
+import type { GlossaryKey } from "@/lib/glossary";
 import { CompareSync } from "./_components/compare-sync";
 import { CompareSuggestions } from "./_components/compare-suggestions";
 
@@ -318,6 +320,12 @@ export default async function ComparePage(props: PageProps<"/compare">) {
   );
 }
 
+/** Derived stats in the cards get a "?" (Task #112). */
+const LABEL_HELP: Partial<Record<string, GlossaryKey>> = {
+  "Like ratio": "likeRatio",
+  "Est. earnings/day": "earnings",
+};
+
 function EntityCard({
   color,
   title,
@@ -350,7 +358,13 @@ function EntityCard({
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
         {stats.map(([label, value]) => (
           <div key={label} className="contents">
-            <dt className="whitespace-nowrap text-muted-foreground">{label}</dt>
+            <dt className="whitespace-nowrap text-muted-foreground">
+              {LABEL_HELP[label] ? (
+                <LabelWithHelp term={LABEL_HELP[label]}>{label}</LabelWithHelp>
+              ) : (
+                label
+              )}
+            </dt>
             <dd className="text-right whitespace-nowrap tabular-nums">{value}</dd>
           </div>
         ))}

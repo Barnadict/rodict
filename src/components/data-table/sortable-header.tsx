@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 
+import { MetricHelp } from "@/components/metric-help";
+import type { GlossaryKey } from "@/lib/glossary";
+
 interface SortableHeaderProps<F extends string> {
   field: F;
   label: string;
@@ -8,6 +11,8 @@ interface SortableHeaderProps<F extends string> {
   currentOrder: "asc" | "desc";
   /** The rest of the current query string, so sorting preserves filters. */
   baseParams: Record<string, string | undefined>;
+  /** Glossary entry for a derived stat: a "?" after the label (Task #112). */
+  help?: GlossaryKey;
 }
 
 export function SortableHeader<F extends string>({
@@ -16,6 +21,7 @@ export function SortableHeader<F extends string>({
   currentSort,
   currentOrder,
   baseParams,
+  help,
 }: SortableHeaderProps<F>) {
   const isActive = field === currentSort;
   const nextOrder = isActive && currentOrder === "desc" ? "asc" : "desc";
@@ -29,7 +35,7 @@ export function SortableHeader<F extends string>({
 
   const Icon = !isActive ? ArrowUpDown : currentOrder === "desc" ? ArrowDown : ArrowUp;
 
-  return (
+  const link = (
     <Link
       href={`?${params.toString()}`}
       className="inline-flex items-center gap-1 hover:text-foreground"
@@ -46,5 +52,14 @@ export function SortableHeader<F extends string>({
         </span>
       )}
     </Link>
+  );
+  // The "?" sits outside the link: a button can't go inside one.
+  return help ? (
+    <span className="inline-flex items-center gap-1">
+      {link}
+      <MetricHelp term={help} />
+    </span>
+  ) : (
+    link
   );
 }

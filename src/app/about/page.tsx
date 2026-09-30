@@ -10,6 +10,7 @@ import { LIKE_RATIO_MIN_VOTES } from "@/lib/games-list";
 import { NEAR_LAUNCH_DAYS } from "@/lib/launch-benchmark";
 import { RANK_CHANGE } from "@/lib/game-timeline";
 import { THEME_MIN_GAMES } from "@/lib/niche-finder";
+import { GLOSSARY } from "@/lib/glossary";
 import { BIG_MOVE_MIN_PCT, BIG_MOVE_MIN_PLAYERS, FEED_WINDOW_DAYS } from "@/lib/feed";
 import Link from "next/link";
 
@@ -202,7 +203,8 @@ export default function AboutPage() {
         </p>
       </Section>
 
-      <Section id="earnings" title="How the earnings estimate works">
+      <Section id={GLOSSARY.earnings.anchor} title="How the earnings estimate works">
+        <p className="max-w-2xl font-medium">{GLOSSARY.earnings.definition}</p>
         <p className="max-w-2xl text-muted-foreground">
           Roblox has published no per-game revenue API, and gamepass/developer-product sale counts
           have been private since July 2020. There is no way to know what a game actually earns. So
@@ -383,11 +385,10 @@ export default function AboutPage() {
                   dashed after the real data, always with its band.
                 </TableCell>
               </TableRow>
-              <TableRow>
+              <TableRow id={GLOSSARY.opportunity.anchor} className="scroll-mt-6">
                 <TableCell className="font-medium">Opportunity score (0–100)</TableCell>
                 <TableCell className="text-muted-foreground">
-                  A weighted composite of demand intensity, total demand, momentum, and crowding,
-                  normalized across genres. It is a <em>descriptive signal</em>, not advice, and the
+                  <span className="text-foreground">{GLOSSARY.opportunity.definition}</span> The
                   weights are a judgment call.
                 </TableCell>
               </TableRow>
@@ -446,10 +447,11 @@ export default function AboutPage() {
                   at all.
                 </TableCell>
               </TableRow>
-              <TableRow>
+              <TableRow id={GLOSSARY.launchBenchmark.anchor} className="scroll-mt-6">
                 <TableCell className="font-medium">Launch benchmarks</TableCell>
                 <TableCell className="text-muted-foreground">
-                  For each day since launch (up to day 90), the spread of a genre&apos;s games&apos;
+                  <span className="text-foreground">{GLOSSARY.launchBenchmark.definition}</span> For
+                  each day since launch (up to day 90), the spread of a genre&apos;s games&apos;
                   daily average players, stored as every 5th percentile. A game page places the game
                   on its latest complete day (&ldquo;Day 14: above 82% of Simulator
                   launches&rdquo;), and the genre lifecycle chart shades the middle half. Only games
@@ -459,9 +461,10 @@ export default function AboutPage() {
                   Recomputed after each collection.
                 </TableCell>
               </TableRow>
-              <TableRow>
+              <TableRow id={GLOSSARY.session.anchor} className="scroll-mt-6">
                 <TableCell className="font-medium">Est. session length</TableCell>
                 <TableCell className="text-muted-foreground">
+                  <span className="text-foreground">{GLOSSARY.session.definition}</span>{" "}
                   Little&apos;s law: average players = arrivals per hour × average time each stays,
                   so time per visit ≈ player-hours ÷ visits over the same span. For each pair of
                   readings in the last {SESSION_ESTIMATE.windowHours}h we take the average players ×
@@ -477,9 +480,13 @@ export default function AboutPage() {
                   Labeled <Badge variant="secondary">Est.</Badge> everywhere.
                 </TableCell>
               </TableRow>
-              <TableRow>
+              <TableRow id={GLOSSARY.favoritesPer1k.anchor} className="scroll-mt-6">
                 <TableCell className="font-medium">Favorites per 1K visits · like ratio</TableCell>
                 <TableCell className="text-muted-foreground">
+                  <span className="text-foreground">
+                    {GLOSSARY.favoritesPer1k.term}: {GLOSSARY.favoritesPer1k.definition}{" "}
+                    {GLOSSARY.likeRatio.term}: {GLOSSARY.likeRatio.definition}
+                  </span>{" "}
                   Ratios of Roblox&apos;s own all-time counters, not estimates: favorites ÷ visits ×
                   1,000 (shown from {FAVORITES_MIN_VISITS.toLocaleString("en-US")} visits), and
                   likes ÷ (likes + dislikes). The like-ratio trend on a game page is the change
@@ -496,12 +503,13 @@ export default function AboutPage() {
                   does not mean visits cause players.
                 </TableCell>
               </TableRow>
-              <TableRow>
+              <TableRow id={GLOSSARY.concentration.anchor} className="scroll-mt-6">
                 <TableCell className="font-medium">Market concentration</TableCell>
                 <TableCell className="text-muted-foreground">
-                  Per genre and UTC day, the share of the genre&apos;s players held by its top 1, 5
-                  and 10 games, and the Herfindahl-Hirschman index (sum of squared shares, shown on
-                  a 0–10,000 scale). Each game counts once a day with its daily average players, so
+                  <span className="text-foreground">{GLOSSARY.concentration.definition}</span> Per
+                  genre and UTC day, the share of the genre&apos;s players held by its top 1, 5 and
+                  10 games, and the Herfindahl-Hirschman index (sum of squared shares, shown on a
+                  0–10,000 scale). Each game counts once a day with its daily average players, so
                   games collected more often don&apos;t weigh more. The &ldquo;many small games / a
                   few leaders / a few giants&rdquo; labels use the usual antitrust bands (1,500 and
                   2,500) purely as labels. Days with no collection are gaps.

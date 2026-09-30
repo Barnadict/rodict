@@ -106,5 +106,22 @@ export function useWatchlist() {
     write(read().filter((e) => !(e.kind === kind && e.id === id)));
   }, []);
 
-  return { entries, isWatched, toggle, remove };
+  /** Add several entries at once, skipping any already watched (Task #113). */
+  const addMany = React.useCallback(
+    (items: { kind: WatchlistKind; id: string; name: string }[]) => {
+      const current = read();
+      const have = new Set(current.map((e) => `${e.kind}:${e.id}`));
+      const addedAt = new Date().toISOString();
+      for (const item of items) {
+        const key = `${item.kind}:${item.id}`;
+        if (have.has(key)) continue;
+        have.add(key);
+        current.push({ ...item, addedAt });
+      }
+      write(current);
+    },
+    [],
+  );
+
+  return { entries, isWatched, toggle, remove, addMany };
 }

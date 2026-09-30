@@ -21,6 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { LabelWithHelp } from "@/components/metric-help";
 import { SaturationScatter, type SaturationPoint } from "@/components/charts/saturation-scatter";
 import { PresetLinks } from "@/components/filters/preset-links";
 import { LocalTime } from "@/components/local-time";
@@ -135,7 +136,11 @@ export default async function SaturationPage(props: PageProps<"/saturation">) {
                   <TableHead className="text-right">Games</TableHead>
                   <TableHead className="text-right">Players</TableHead>
                   <TableHead className="text-right">Players / game</TableHead>
-                  {hasScores && <TableHead className="text-right">Opportunity</TableHead>}
+                  {hasScores && (
+                    <TableHead className="text-right">
+                      <LabelWithHelp term="opportunity">Opportunity</LabelWithHelp>
+                    </TableHead>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -213,7 +218,9 @@ export default async function SaturationPage(props: PageProps<"/saturation">) {
                   <TableHead className="text-right">Biggest game</TableHead>
                   <TableHead className="text-right">Top 5</TableHead>
                   <TableHead className="text-right">Top 10</TableHead>
-                  <TableHead className="text-right">HHI</TableHead>
+                  <TableHead className="text-right">
+                    <LabelWithHelp term="concentration">HHI</LabelWithHelp>
+                  </TableHead>
                   <TableHead className="text-right">30 days earlier</TableHead>
                   <TableHead className="text-right">Like N equal games</TableHead>
                   <TableHead>Shape</TableHead>
