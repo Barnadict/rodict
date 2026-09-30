@@ -29,6 +29,7 @@ const SORT_OPTIONS = [
   { value: "firstSeenAt", label: "Newest tracked" },
   { value: "likeRatio", label: "Best like ratio" },
   { value: "growth", label: "Fastest growing" },
+  { value: "session", label: "Stickiest (Est.)" },
 ] as const;
 
 const ALL = "all";

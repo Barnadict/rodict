@@ -11,13 +11,23 @@ import {
   getGameUpdateHistory,
   getSimilarGames,
 } from "@/lib/db/games";
-import { getAnomaliesForGame } from "@/lib/db/analytics";
+import { getAnomaliesForGame, getLaunchBenchmarkForGenre } from "@/lib/db/analytics";
+import { completeDays, describeLaunchPosition, launchPosition } from "@/lib/launch-benchmark";
+import { dailyByAge } from "@/lib/new-releases";
 import { getGamePassCatalog } from "@/lib/db/game-passes";
 import { getGameIcons } from "@/lib/roblox/client";
 import { deriveSnapshotMetrics, PASS_TIER_NOTE } from "@/lib/earnings/estimate";
 import { formatCompact, formatExact, formatRelativeTime, formatUsdRange } from "@/lib/format";
 import { formatGrowthPct } from "@/lib/stats";
 import { creatorPath } from "@/lib/creators";
+import { getEngagement } from "@/lib/cached-queries";
+import {
+  SESSION_ESTIMATE,
+  favoritesPer1kVisits,
+  formatSessionMinutes,
+  likeRatioTrend,
+} from "@/lib/engagement";
+import { LIKE_RATIO_MIN_VOTES } from "@/lib/games-list";
 import { measureUpdateImpacts, type UpdateWindowImpact } from "@/lib/update-impact";
 import {
   DEFAULT_GAME_METRIC,
@@ -101,13 +111,45 @@ async function getGameDetail(universeIdParam: string, range: RangeKey) {
     return { similar, icons: new Map(icons.map((i) => [String(i.universeId), i.imageUrl])) };
   });
 
-  const [snapshots, anomalies, updateHistory, { similar, icons }, passCatalog] = await Promise.all([
+  const [
+    snapshots,
+    anomalies,
+    updateHistory,
+    { similar, icons },
+    passCatalog,
+    engagement,
+    benchmark,
+  ] = await Promise.all([
     getGameSnapshots(game.id, { from: rangeToCutoff(range) }),
     getAnomaliesForGame(game.id),
     getGameUpdateHistory(game.id),
     similarWithIcons,
     getGamePassCatalog(game.id),
+    getEngagement(),
+    game.currentGenreId && game.robloxCreatedAt
+      ? getLaunchBenchmarkForGenre(game.currentGenreId)
+      : null,
   ]);
+
+  // Where the game sits among its genre's launches, on its latest full day
+  // since launch that the benchmark covers (Task #83).
+  const created = game.robloxCreatedAt;
+  const lastAt = snapshots.at(-1)?.collectedAt.getTime();
+  const launch =
+    benchmark && created && lastAt !== undefined
+      ? launchPosition(
+          completeDays(
+            dailyByAge(
+              snapshots.map((s) => ({ t: s.collectedAt.getTime(), playing: s.playing })),
+              created,
+              benchmark.maxDay,
+            ),
+            created,
+            lastAt,
+          ),
+          benchmark,
+        )
+      : null;
 
   return {
     game,
@@ -117,6 +159,9 @@ async function getGameDetail(universeIdParam: string, range: RangeKey) {
     similar,
     icons,
     passCatalog,
+    launch,
+    launchNearDays: benchmark?.nearLaunchDays ?? null,
+    sessionMinutes: engagement.games.find((g) => g.id === game.id)?.minutes ?? null,
     iconUrl: icons.get(String(universeId)) ?? null,
   };
 }
@@ -158,11 +203,33 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
   const data = await getGameDetail(universeIdParam, range);
   if (!data) notFound();
 
-  const { game, snapshots, anomalies, updateHistory, similar, icons, iconUrl, passCatalog } = data;
+  const {
+    game,
+    snapshots,
+    anomalies,
+    updateHistory,
+    similar,
+    icons,
+    iconUrl,
+    passCatalog,
+    sessionMinutes,
+    launch,
+    launchNearDays,
+  } = data;
   const latest = snapshots[snapshots.length - 1];
   const previous = snapshots.length > 1 ? snapshots[snapshots.length - 2] : undefined;
   const derived = latest ? deriveSnapshotMetrics(latest, previous, passCatalog) : null;
   const passTier = derived?.estimatedDailyEarnings.passTier ?? null;
+  const favoritesPer1k = favoritesPer1kVisits(game.currentFavorites, game.currentVisits);
+  const likeTrend = likeRatioTrend(
+    snapshots.map((s) => ({
+      t: s.collectedAt.getTime(),
+      upVotes: s.upVotes,
+      downVotes: s.downVotes,
+    })),
+    LIKE_RATIO_MIN_VOTES,
+  );
+  const rangeLabel = RANGE_OPTIONS.find((o) => o.value === range)?.label ?? range;
 
   const chart = METRIC_CHART[metric];
   const chartData = buildMetricSeries(snapshots, metric);
@@ -313,6 +380,26 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
               ? `${Math.round(derived.likeRatio * 100)}%`
               : "—"
           }
+          hint={
+            likeTrend !== null
+              ? `${likeTrend >= 0 ? "+" : "−"}${Math.abs(likeTrend * 100).toFixed(1)} pts over ${range === RANGE_CLEAR_VALUE ? "all history" : rangeLabel}`
+              : undefined
+          }
+        />
+        <StatTile
+          label="Est. session length"
+          value={formatSessionMinutes(sessionMinutes)}
+          badge="Est."
+          hint={
+            sessionMinutes !== null
+              ? `Players ÷ visits/hour, last ${SESSION_ESTIMATE.windowHours}h`
+              : "Too few visits or readings in the last day"
+          }
+        />
+        <StatTile
+          label="Favorites per 1K visits"
+          value={favoritesPer1k !== null ? favoritesPer1k.toFixed(1) : "—"}
+          hint="All-time favorites ÷ all-time visits"
         />
         <StatTile
           label="Est. earnings/day"
@@ -328,6 +415,30 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
           hint={passTier ? PASS_TIER_NOTE[passTier] : "Game passes not checked yet"}
         />
       </div>
+
+      {launch && game.currentGenre && (
+        <div className="flex flex-col gap-1 rounded-lg border p-3 text-sm">
+          <span>
+            <span className="font-medium">Day {launch.day}:</span>{" "}
+            {describeLaunchPosition(launch, game.currentGenre.name)}{" "}
+            <span className="text-muted-foreground tabular-nums">
+              ({formatCompact(Math.round(launch.value))} avg players that day)
+            </span>
+          </span>
+          <span className="text-xs text-muted-foreground">
+            Compared with the daily average players of {formatCompact(launch.nGames)}{" "}
+            {game.currentGenre.name} games on their day {launch.day}, counting only games we started
+            tracking within {launchNearDays} days of launch, so games found only after they took off
+            don&apos;t raise the bar.{" "}
+            <Link
+              href={`/genres/${game.currentGenre.slug}#lifecycle`}
+              className="underline underline-offset-2"
+            >
+              Genre launch curve
+            </Link>
+          </span>
+        </div>
+      )}
 
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">

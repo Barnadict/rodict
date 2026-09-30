@@ -35,6 +35,7 @@ import cohort
 import seasonality
 import forecast
 import update_impact
+import launch_benchmark
 
 JOBS = [
     ("survival_km", survival.run),
@@ -47,6 +48,7 @@ JOBS = [
     ("seasonality", seasonality.run),
     ("forecast", forecast.run),
     ("update_impact", update_impact.run),
+    ("launch_benchmark", launch_benchmark.run),
 ]
 
 

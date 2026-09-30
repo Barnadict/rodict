@@ -7,7 +7,8 @@ import {
   type GameSortField,
 } from "@/lib/db/games";
 import { RISING, getRisingGames, getRisingGenres } from "@/lib/db/trends";
-import { getGrowthById } from "@/lib/cached-queries";
+import { getGrowthById, getSessionById } from "@/lib/cached-queries";
+import { SESSION_ESTIMATE } from "@/lib/engagement";
 import { estimateDailyEarningsFromCcu } from "@/lib/earnings/estimate";
 import { rangeToCutoff, RANGE_CLEAR_VALUE, type RangeKey } from "@/lib/date-range";
 import {
@@ -47,6 +48,7 @@ export async function getGamesExport(p: GamesExportParams): Promise<ExportTable>
 
   const now = new Date();
   const sort = p.sort === "growth" && p.range === RANGE_CLEAR_VALUE ? "currentPlaying" : p.sort;
+  const sessionById = sort === "session" ? await getSessionById() : undefined;
   const { games, total } = await getGamesList({
     genreSlug: p.genreSlug,
     themeSlug: p.themeSlug,
@@ -55,6 +57,7 @@ export async function getGamesExport(p: GamesExportParams): Promise<ExportTable>
     minPlaying: p.minPlaying,
     created: p.age ? ageToCreatedRange(p.age, now) : undefined,
     growthById: sort === "growth" ? await getGrowthById(p.range) : undefined,
+    sessionById,
     sort,
     order: p.order,
     limit: EXPORT_MAX_GAMES,
@@ -75,6 +78,11 @@ export async function getGamesExport(p: GamesExportParams): Promise<ExportTable>
   } else if (sort === "growth") {
     notes.push(
       `Sorted by growth over ${p.range}: first-day vs last-day average players; only games averaging at least ${RISING.minBaseline} players at the start are included.`,
+    );
+  }
+  if (sort === "session") {
+    notes.push(
+      `Sorted by est. session length (est_session_minutes): players ÷ visits per hour over the last ${SESSION_ESTIMATE.windowHours}h (Little's law); only games with enough visits and close-together readings are included.`,
     );
   }
   if (total > games.length) {
@@ -102,6 +110,17 @@ export async function getGamesExport(p: GamesExportParams): Promise<ExportTable>
       { name: "est_earnings_low_usd_per_day", value: (g) => usd(earnings.get(g.id)!.low) },
       { name: "est_earnings_high_usd_per_day", value: (g) => usd(earnings.get(g.id)!.high) },
       { name: "est_earnings_pass_tier", value: (g) => earnings.get(g.id)!.passTier ?? null },
+      ...(sessionById
+        ? [
+            {
+              name: "est_session_minutes",
+              value: (g: Row) => {
+                const m = sessionById.get(g.id);
+                return m === undefined ? null : Math.round(m * 10) / 10;
+              },
+            },
+          ]
+        : []),
       { name: "url", value: (g) => `/games/${g.universeId}` },
     ],
     games,

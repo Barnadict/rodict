@@ -5,7 +5,8 @@ import { getGamesList, type GameSortField } from "@/lib/db/games";
 import { getAllGenres } from "@/lib/db/genres";
 import { getAllThemes } from "@/lib/db/themes";
 import { getGrowthForGames, RISING } from "@/lib/db/trends";
-import { getGrowthById } from "@/lib/cached-queries";
+import { getGrowthById, getSessionById } from "@/lib/cached-queries";
+import { SESSION_ESTIMATE, formatSessionMinutes } from "@/lib/engagement";
 import { getGameIcons } from "@/lib/roblox/client";
 import { estimateDailyEarningsFromCcu } from "@/lib/earnings/estimate";
 import { formatCompact, formatUsdRange } from "@/lib/format";
@@ -63,6 +64,7 @@ const SORT_FIELDS: GameSortField[] = [
   "firstSeenAt",
   "likeRatio",
   "growth",
+  "session",
 ];
 
 function isSortField(value: string | undefined): value is GameSortField {
@@ -104,6 +106,7 @@ async function getGamesPageData(q: GamesQuery) {
   const cutoff = rangeToCutoff(q.range);
   // Growth is range-scoped; the page drops a growth sort when there's no range.
   const growthById = q.sort === "growth" && cutoff ? await getGrowthById(q.range) : undefined;
+  const sessionById = q.sort === "session" ? await getSessionById() : undefined;
 
   const [{ games, total }, genres, themes] = await Promise.all([
     getGamesList({
@@ -114,6 +117,7 @@ async function getGamesPageData(q: GamesQuery) {
       minPlaying: q.minPlaying,
       created: q.age ? ageToCreatedRange(q.age, new Date()) : undefined,
       growthById,
+      sessionById,
       sort: q.sort,
       order: q.order,
       limit: PAGE_SIZE,
@@ -147,7 +151,12 @@ async function getGamesPageData(q: GamesQuery) {
     icons = new Map(fetched.map((icon) => [String(icon.universeId), icon.imageUrl]));
   }
 
-  return { games, total, genres, themes, growthByGame, icons };
+  // Sorted by session length, the table shows the estimate it ranked on.
+  const sessionByGame = sessionById
+    ? new Map(games.map((g) => [g.id, sessionById.get(g.id) ?? null]))
+    : null;
+
+  return { games, total, genres, themes, growthByGame, sessionByGame, icons };
 }
 
 export default async function GamesPage(props: PageProps<"/games">) {
@@ -174,19 +183,20 @@ export default async function GamesPage(props: PageProps<"/games">) {
   // browsing is the primary experience; the table is opt-in.
   const view: ViewMode = get("view") === "table" ? "table" : "grid";
 
-  const { games, total, genres, themes, growthByGame, icons } = await getGamesPageData({
-    page,
-    sort,
-    order,
-    genreSlug,
-    themeSlug,
-    search,
-    status,
-    age,
-    minPlaying,
-    range,
-    view,
-  });
+  const { games, total, genres, themes, growthByGame, sessionByGame, icons } =
+    await getGamesPageData({
+      page,
+      sort,
+      order,
+      genreSlug,
+      themeSlug,
+      search,
+      status,
+      age,
+      minPlaying,
+      range,
+      view,
+    });
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   // The filters every control carries along; each control adds its own params.
@@ -209,7 +219,7 @@ export default async function GamesPage(props: PageProps<"/games">) {
         <h1 className="text-2xl font-semibold tracking-tight">Games</h1>
         <p className="text-muted-foreground">
           {total.toLocaleString()} tracked game{total === 1 ? "" : "s"} — sortable by players,
-          visits, favorites, like ratio and growth.
+          visits, favorites, like ratio, growth and est. session length.
         </p>
         {sort === "likeRatio" && (
           <p className="mt-1 text-sm text-muted-foreground">
@@ -221,6 +231,21 @@ export default async function GamesPage(props: PageProps<"/games">) {
             Sorted by growth: average players over the first day of the range vs. the last day, as
             on Trending. Only games averaging at least {RISING.minBaseline} players at the start are
             ranked.
+          </p>
+        )}
+        {sort === "session" && (
+          <p className="mt-1 text-sm text-muted-foreground">
+            Sorted by <span className="font-medium text-foreground">est. session length</span>{" "}
+            <Badge variant="outline" className="text-[10px]">
+              Est.
+            </Badge>
+            : players ÷ visits per hour over the last {SESSION_ESTIMATE.windowHours}h (Little&apos;s
+            law). Only games with at least {SESSION_ESTIMATE.minVisits.toLocaleString("en-US")}{" "}
+            visits and {SESSION_ESTIMATE.minCoveredHours}h of close-together readings in that window
+            are ranked. Idle and AFK games naturally rank high.{" "}
+            <Link href="/about#forecasts" className="underline underline-offset-2">
+              How it&apos;s estimated
+            </Link>
           </p>
         )}
       </div>
@@ -305,6 +330,17 @@ export default async function GamesPage(props: PageProps<"/games">) {
                   />
                 </TableHead>
                 <TableHead className="text-right">Est. earnings/day</TableHead>
+                {sessionByGame && (
+                  <TableHead className="text-right">
+                    <SortableHeader
+                      field="session"
+                      label="Est. session"
+                      currentSort={sort}
+                      currentOrder={order}
+                      baseParams={headerParams}
+                    />
+                  </TableHead>
+                )}
                 {growthByGame && (
                   <TableHead className="text-right">
                     <SortableHeader
@@ -322,7 +358,7 @@ export default async function GamesPage(props: PageProps<"/games">) {
               {games.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={growthByGame ? 10 : 9}
+                    colSpan={9 + (growthByGame ? 1 : 0) + (sessionByGame ? 1 : 0)}
                     className="h-24 text-center text-muted-foreground"
                   >
                     No games match these filters.
@@ -383,6 +419,11 @@ export default async function GamesPage(props: PageProps<"/games">) {
                         </Badge>
                       </span>
                     </TableCell>
+                    {sessionByGame && (
+                      <TableCell className="text-right tabular-nums">
+                        {formatSessionMinutes(sessionByGame.get(game.id) ?? null)}
+                      </TableCell>
+                    )}
                     {growthByGame && (
                       <TableCell className="text-right tabular-nums">
                         <GrowthBadge growth={growth} />

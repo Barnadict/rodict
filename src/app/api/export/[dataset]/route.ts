@@ -14,6 +14,7 @@ const SORTS: GameSortField[] = [
   "firstSeenAt",
   "likeRatio",
   "growth",
+  "session",
 ];
 
 const usage = (message: string) =>

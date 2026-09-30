@@ -6,6 +6,7 @@ import { collectionTier, isDueForCollection } from "@/lib/collector/cadence";
 import { rankSimilarGames, similarCcuBand } from "@/lib/game-metrics";
 import { impactSnapshotRange } from "@/lib/update-impact";
 import { rankByGrowth, rankByLikeRatio } from "@/lib/games-list";
+import { rankBySession } from "@/lib/engagement";
 
 // ---------------------------------------------------------------------------
 // Write path (used by the collector, Task #8)
@@ -428,8 +429,8 @@ export async function getLastCollectedAt(): Promise<Date | null> {
 export type ColumnSortField =
   "currentPlaying" | "currentVisits" | "currentFavorites" | "allTimePeakPlayers" | "firstSeenAt";
 
-/** Column sorts plus two computed ones ranked in memory (Task #70). */
-export type GameSortField = ColumnSortField | "likeRatio" | "growth";
+/** Column sorts plus computed ones ranked in memory (Tasks #70, #82). */
+export type GameSortField = ColumnSortField | "likeRatio" | "growth" | "session";
 
 export interface GamesListParams {
   genreSlug?: string;
@@ -446,6 +447,8 @@ export interface GamesListParams {
   offset?: number;
   /** growthPct by game id; required for sort "growth" (see getGameWindowGrowth). */
   growthById?: Map<string, number>;
+  /** Est. session minutes by game id; required for sort "session" (see getSessionById). */
+  sessionById?: Map<string, number>;
 }
 
 const LIST_INCLUDE = {
@@ -480,7 +483,7 @@ export async function getGamesList(params: GamesListParams = {}) {
     ...(created ? { robloxCreatedAt: created } : {}),
   };
 
-  if (sort !== "likeRatio" && sort !== "growth") {
+  if (sort !== "likeRatio" && sort !== "growth" && sort !== "session") {
     const [games, total] = await Promise.all([
       prisma.game.findMany({
         where,
@@ -502,7 +505,9 @@ export async function getGamesList(params: GamesListParams = {}) {
   const ranked =
     sort === "likeRatio"
       ? rankByLikeRatio(rows, order)
-      : rankByGrowth(rows, params.growthById ?? new Map(), order);
+      : sort === "growth"
+        ? rankByGrowth(rows, params.growthById ?? new Map(), order)
+        : rankBySession(rows, params.sessionById ?? new Map(), order);
   const pageIds = ranked.slice(offset, offset + take);
   const byId = new Map(
     (await prisma.game.findMany({ where: { id: { in: pageIds } }, include: LIST_INCLUDE })).map(

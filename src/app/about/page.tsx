@@ -5,6 +5,8 @@ import { RISING } from "@/lib/db/trends";
 import { SERIES_GAP_DAYS } from "@/lib/stats";
 import { UPDATE_WINDOWS_HOURS } from "@/lib/update-impact";
 import { HIT_PEAK_PLAYERS } from "@/lib/creators";
+import { FAVORITES_MIN_VISITS, SESSION_ESTIMATE } from "@/lib/engagement";
+import { LIKE_RATIO_MIN_VOTES } from "@/lib/games-list";
 import { BIG_MOVE_MIN_PCT, BIG_MOVE_MIN_PLAYERS, FEED_WINDOW_DAYS } from "@/lib/feed";
 import Link from "next/link";
 
@@ -436,6 +438,48 @@ export default function AboutPage() {
                   going from 8 to 12 isn&apos;t flagged. Steps across a collection gap, or spanning
                   much longer than the game&apos;s usual time between readings, aren&apos;t compared
                   at all.
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">Launch benchmarks</TableCell>
+                <TableCell className="text-muted-foreground">
+                  For each day since launch (up to day 90), the spread of a genre&apos;s games&apos;
+                  daily average players, stored as every 5th percentile. A game page places the game
+                  on its latest complete day (&ldquo;Day 14: above 82% of Simulator
+                  launches&rdquo;), and the genre lifecycle chart shades the middle half. Only games
+                  we started tracking within 7 days of their Roblox creation date count: a game we
+                  found in week 6 was found <em>because</em> it was doing well, and would raise the
+                  bar. Games stay in after they die. A day needs at least 5 games. Recomputed after
+                  each collection.
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">Est. session length</TableCell>
+                <TableCell className="text-muted-foreground">
+                  Little&apos;s law: average players = arrivals per hour × average time each stays,
+                  so time per visit ≈ player-hours ÷ visits over the same span. For each pair of
+                  readings in the last {SESSION_ESTIMATE.windowHours}h we take the average players ×
+                  the hours between them, and the change in Roblox&apos;s visit counter. Pairs less
+                  than {SESSION_ESTIMATE.minGapHours}h or more than {SESSION_ESTIMATE.maxGapHours}h
+                  apart are skipped (the counter moves in steps, and a long gap hides what happened
+                  in it), as are pairs where the counter went backwards. A game needs{" "}
+                  {`${SESSION_ESTIMATE.minCoveredHours}h of counted pairs and ${SESSION_ESTIMATE.minVisits.toLocaleString("en-US")} visits`}{" "}
+                  or it shows no estimate. A genre pools its games, so busier games weigh more.
+                  Caveats: a visit is a join, not a person, so rejoining after a disconnect or
+                  server hop splits one sitting into several; it assumes play is roughly steady over
+                  the day; and idle/AFK games read long because players stay in without new joins.
+                  Labeled <Badge variant="secondary">Est.</Badge> everywhere.
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">Favorites per 1K visits · like ratio</TableCell>
+                <TableCell className="text-muted-foreground">
+                  Ratios of Roblox&apos;s own all-time counters, not estimates: favorites ÷ visits ×
+                  1,000 (shown from {FAVORITES_MIN_VISITS.toLocaleString("en-US")} visits), and
+                  likes ÷ (likes + dislikes). The like-ratio trend on a game page is the change
+                  between the first and last reading in the chosen range with at least{" "}
+                  {LIKE_RATIO_MIN_VOTES} votes, in percentage points. A genre&apos;s ratios add up
+                  all its games&apos; counters, so big games dominate.
                 </TableCell>
               </TableRow>
               <TableRow>

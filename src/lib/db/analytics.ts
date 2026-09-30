@@ -227,3 +227,25 @@ export interface UpdateImpactGenre {
 export function getUpdateImpactForGenre(genreId: string) {
   return getPayload<UpdateImpactGenre>("update_impact", "genre", genreId);
 }
+
+// --- Launch benchmarks (Task #83) ---
+
+export interface LaunchBenchmarkDay {
+  day: number;
+  /** Games with a reading that day. */
+  n: number;
+  /** Daily average players at each of `quantiles` (percent), ascending. */
+  q: number[];
+}
+export interface LaunchBenchmark {
+  status: "ok" | "insufficient";
+  nGames: number;
+  maxDay: number;
+  nearLaunchDays: number;
+  minGames: number;
+  quantiles: number[];
+  days: LaunchBenchmarkDay[];
+}
+export function getLaunchBenchmarkForGenre(genreId: string) {
+  return getPayload<LaunchBenchmark>("launch_benchmark", "genre", genreId);
+}

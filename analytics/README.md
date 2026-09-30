@@ -18,6 +18,7 @@ reads the results — nothing statistical runs in the browser or a request.
 | `seasonality.py` | #28 | `seasonality` — day-of-week / hour indices on genre popularity |
 | `forecast.py` | #29 | `forecast` — Holt exponential-smoothing projection + uncertainty band |
 | `update_impact.py` | #63 | `update_impact` — per-genre players 24h/72h after vs. before a recorded update (median, quartiles, share up) |
+| `launch_benchmark.py` | #83 | `launch_benchmark` — per-genre p5…p95 of daily average players at each day 0–90 since launch, from games tracked since near launch |
 
 `run.py` loads the data **once** (`db.load_all`) and hands it to every job as
 `run(con, data)`; no job reads the snapshot tables itself (Task #44). Each job
@@ -77,6 +78,7 @@ Covers the pure statistical helpers (Task #37) — no DB, no network:
 | `test_opportunity.py` | min-max normalization, weight signs, per-genre growth |
 | `test_survival.py` | censoring + left truncation of lifetime rows |
 | `test_seasonality.py` | weekday indices and the cold-start guard |
+| `test_launch_benchmark.py` | near-launch filter (survivorship bias), per-day averaging, min games per day, stored percentiles |
 
 The `_anomalies` tests pin a **real bug they caught**: with only a z-score, a
 step just had to be unusual *for its series* — so on a very regular curve (tiny

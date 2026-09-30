@@ -17,9 +17,13 @@ import {
   getSeasonalityForGenre,
   getForecastForGenre,
   getUpdateImpactForGenre,
+  getLaunchBenchmarkForGenre,
   getAnalyticsComputedAt,
 } from "@/lib/db/analytics";
+import { benchmarkBand } from "@/lib/launch-benchmark";
 import { estimateDailyEarningsFromCcu } from "@/lib/earnings/estimate";
+import { getEngagement } from "@/lib/cached-queries";
+import { SESSION_ESTIMATE, formatSessionMinutes } from "@/lib/engagement";
 import { formatCompact, formatUsdRange } from "@/lib/format";
 import { LOW_COVERAGE, buildProjection, formatGrowthPct } from "@/lib/stats";
 
@@ -95,6 +99,8 @@ async function getGenreDetail(slug: string, range: RangeKey) {
     forecast,
     updateImpact,
     analyticsAt,
+    engagementIndex,
+    launchBenchmark,
   ] = await Promise.all([
     getGenreStatBySlug(slug),
     getGenreSnapshots(genre.id, { from: cutoff }),
@@ -109,6 +115,8 @@ async function getGenreDetail(slug: string, range: RangeKey) {
     getForecastForGenre(genre.id),
     getUpdateImpactForGenre(genre.id),
     getAnalyticsComputedAt(),
+    getEngagement(),
+    getLaunchBenchmarkForGenre(genre.id),
   ]);
 
   // A range narrower than "all" adds a Δ column to top games, scoped to just
@@ -140,6 +148,8 @@ async function getGenreDetail(slug: string, range: RangeKey) {
     analyticsAt,
     growthByGame,
     moverUniverseIds,
+    launchBenchmark,
+    engagement: engagementIndex.genres.find((g) => g.genreId === genre.id) ?? null,
     // Priced at the as-of date rather than "now" so the cached entry doesn't
     // depend on when it happens to be read.
     earnings: stat ? estimateDailyEarningsFromCcu(stat.totalPlaying, cutoff ?? new Date()) : null,
@@ -171,8 +181,11 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
     analyticsAt,
     growthByGame,
     moverUniverseIds,
+    engagement,
+    launchBenchmark,
     earnings,
   } = data;
+  const launchBand = benchmarkBand(launchBenchmark);
 
   const hasAnalytics = !!(survival || clustering || opportunity || momentum);
 
@@ -218,6 +231,46 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
           value={earnings ? formatUsdRange(earnings.low, earnings.high) : "—"}
           badge="Est."
         />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatTile
+            label="Est. session length"
+            value={formatSessionMinutes(engagement?.sessionMinutes ?? null)}
+            badge="Est."
+            hint={
+              engagement?.sessionGames
+                ? `From ${formatCompact(engagement.sessionGames)} games' last ${SESSION_ESTIMATE.windowHours}h`
+                : undefined
+            }
+          />
+          <StatTile
+            label="Favorites per 1K visits"
+            value={engagement?.favoritesPer1k != null ? engagement.favoritesPer1k.toFixed(1) : "—"}
+          />
+          <StatTile
+            label="Like ratio"
+            value={
+              engagement?.likeRatio != null ? `${Math.round(engagement.likeRatio * 100)}%` : "—"
+            }
+            hint="All votes across the genre"
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Est. session length is the genre&apos;s players ÷ its visits per hour over the last{" "}
+          {SESSION_ESTIMATE.windowHours}h (Little&apos;s law), so busier games weigh more.{" "}
+          <Link
+            href={`/games?genre=${slug}&sort=session&view=table`}
+            className="underline underline-offset-2"
+          >
+            Stickiest {genre.name} games
+          </Link>{" "}
+          ·{" "}
+          <Link href="/about#forecasts" className="underline underline-offset-2">
+            how it&apos;s estimated
+          </Link>
+        </p>
       </div>
 
       {hasAnalytics && (
@@ -358,16 +411,28 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
         )}
       </section>
 
-      <section className="flex flex-col gap-3">
+      <section id="lifecycle" className="flex scroll-mt-6 flex-col gap-3">
         <div>
           <h2 className="font-medium">Lifecycle</h2>
           <p className="text-sm text-muted-foreground">
             Average players by weeks since a game&apos;s launch, across this genre.
+            {launchBand.length > 0 && launchBenchmark && (
+              <>
+                {" "}
+                The shaded band is the <span className="text-foreground">launch benchmark</span>:
+                the middle half of daily average players at each day since launch, over the first{" "}
+                {launchBenchmark.maxDay} days, from {formatCompact(launchBenchmark.nGames)} games we
+                started tracking within {launchBenchmark.nearLaunchDays} days of launch. Games found
+                later are left out, since they were found because they were doing well. A day needs{" "}
+                {launchBenchmark.minGames}+ games.
+              </>
+            )}
           </p>
         </div>
         <div className="rounded-lg border p-4">
           <LifecycleChart
             data={lifecycle}
+            band={launchBand}
             ariaLabel={`Lifecycle chart: average players by weeks since launch for ${genre.name} games`}
           />
         </div>
