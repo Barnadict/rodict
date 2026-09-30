@@ -29,6 +29,17 @@ import { ESTIMATE_NOTE, buildTable, iso, usd, type ExportTable } from "@/lib/exp
 export const EXPORT_MAX_GAMES = 1000;
 /** Rows in a trending export (the page shows 25). */
 export const EXPORT_TRENDING_ROWS = 100;
+/** `sort` values a games export accepts; anything else sorts by players now. */
+export const EXPORT_GAME_SORTS: GameSortField[] = [
+  "currentPlaying",
+  "currentVisits",
+  "currentFavorites",
+  "allTimePeakPlayers",
+  "firstSeenAt",
+  "likeRatio",
+  "growth",
+  "session",
+];
 
 export interface GamesExportParams {
   genreSlug?: string;

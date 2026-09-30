@@ -26,6 +26,10 @@ export function SiteFooter() {
           <Link href="/about" className="underline underline-offset-4">
             About the data
           </Link>
+          . Data on your own site:{" "}
+          <Link href="/api-docs" className="underline underline-offset-4">
+            API and feeds
+          </Link>
           .
         </p>
         <div className="flex items-center gap-4">

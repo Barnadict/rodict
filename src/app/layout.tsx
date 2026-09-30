@@ -54,7 +54,9 @@ export default function RootLayout({
           <TooltipProvider delay={200}>
             <SidebarProvider style={{ "--sidebar-width": "13rem" } as React.CSSProperties}>
               <AppSidebar />
-              <SidebarInset>
+              {/* min-w-0: a long unbreakable line (an embed snippet, a URL) scrolls in
+                  its own box instead of widening the page past the screen. */}
+              <SidebarInset className="min-w-0">
                 <SiteHeader />
                 <main className="flex flex-1 flex-col">
                   {/* Page changes fade and rise in (Task #107). Only updates

@@ -712,6 +712,17 @@ export default function AboutPage() {
             </dd>
           </div>
           <div>
+            <dt className="font-medium">API and feeds</dt>
+            <dd className="text-muted-foreground">
+              The CSV/JSON export, both Atom feeds and the badge are documented, with copyable
+              examples, on{" "}
+              <Link href="/api-docs" className="underline underline-offset-4">
+                API and feeds
+              </Link>
+              .
+            </dd>
+          </div>
+          <div>
             <dt className="font-medium">Est. earnings</dt>
             <dd className="text-muted-foreground">
               A derived range, never real revenue. See{" "}

@@ -3,19 +3,13 @@ import type { NextRequest } from "next/server";
 import type { GameSortField } from "@/lib/db/games";
 import { parseRangeKey } from "@/lib/date-range";
 import { exportFileName, parseExportFormat, toCsv, toJson, type ExportTable } from "@/lib/export";
-import { getGamesExport, getSnapshotsExport, getTrendingExport } from "@/lib/export-data";
+import {
+  EXPORT_GAME_SORTS,
+  getGamesExport,
+  getSnapshotsExport,
+  getTrendingExport,
+} from "@/lib/export-data";
 import { parseAge, parseMinPlayers, parseStatus } from "@/lib/games-list";
-
-const SORTS: GameSortField[] = [
-  "currentPlaying",
-  "currentVisits",
-  "currentFavorites",
-  "allTimePeakPlayers",
-  "firstSeenAt",
-  "likeRatio",
-  "growth",
-  "session",
-];
 
 const usage = (message: string) =>
   new Response(message, { status: 400, headers: { "Content-Type": "text/plain; charset=utf-8" } });
@@ -44,7 +38,9 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/export/[
       age: parseAge(get("age")),
       minPlaying: parseMinPlayers(get("min")),
       search: get("q")?.slice(0, 100),
-      sort: SORTS.includes(sort as GameSortField) ? (sort as GameSortField) : "currentPlaying",
+      sort: EXPORT_GAME_SORTS.includes(sort as GameSortField)
+        ? (sort as GameSortField)
+        : "currentPlaying",
       order: get("order") === "asc" ? "asc" : "desc",
       range,
     });

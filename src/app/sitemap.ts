@@ -28,6 +28,7 @@ const STATIC_PATHS = [
   "/creators",
   "/updates",
   "/about",
+  "/api-docs",
   "/status",
 ];
 
