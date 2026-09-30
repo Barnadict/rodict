@@ -56,6 +56,7 @@ export function totalWrites(counts: WriteCounts): number {
  */
 export const TURSO_FREE_PLAN = {
   checkedOn: "2026-09-29",
+  /** Mirrored as ROWS_WRITTEN_PER_MONTH in analytics/budget.py (Task #80). */
   rowsWrittenPerMonth: 10_000_000,
   rowsReadPerMonth: 500_000_000,
   storageBytes: 5 * 1024 ** 3,

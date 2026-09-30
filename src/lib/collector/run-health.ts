@@ -8,7 +8,7 @@
  *   - the bulk persist step threw, or
  *   - it persisted under `COLLECT_PERSIST_FLOOR` of the games it was due to
  *     collect, with the write-budget guard not holding it back.
- * A run the guard (Task #47) reduced or paused is expected to write little, so
+ * A run the guard (Task #47) reduced, paced (#79) or paused is expected to write little, so
  * the floor never applies to it: it stays `partial` and doesn't alert.
  */
 
@@ -24,7 +24,7 @@ export interface CollectRunFacts {
   /** Games the run set out to collect. */
   due: number;
   persisted: number;
-  /** The budget guard reduced or paused the run. */
+  /** The budget guard reduced, paced or paused the run. */
   guarded: boolean;
 }
 
@@ -74,6 +74,6 @@ function collectFactsFromRow(run: RecordedRun): CollectRunFacts | null {
     persistFailed,
     due: due ?? 0,
     persisted: persisted ?? 0,
-    guarded: guard === "reduced" || guard === "paused",
+    guarded: guard === "reduced" || guard === "paced" || guard === "paused",
   };
 }

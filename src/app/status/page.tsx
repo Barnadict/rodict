@@ -7,6 +7,7 @@ import { COLLECTION_CADENCE } from "@/lib/collector/cadence";
 import {
   BUDGET_GUARD,
   decideBudgetGuard,
+  WRITE_PACE,
   type BudgetGuardMode,
 } from "@/lib/collector/budget-guard";
 import { getCollectionCoverage, getRunsSince, type TierCoverage } from "@/lib/db/status";
@@ -53,6 +54,7 @@ const JOB_LABELS: Record<string, string> = {
   collect: "Collection",
   analytics: "Analytics",
   gamepasses: "Game passes",
+  "discovery-probe": "Discovery probe",
 };
 
 const JOB_SCHEDULES: Record<string, string> = {
@@ -84,7 +86,8 @@ async function getStatusData() {
     health: summarizeJobHealth(runs, STATUS_JOBS),
     coverage,
     budget,
-    guard: decideBudgetGuard(budget, cap),
+    // As a scheduled (paced, Task #79) collect run would decide right now.
+    guard: decideBudgetGuard(budget, cap, { pace: true }),
     cap,
     dbBytes,
     computedAt: now,
@@ -157,6 +160,7 @@ function Section({
 const GUARD_LABEL: Record<BudgetGuardMode, { text: string; tone: Tone }> = {
   normal: { text: "Normal", tone: "ok" },
   reduced: { text: "Reduced (busy games only)", tone: "warn" },
+  paced: { text: "Paced (ahead of the line)", tone: "warn" },
   paused: { text: "Paused", tone: "error" },
 };
 
@@ -175,7 +179,9 @@ function BudgetSection({ data }: { data: Awaited<ReturnType<typeof getStatusData
           {formatExact(TURSO_FREE_PLAN.rowsWrittenPerMonth)} rows written per month. Hitting that
           cap in August 2026 stopped collection for six weeks, so collection now slows down at{" "}
           {Math.round(BUDGET_GUARD.reduceAt * 100)}% of the cap and pauses at{" "}
-          {Math.round(BUDGET_GUARD.pauseAt * 100)}%. The month resets on the 1st (UTC).
+          {Math.round(BUDGET_GUARD.pauseAt * 100)}%. Scheduled runs also keep to an even line
+          through the month, aimed at {Math.round(WRITE_PACE.margin * 100)}% of the cap: a run that
+          finds the month ahead of the line is skipped. The month resets on the 1st (UTC).
         </>
       }
     >
@@ -200,6 +206,7 @@ function BudgetSection({ data }: { data: Awaited<ReturnType<typeof getStatusData
           value={
             <ToneText tone={GUARD_LABEL[guard.mode].tone}>{GUARD_LABEL[guard.mode].text}</ToneText>
           }
+          hint={`Pace line: ${formatCompact(guard.paceAllowance)} by now`}
         />
         <StatTile
           label="Storage used"
@@ -212,7 +219,11 @@ function BudgetSection({ data }: { data: Awaited<ReturnType<typeof getStatusData
         />
       </div>
 
-      <BudgetBar used={used} projected={projected === null ? null : projected / cap} />
+      <BudgetBar
+        used={used}
+        projected={projected === null ? null : projected / cap}
+        pace={guard.paceAllowance / cap}
+      />
 
       {guard.reason && <p className="text-sm text-amber-600 dark:text-amber-400">{guard.reason}</p>}
       {budget.unmeasuredRuns > 0 && (
@@ -225,8 +236,17 @@ function BudgetSection({ data }: { data: Awaited<ReturnType<typeof getStatusData
   );
 }
 
-/** A 0–100% bar of the cap: solid = written so far, faint = projected. */
-function BudgetBar({ used, projected }: { used: number; projected: number | null }) {
+/** A 0–100% bar of the cap: solid = written so far, faint = projected, blue
+ * tick = where the even-pace line (Task #79) is today. */
+function BudgetBar({
+  used,
+  projected,
+  pace,
+}: {
+  used: number;
+  projected: number | null;
+  pace: number;
+}) {
   const pct = (v: number) => `${Math.min(100, Math.max(0, v * 100))}%`;
   const tone =
     used >= BUDGET_GUARD.pauseAt
@@ -239,7 +259,7 @@ function BudgetBar({ used, projected }: { used: number; projected: number | null
       <div
         className="relative h-3 w-full overflow-hidden rounded-full bg-muted"
         role="img"
-        aria-label={`${formatShare(used)} of the monthly write cap used${projected === null ? "" : `, ${formatShare(projected)} projected by month end (estimate)`}`}
+        aria-label={`${formatShare(used)} of the monthly write cap used, pace line at ${formatShare(pace)}${projected === null ? "" : `, ${formatShare(projected)} projected by month end (estimate)`}`}
       >
         {projected !== null && (
           <div
@@ -255,11 +275,13 @@ function BudgetBar({ used, projected }: { used: number; projected: number | null
             style={{ left: pct(mark) }}
           />
         ))}
+        <div className="absolute inset-y-0 w-0.5 bg-sky-500" style={{ left: pct(pace) }} />
       </div>
       <div className="flex justify-between text-xs text-muted-foreground">
         <span>0</span>
         <span>
-          Solid: written so far · Faint: projected (Est.) · Lines: slow-down and pause points
+          Solid: written so far · Faint: projected (Est.) · Blue: pace line today · Lines: slow-down
+          and pause points
         </span>
         <span>{formatCompact(TURSO_FREE_PLAN.rowsWrittenPerMonth)}</span>
       </div>

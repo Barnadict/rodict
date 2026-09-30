@@ -45,7 +45,11 @@ jobs:
           # Corpus GROWTH comes from manual `npm run collect:prod` on a residential
           # IP. A manual workflow_dispatch can still force a full-discovery run by
           # leaving knownOnly unchecked.
-          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.knownOnly }}" = "true" ]; then
+          # Scheduled runs --pace (Task #79): a run ahead of the month's even
+          # write line is skipped, so collection spreads across the whole month.
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            npm run collect -- --known-only --pace
+          elif [ "${{ inputs.knownOnly }}" = "true" ]; then
             npm run collect -- --known-only
           else
             npm run collect

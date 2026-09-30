@@ -45,7 +45,7 @@ async function main() {
   const { TURSO_FREE_PLAN } = await import("../src/lib/db/write-counts");
   const { getDatabaseSizeBytes, getMonthWriteBudget, PRODUCTION_SCHEDULE } =
     await import("../src/lib/db/write-budget");
-  const { BUDGET_GUARD } = await import("../src/lib/collector/budget-guard");
+  const { BUDGET_GUARD, paceAllowance } = await import("../src/lib/collector/budget-guard");
 
   // Default schedule = what the workflows run today (collect every 3h,
   // analytics twice a day, game passes daily).
@@ -108,6 +108,10 @@ async function main() {
   console.log(
     `Collector budget guard (Task #47): busy-tier only above ${BUDGET_GUARD.reduceAt * 100}% ` +
       `projected, paused above ${BUDGET_GUARD.pauseAt * 100}% written.`,
+  );
+  console.log(
+    `Pace line today (Task #79): ${fmt(paceAllowance(report, cap))} — scheduled collect runs ` +
+      `are skipped while the month's writes are above it.`,
   );
   if (report.fullMonthAnalyticsReadsAtSchedule !== null) {
     console.log(

@@ -11,6 +11,10 @@ AnalyticsResult rows, writing just what changed (Task #43).
 One job failing never blocks the others (each is independent), but if ANY job
 fails the process exits non-zero so CI reports the run as failed — a workflow
 that always goes green would be worthless as a monitoring signal (Task #34).
+
+Before loading anything, the write-budget guard (Task #80, budget.py) checks
+this month's measured writes. Past the collector's 95% pause line the run is
+skipped and logged `partial` (no alert). `--ignore-budget` runs it anyway.
 """
 from __future__ import annotations
 
@@ -19,6 +23,7 @@ import time
 import traceback
 from datetime import datetime, timezone
 
+import budget
 import db
 import survival
 import momentum
@@ -78,10 +83,38 @@ def _analytics_writes(written: dict[str, dict]) -> dict[str, dict]:
     return {"AnalyticsResult": total}
 
 
+def skip_for_budget(con: db.Connection, started_at: datetime) -> bool:
+    """Record a skipped run and return True when the write budget is past the pause line."""
+    reason = budget.pause_reason(budget.month_writes_to_date(con, started_at))
+    if reason is None:
+        return False
+    print(f"::warning::{reason}")
+    db.record_job_run(
+        con,
+        job="analytics",
+        status="partial",
+        started_at=started_at,
+        finished_at=datetime.now(timezone.utc),
+        summary={"jobs": 0, "failed": 0, "budgetGuard": "paused", "writes": {}, "writesTotal": 0},
+        error=reason,
+    )
+    return True
+
+
 if __name__ == "__main__":
     print("Running Phase 4 analytics jobs...")
     started_at = datetime.now(timezone.utc)
     con = db.connect()
+
+    if "--ignore-budget" not in sys.argv:
+        try:
+            skipped = skip_for_budget(con, started_at)
+        except Exception:
+            con.close()
+            raise
+        if skipped:
+            con.close()
+            sys.exit(0)
 
     load_start = time.time()
     failures: list[str]

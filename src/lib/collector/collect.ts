@@ -9,6 +9,8 @@
  * Before any of that, the write-budget guard (Task #47, budget-guard.ts) checks
  * the month's measured writes and may reduce the run to busy-tier games or
  * pause it, so collection degrades instead of running into Turso's write cap.
+ * Scheduled runs also pace themselves across the month (Task #79): a run ahead
+ * of the even-pace line is skipped.
  *
  * Every game shares one `collectedAt` timestamp so a run is a clean time slice.
  * Per-game failures are caught and tallied so one bad game never aborts the run.
@@ -71,6 +73,8 @@ export interface CollectOptions extends DiscoverOptions {
   maxGames?: number;
   /** Skip the write-budget guard (Task #47) — a deliberate manual override. */
   ignoreBudget?: boolean;
+  /** Skip the run when ahead of the month's even-pace line (Task #79). */
+  pace?: boolean;
 }
 
 export async function runCollection(opts: CollectOptions = {}): Promise<CollectionSummary> {
@@ -81,8 +85,12 @@ export async function runCollection(opts: CollectOptions = {}): Promise<Collecti
   // Write-budget guard (Task #47). Reads a month of JobRuns — no writes.
   const budgetGuard = opts.ignoreBudget
     ? null
-    : decideBudgetGuard(await getMonthWriteBudget(startedAt), TURSO_FREE_PLAN.rowsWrittenPerMonth);
-  if (budgetGuard?.mode === "paused") return pausedSummary(startedAt, budgetGuard);
+    : decideBudgetGuard(await getMonthWriteBudget(startedAt), TURSO_FREE_PLAN.rowsWrittenPerMonth, {
+        pace: opts.pace,
+      });
+  if (budgetGuard?.mode === "paused" || budgetGuard?.mode === "paced") {
+    return pausedSummary(startedAt, budgetGuard);
+  }
   const reduced = budgetGuard?.mode === "reduced";
 
   const discovery = await discoverUniverseIds(
@@ -200,7 +208,7 @@ export async function runCollection(opts: CollectOptions = {}): Promise<Collecti
   };
 }
 
-/** A run the budget guard paused: nothing was fetched or written. */
+/** A run the budget guard paused or paced: nothing was fetched or written. */
 function pausedSummary(startedAt: Date, budgetGuard: BudgetGuardDecision): CollectionSummary {
   const finishedAt = new Date();
   return {
@@ -232,7 +240,7 @@ function pausedSummary(startedAt: Date, budgetGuard: BudgetGuardDecision): Colle
   };
 }
 
-/** A run with per-game errors, or one the budget guard reduced or paused, is
+/** A run with per-game errors, or one the budget guard reduced, paced or paused, is
  * "partial" rather than a clean success, so monitoring can tell them apart. A
  * run that saved (almost) nothing is a "failure", so it alerts (Task #75). */
 export function collectionJobStatus(summary: CollectionSummary): JobStatus {

@@ -168,7 +168,9 @@ export default function AboutPage() {
             If a month&apos;s database writes are on course to pass {BUDGET_GUARD.reduceAt * 100}%
             of the hosting plan&apos;s limit, only busy games are collected (no quiet games, no new
             discoveries) until the month resets; past {BUDGET_GUARD.pauseAt * 100}% already used,
-            collection pauses. Quiet games can have longer gaps in such a month.
+            collection pauses. Scheduled runs also keep to an even pace through the month: when
+            writes run ahead of it, a run is skipped so the budget lasts to the month&apos;s end.
+            Quiet games can have longer gaps in such a month.
           </li>
           <li>
             <strong className="text-foreground">All timestamps are stored in UTC</strong> and

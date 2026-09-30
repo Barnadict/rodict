@@ -67,8 +67,8 @@ describe("effectiveRunStatus", () => {
     ).toBe("partial");
   });
 
-  it("keeps guard-reduced partial runs partial", () => {
-    const summary = JSON.stringify({ due: 2000, persisted: 0, budgetGuard: "reduced" });
+  it.each(["reduced", "paced"])("keeps guard-%s partial runs partial", (budgetGuard) => {
+    const summary = JSON.stringify({ due: 2000, persisted: 0, budgetGuard });
     expect(effectiveRunStatus({ job: "collect", status: "partial", error: null, summary })).toBe(
       "partial",
     );

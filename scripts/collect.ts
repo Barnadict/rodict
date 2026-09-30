@@ -1,5 +1,8 @@
 /**
- * Manual collector run (Task #8): `npm run collect [-- --max=N --known-only --all --ignore-budget]`.
+ * Manual collector run (Task #8): `npm run collect [-- --max=N --known-only --all --ignore-budget --pace]`.
+ *
+ * `--pace` (the scheduled collect.yml runs) skips the run when the month's
+ * writes are ahead of the even-pace line (Task #79).
  *
  * Local scheduling (cron / node-cron) so history accumulates during dev is
  * Task #12; cloud automation (GitHub Actions) is Task #32.
@@ -29,6 +32,8 @@ async function main() {
   const ignoreCadence = process.argv.includes("--all");
   // Skip the write-budget guard (Task #47). Only for a deliberate manual run.
   const ignoreBudget = process.argv.includes("--ignore-budget");
+  // Skip the run when ahead of the month's even-pace line (Task #79).
+  const pace = process.argv.includes("--pace");
   const startedAt = new Date();
 
   console.log("Starting collection...");
@@ -38,6 +43,7 @@ async function main() {
       knownOnly,
       ignoreCadence,
       ignoreBudget,
+      pace,
     });
 
     console.log(JSON.stringify(summary, null, 2));
