@@ -1,0 +1,40 @@
+name: Discovery probe
+
+# Measures which discovery sources (each omni-search query, each explore-api
+# chart) still work from GitHub's datacenter IP (Task #94). Persists no games:
+# it records per-source pages, games, new games and 429s in one JobRun row.
+# Manual only; see the job's log table or the JobRun summary for the result.
+
+on:
+  workflow_dispatch:
+    inputs:
+      pages:
+        description: "Omni-search pages per query"
+        type: string
+        default: "10"
+      chartPages:
+        description: "Pages per explore chart"
+        type: string
+        default: "5"
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Probe discovery sources
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+          PAGES: ${{ inputs.pages }}
+          CHART_PAGES: ${{ inputs.chartPages }}
+        run: npm run collect:probe -- --pages="${PAGES}" --chart-pages="${CHART_PAGES}"

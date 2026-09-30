@@ -9,7 +9,7 @@ import { effectiveRunStatus } from "@/lib/collector/run-health";
  * last run failed", and so failures leave a trace beyond the CI logs.
  */
 
-export type JobName = "collect" | "analytics" | "gamepasses";
+export type JobName = "collect" | "analytics" | "gamepasses" | "discovery-probe";
 export type JobStatus = "success" | "partial" | "failure";
 
 export interface JobRunRecord {

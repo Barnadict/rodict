@@ -23,6 +23,7 @@
     "collect": "tsx scripts/collect.ts",
     "collect:prod": "tsx scripts/collect-prod.ts",
     "collect:gamepasses": "tsx scripts/collect-gamepasses.ts",
+    "collect:probe": "tsx scripts/discovery-probe.ts",
     "analytics": "analytics\\.venv\\Scripts\\python analytics/run.py",
     "test": "vitest run",
     "test:watch": "vitest",

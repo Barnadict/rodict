@@ -31,6 +31,9 @@ export interface RobloxGetOptions {
   maxAttempts?: number;
   /** Caller abort signal (merged with the per-attempt timeout). */
   signal?: AbortSignal;
+  /** Called with every attempt's HTTP status (0 = network error/timeout),
+   * retried ones included. The discovery probe counts 429s with it (Task #94). */
+  onResponse?: (status: number) => void;
 }
 
 export class RobloxApiError extends Error {
@@ -155,6 +158,7 @@ async function fetchWithRetry<T>(url: string, opts: RobloxGetOptions): Promise<T
     } catch (err) {
       // network error or timeout/abort — retry unless the caller aborted
       if (opts.signal?.aborted) throw err;
+      opts.onResponse?.(0);
       if (attempt >= maxAttempts) {
         throw new RobloxApiError(
           0,
@@ -167,6 +171,7 @@ async function fetchWithRetry<T>(url: string, opts: RobloxGetOptions): Promise<T
       continue;
     }
 
+    opts.onResponse?.(res.status);
     if (res.ok) return (await res.json()) as T;
 
     // retry on rate-limit / server errors

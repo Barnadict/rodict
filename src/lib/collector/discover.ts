@@ -53,7 +53,7 @@ export const DEFAULT_DISCOVERY_QUERIES = [
 
 // `filters_v5` is a filter UI descriptor, not a game list — it returns no games
 // and must be skipped when walking the charts.
-const SKIP_SORTS = new Set(["filters_v5"]);
+export const SKIP_SORTS = new Set(["filters_v5"]);
 
 export interface DiscoverOptions {
   /** Search queries to fan out over. Defaults to DEFAULT_DISCOVERY_QUERIES. */
