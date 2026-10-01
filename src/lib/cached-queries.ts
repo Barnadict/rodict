@@ -11,6 +11,10 @@ import { rangeToCutoff, type RangeKey } from "@/lib/date-range";
 import { getSmallIcons } from "@/lib/game-icons";
 import { WEEKLY_DAYS, WEEKLY_LIMIT, weeklySpikes, type WeeklyData } from "@/lib/weekly";
 
+// Every loader here is `use cache: remote`: they have one or a few keys and are
+// read by many pages, while plain `use cache` is per serverless instance, so
+// each cold instance re-ran them against Turso's rows-read quota.
+
 /**
  * Window growth for every rankable game, keyed only by the range so /games and
  * its export share one entry across all filter combinations (Task #70). Same
@@ -18,7 +22,7 @@ import { WEEKLY_DAYS, WEEKLY_LIMIT, weeklySpikes, type WeeklyData } from "@/lib/
  * floor.
  */
 export async function getGrowthRanking(range: RangeKey) {
-  "use cache";
+  "use cache: remote";
   cacheLife("hours");
   const rows = await getGameWindowGrowth(rangeToCutoff(range));
   return rows.map((r) => ({
@@ -41,7 +45,7 @@ export async function getGrowthById(range: RangeKey): Promise<Map<string, number
  * export all read this, so a cache refresh costs one ~day of snapshot reads.
  */
 export async function getEngagement() {
-  "use cache";
+  "use cache: remote";
   cacheLife("hours");
   return getEngagementIndex();
 }
@@ -57,21 +61,21 @@ export async function getSessionById(): Promise<Map<string, number>> {
  * pages: each page slices the days its range covers instead of reading them.
  */
 export async function getAllRankLadders() {
-  "use cache";
+  "use cache: remote";
   cacheLife("hours");
   return getRankLadders();
 }
 
 /** Every genre's concentration series (Task #87), as [genreId, series] pairs. */
 export async function getConcentrationIndex() {
-  "use cache";
+  "use cache: remote";
   cacheLife("hours");
   return [...(await getConcentrationAll())];
 }
 
 /** Update cadence for every genre (Task #88); growth over the same 30 days. */
 export async function getUpdateCadence() {
-  "use cache";
+  "use cache: remote";
   cacheLife("hours");
   // The "30d" range is CADENCE.recentDays; update-cadence.test.ts pins that.
   const growth = await getGrowthById("30d");
@@ -80,7 +84,7 @@ export async function getUpdateCadence() {
 
 /** Game-pass pricing for every genre (Task #89). */
 export async function getPassPricing() {
-  "use cache";
+  "use cache: remote";
   cacheLife("hours");
   return getPassPricingIndex();
 }

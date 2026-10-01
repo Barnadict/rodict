@@ -106,7 +106,7 @@ export async function generateMetadata(props: PageProps<"/genres/[slug]">): Prom
 
 /** Title, stat tiles and engagement: the part of the page built at deploy. */
 async function getGenreHead(slug: string) {
-  "use cache";
+  "use cache: remote";
   cacheLife("hours");
 
   const [genre, stat, engagementIndex] = await Promise.all([
@@ -128,7 +128,7 @@ async function getGenreHead(slug: string) {
 
 /** The precomputed analytics rows (one small read each). */
 async function getGenreAnalytics(genreId: string) {
-  "use cache";
+  "use cache: remote";
   cacheLife("hours");
 
   const [
@@ -176,14 +176,19 @@ async function getGenreAnalytics(genreId: string) {
   };
 }
 
+/**
+ * Reads every snapshot of the genre's games (~160K rows for a big genre), and
+ * the curve is bucketed by week of age, so a day-old copy is as good as a fresh
+ * one. Refreshing it hourly across all genres would cost ~1.2M rows an hour.
+ */
 async function getGenreLifecycleCached(genreId: string) {
-  "use cache";
-  cacheLife("hours");
+  "use cache: remote";
+  cacheLife("days");
   return getGenreLifecycle(genreId);
 }
 
 async function getGenreSeries(genreId: string, range: RangeKey) {
-  "use cache";
+  "use cache: remote";
   cacheLife("hours");
   return getGenreSnapshots(genreId, { from: rangeToCutoff(range) });
 }
@@ -193,7 +198,7 @@ async function getGenreSeries(genreId: string, range: RangeKey) {
  * these 10 rows (Task #19) — same pattern as the games list.
  */
 async function getGenreTopGames(slug: string, range: RangeKey) {
-  "use cache";
+  "use cache: remote";
   cacheLife("hours");
 
   const cutoff = rangeToCutoff(range);

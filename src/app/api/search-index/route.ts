@@ -3,7 +3,7 @@ import { cacheLife } from "next/cache";
 import { buildSearchIndex } from "@/lib/db/search";
 
 async function getSearchIndex() {
-  "use cache";
+  "use cache: remote";
   cacheLife("hours");
   return buildSearchIndex();
 }
