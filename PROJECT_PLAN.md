@@ -35,6 +35,7 @@ Ask me which task to start. Remind me before any task that needs something only 
 - After 2026-10-04, check `logs/discovery.log` for the first weekly discovery run.
 - The keepalive workflow (#51) is unproven until 60 quiet days pass.
 - Check the build time and Runtime Cache usage (Vercel → Observability) after a few days of #95–#101 being live.
+- **Analytics reads grow with snapshots.** `analytics/db.py` `load_game_snapshots` reads the whole `GameSnapshot` table on every run: ~1.2M rows (2026-10-01), ×2 runs/day ≈ 73M of the 500M rows-read/month, and it grows with every collect. Before it gets heavy, load only the window each job needs, or read incrementally / from a daily rollup.
 - `db:retention` must not run in production until the last-of-day bucket is replaced by a write-once daily stat (`GameDailyStat`), as noted in `src/lib/retention/policy.ts`.
 
 ---
@@ -82,6 +83,7 @@ Failed, cancelled or broken-partial runs open (or comment on) a GitHub issue thr
 - **Cache on a key, never a `Date`.** Loaders take a `RangeKey` and work out the cutoff inside. A `now`-based argument makes a new cache key on every request, so the cache never hits.
 - **Turso rejects deep expressions** ("Expression tree is too large"). Don't build `OR:`/`AND:` from `.map()`. An ESLint rule enforces this (#77).
 - **Migrations:** `npm run db:migrate` is local only. Turso gets migrations only through the "Deploy migrations" workflow (`npm run db:deploy`).
+- **Never `prisma.<model>.aggregate({ _min/_max })` on a big table.** Prisma wraps it in a subquery, so SQLite skips the index and scans everything (1.2M rows per call on `GameSnapshot`). Use `findFirst` ordered by the column (`getSnapshotTimeBound`). This, plus per-instance `use cache` on game pages, burned ~1.2B rows read on 2026-09-30. Shared loaders with few keys use `use cache: remote`.
 - **Page through Turso by rowid, never OFFSET.** OFFSET re-reads every earlier row, and each one counts as a read.
 - **Roblox `/v1/games` accepts fewer than 100 ids per request.** Test with realistic batch sizes, not `--max=10`.
 - **Turbopack JSX whitespace:** text after `{expr}` loses its leading space when it wraps onto the next line. Keep the value and its unit in one expression.
