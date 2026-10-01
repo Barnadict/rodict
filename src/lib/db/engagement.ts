@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getSnapshotTimeBound } from "@/lib/db/games";
 import {
   EMPTY_SESSION_SUMS,
   SESSION_ESTIMATE,
@@ -46,8 +47,7 @@ export interface EngagementIndex {
  * also gives each game's latest server size (Task #91), so that costs no reads.
  */
 export async function getEngagementIndex(): Promise<EngagementIndex> {
-  const latest = await prisma.gameSnapshot.aggregate({ _max: { collectedAt: true } });
-  const end = latest._max.collectedAt;
+  const end = await getSnapshotTimeBound("last");
   if (!end) return { windowEnd: null, games: [], genres: [], serverSize: {} };
   const from = new Date(end.getTime() - SESSION_ESTIMATE.windowHours * 3_600_000);
 

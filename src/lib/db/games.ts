@@ -590,6 +590,21 @@ export async function getLatestSnapshots(gameId: string, n: number) {
   return rows.reverse();
 }
 
+/**
+ * The earliest or latest snapshot time across all games, or null when there are
+ * none. One row off the collectedAt index. Don't use `prisma.gameSnapshot
+ * .aggregate({ _min/_max })` for this: Prisma wraps aggregates in a subquery,
+ * which stops SQLite using the index, so it reads every snapshot (1.2M rows
+ * per call on Turso, which was most of the monthly rows-read quota).
+ */
+export async function getSnapshotTimeBound(which: "first" | "last"): Promise<Date | null> {
+  const row = await prisma.gameSnapshot.findFirst({
+    orderBy: { collectedAt: which === "first" ? "asc" : "desc" },
+    select: { collectedAt: true },
+  });
+  return row?.collectedAt ?? null;
+}
+
 /** universeId (as a string, for links) by internal game id. Unknown ids are left out. */
 export async function getUniverseIds(gameIds: string[]): Promise<Record<string, string>> {
   if (gameIds.length === 0) return {};

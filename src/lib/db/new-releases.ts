@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getSnapshotTimeBound } from "@/lib/db/games";
 import { TS_FORMAT } from "@/lib/db/trends";
 import { NEW_RELEASES_LIMIT, summarizeLifecycle, type Reading } from "@/lib/new-releases";
 
@@ -100,8 +101,7 @@ export async function getGenreEarlyLifecycle(
   maxDays: number,
   excludeGameId?: string,
 ) {
-  const first = await prisma.gameSnapshot.aggregate({ _min: { collectedAt: true } });
-  const firstAt = first._min.collectedAt;
+  const firstAt = await getSnapshotTimeBound("first");
   if (!firstAt) return [];
   const earliestLaunch = new Date(firstAt.getTime() - maxDays * DAY_MS);
 
