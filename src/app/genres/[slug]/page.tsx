@@ -79,9 +79,15 @@ import { getGenreShare } from "./share";
 
 type SearchParams = PageProps<"/genres/[slug]">["searchParams"];
 
-/** Every genre is built at deploy (Task #96); the list is the fixed taxonomy. */
+/**
+ * Only one genre is built at deploy (Cache Components needs at least one
+ * param); the rest render on first visit and are then kept the same way. Every
+ * genre used to be built (Task #96), but Vercel builds in iad1 with one worker
+ * and Turso is in Tokyo, so ~20 genre pages of 13+ queries each queued up
+ * behind each other until a cache fill passed Next's 50s prerender timeout.
+ */
 export function generateStaticParams() {
-  return GENRES.map((g) => ({ slug: g.slug }));
+  return GENRES.slice(0, 1).map((g) => ({ slug: g.slug }));
 }
 
 export async function generateMetadata(props: PageProps<"/genres/[slug]">): Promise<Metadata> {
