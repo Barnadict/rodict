@@ -20,7 +20,14 @@ on:
         default: true
 
 jobs:
+  # Skip quietly while Turso blocks queries (quota used up); see turso-guard.yml.
+  guard:
+    uses: ./.github/workflows/turso-guard.yml
+    secrets: inherit
+
   collect:
+    needs: guard
+    if: needs.guard.outputs.blocked != 'true'
     runs-on: ubuntu-latest
     # Headroom for a multi-thousand-game corpus: discovery walks the omni-search
     # tail + the explore-api charts, and the collector fetches/persists them all.

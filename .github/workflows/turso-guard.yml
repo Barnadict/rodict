@@ -1,0 +1,46 @@
+name: Turso guard
+
+# Reusable pre-check for the pipelines that need the hosted DB.
+#
+# Once the plan's monthly quota is used up, Turso rejects every query with
+# `BLOCKED` until the billing period resets. Every scheduled run then fails the
+# same way, and each failure sends an email and an alert comment (11 runs a day
+# for the rest of the month). This asks the DB one trivial question first: if it
+# answers BLOCKED, the caller skips its job and the run ends green with a
+# warning instead.
+#
+# It only ever skips on that exact answer. Any other outcome (network error,
+# bad token, DB down) reports `blocked=false`, so the real job runs and fails
+# loudly as before.
+
+on:
+  workflow_call:
+    outputs:
+      blocked:
+        description: '"true" when Turso is rejecting queries because the quota is used up'
+        value: ${{ jobs.check.outputs.blocked }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      blocked: ${{ steps.probe.outputs.blocked }}
+    steps:
+      - name: Ask Turso whether queries are blocked
+        id: probe
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: |
+          RES=$(curl -sS -m 20 -X POST "https://${DATABASE_URL#libsql://}/v2/pipeline" \
+            -H "Authorization: Bearer ${DATABASE_AUTH_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"requests":[{"type":"execute","stmt":{"sql":"SELECT 1 FROM Genre LIMIT 1"}},{"type":"close"}]}' \
+            || true)
+          if echo "${RES}" | grep -q '"code":"BLOCKED"'; then
+            echo "::warning::Turso is blocking queries (monthly quota used up), so this run is skipped. It resumes when the billing period resets or the plan is upgraded."
+            echo "blocked=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "blocked=false" >> "$GITHUB_OUTPUT"
+          fi

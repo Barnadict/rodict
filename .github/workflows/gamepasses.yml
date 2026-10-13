@@ -16,7 +16,14 @@ on:
         default: ""
 
 jobs:
+  # Skip quietly while Turso blocks queries (quota used up); see turso-guard.yml.
+  guard:
+    uses: ./.github/workflows/turso-guard.yml
+    secrets: inherit
+
   gamepasses:
+    needs: guard
+    if: needs.guard.outputs.blocked != 'true'
     runs-on: ubuntu-latest
     # ~760 games at the shared limiter's ≤5 req/s is ~3 min; room for 429 retries.
     timeout-minutes: 20
