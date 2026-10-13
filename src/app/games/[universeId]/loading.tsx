@@ -3,7 +3,7 @@ import { StatTilesSkeleton } from "@/components/data-table/stat-tiles-skeleton";
 
 export default function GameDetailLoading() {
   return (
-    <div className="flex flex-1 flex-col gap-6 p-6" aria-busy="true">
+    <div className="page-stack" aria-busy="true">
       <span className="sr-only">Loading game…</span>
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-4">

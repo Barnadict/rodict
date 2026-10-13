@@ -55,8 +55,8 @@ export interface BadgeContent {
   href?: string;
 }
 
-const LABEL_COLOR = "#555";
-export const BADGE_COLORS = { live: "#0e7490", muted: "#9f9f9f" } as const;
+const LABEL_COLOR = "#06102a";
+export const BADGE_COLORS = { live: "#155dfc", muted: "#9f9f9f" } as const;
 
 /** The label and value for a game, or a "not tracked" badge when it's missing. */
 export function badgeContent(

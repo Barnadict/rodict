@@ -34,6 +34,8 @@ import {
   rangeToCutoff,
   type RangeKey,
 } from "@/lib/date-range";
+import { SectionHeading } from "@/components/section-heading";
+import { EmptyState } from "@/components/empty-state";
 
 export const metadata = { title: "Saturation — rodict" };
 
@@ -96,7 +98,7 @@ export default async function SaturationPage(props: PageProps<"/saturation">) {
   );
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-6">
+    <div className="page-stack">
       <PageHeader
         title="Genre saturation"
         description="Supply vs. demand by genre. Genres high on the chart but far left have many players spread across few games — potentially under-served. Genres to the right are crowded. High players-per-game is a signal, not advice."
@@ -110,25 +112,27 @@ export default async function SaturationPage(props: PageProps<"/saturation">) {
       />
 
       {points.length === 0 ? (
-        <div className="flex h-64 flex-col items-center justify-center gap-1 rounded-lg border border-dashed text-center text-muted-foreground">
-          {asOf ? (
+        <EmptyState
+          title={
             <>
-              <p>No collected history reaches back that far yet.</p>
-              <p className="text-sm">
-                The collector only started recently — this is expected, not a bug.
-              </p>
+              {asOf ? (
+                <>
+                  <p>No collected history reaches back that far yet.</p>
+                  <p className="text-sm">Collection started recently. A shorter range has data.</p>
+                </>
+              ) : (
+                <p>No classified genres with games yet — run the collector first.</p>
+              )}
             </>
-          ) : (
-            <p>No classified genres with games yet — run the collector first.</p>
-          )}
-        </div>
+          }
+        />
       ) : (
         <>
-          <div className="rounded-lg border p-4">
+          <div>
             <SaturationScatter data={points} />
           </div>
 
-          <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
+          <div className="overflow-x-auto xl:overflow-visible">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -146,7 +150,7 @@ export default async function SaturationPage(props: PageProps<"/saturation">) {
               <TableBody>
                 {points.map((p) => (
                   <TableRow key={p.slug}>
-                    <TableCell className="font-medium">
+                    <TableCell className="font-bold">
                       <Link
                         href={`/genres/${p.slug}`}
                         className="inline-flex items-center gap-2 hover:underline"
@@ -177,7 +181,7 @@ export default async function SaturationPage(props: PageProps<"/saturation">) {
         </>
       )}
 
-      <p className="text-sm text-muted-foreground">
+      <p className="max-w-[75ch] text-sm text-muted-foreground">
         {hasScores ? (
           <>
             The <span className="font-medium text-foreground">Opportunity</span> score (0–100) is a
@@ -199,9 +203,9 @@ export default async function SaturationPage(props: PageProps<"/saturation">) {
       </p>
 
       {concentrationRows.length > 0 && (
-        <section id="concentration" className="flex scroll-mt-6 flex-col gap-3">
+        <section id="concentration" className="flex scroll-mt-20 flex-col gap-3">
           <div>
-            <h2 className="font-medium">Market concentration</h2>
+            <SectionHeading>Market concentration</SectionHeading>
             <p className="max-w-2xl text-sm text-muted-foreground">
               How much of each genre&apos;s players its biggest games hold on the latest day, from
               each game&apos;s daily average players. A genre with a high HHI is a few giants: a new
@@ -209,7 +213,7 @@ export default async function SaturationPage(props: PageProps<"/saturation">) {
               concentrated first; the day&apos;s date is in each genre&apos;s row.
             </p>
           </div>
-          <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
+          <div className="overflow-x-auto xl:overflow-visible">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -229,7 +233,7 @@ export default async function SaturationPage(props: PageProps<"/saturation">) {
               <TableBody>
                 {concentrationRows.map((r) => (
                   <TableRow key={r.slug}>
-                    <TableCell className="font-medium">
+                    <TableCell className="font-bold">
                       <Link
                         href={`/genres/${r.slug}#concentration`}
                         className="inline-flex items-center gap-2 hover:underline"
@@ -268,7 +272,7 @@ export default async function SaturationPage(props: PageProps<"/saturation">) {
               </TableBody>
             </Table>
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="max-w-[75ch] text-xs text-muted-foreground">
             HHI (Herfindahl-Hirschman index) is the sum of every game&apos;s squared share of the
             genre&apos;s players, on a 0–10,000 scale. Under 1,500 reads as many small games and
             over 2,500 as a few giants, the usual antitrust bands, used here only as labels.

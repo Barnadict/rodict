@@ -1,19 +1,20 @@
 import { ViewTransition } from "react";
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
+import { Archivo, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-import { AppSidebar } from "@/components/layout/app-sidebar";
 import { SiteHeader } from "@/components/layout/site-header";
 import { SiteFooter } from "@/components/layout/site-footer";
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 
-const plusJakartaSans = Plus_Jakarta_Sans({
+// One family for everything. The width axis gives the condensed display voice
+// (`font-display`, `font-figure` in globals.css) without a second download.
+const archivo = Archivo({
   variable: "--font-sans",
   subsets: ["latin"],
+  axes: ["wdth"],
 });
 
 const geistMono = Geist_Mono({
@@ -46,28 +47,23 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${plusJakartaSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${archivo.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="min-h-full">
+      <body className="flex min-h-full flex-col">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <TooltipProvider delay={200}>
-            <SidebarProvider style={{ "--sidebar-width": "13rem" } as React.CSSProperties}>
-              <AppSidebar />
-              {/* min-w-0: a long unbreakable line (an embed snippet, a URL) scrolls in
-                  its own box instead of widening the page past the screen. */}
-              <SidebarInset className="min-w-0">
-                <SiteHeader />
-                <main className="flex flex-1 flex-col">
-                  {/* Page changes fade and rise in (Task #107). Only updates
-                      animate; the sidebar and header sit outside and stay put. */}
-                  <ViewTransition update="page" default="none">
-                    <div className="flex flex-1 flex-col">{children}</div>
-                  </ViewTransition>
-                </main>
-                <SiteFooter />
-              </SidebarInset>
-            </SidebarProvider>
+            <SiteHeader />
+            {/* min-w-0: a long unbreakable line (an embed snippet, a URL) scrolls in
+                its own box instead of widening the page past the screen. */}
+            <main className="flex min-w-0 flex-1 flex-col">
+              {/* Page changes fade and rise in. Only updates animate; the top
+                  bar sits outside and stays put. */}
+              <ViewTransition update="page" default="none">
+                <div className="flex flex-1 flex-col">{children}</div>
+              </ViewTransition>
+            </main>
+            <SiteFooter />
           </TooltipProvider>
         </ThemeProvider>
       </body>

@@ -66,12 +66,12 @@ export function Sparkline({
       <path
         d={d}
         fill="none"
-        stroke="var(--primary)"
+        stroke="var(--chart-line)"
         strokeWidth={1.5}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <circle cx={x(last.i)} cy={y(last.v)} r={2} fill="var(--primary)" />
+      <circle cx={x(last.i)} cy={y(last.v)} r={2} fill="var(--chart-line)" />
     </svg>
   );
 }

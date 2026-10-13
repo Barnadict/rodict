@@ -38,14 +38,11 @@ export function SortableHeader<F extends string>({
   const link = (
     <Link
       href={`?${params.toString()}`}
-      className="inline-flex items-center gap-1 hover:text-foreground"
+      className={`inline-flex items-center gap-1 hover:text-foreground ${isActive ? "font-semibold text-foreground" : ""}`}
       scroll={false}
     >
       {label}
-      <Icon
-        aria-hidden="true"
-        className={`size-3.5 ${isActive ? "text-foreground" : "text-muted-foreground/50"}`}
-      />
+      <Icon aria-hidden="true" className={`size-3.5 ${isActive ? "text-link" : "opacity-50"}`} />
       {isActive && (
         <span className="sr-only">
           , sorted {currentOrder === "desc" ? "descending" : "ascending"}

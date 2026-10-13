@@ -24,6 +24,7 @@
     "collect:prod": "tsx scripts/collect-prod.ts",
     "collect:gamepasses": "tsx scripts/collect-gamepasses.ts",
     "collect:probe": "tsx scripts/discovery-probe.ts",
+    "dev:backfill": "tsx scripts/dev-backfill.ts",
     "analytics": "analytics\\.venv\\Scripts\\python analytics/run.py",
     "speed": "tsx scripts/measure-speed.ts",
     "test": "vitest run",

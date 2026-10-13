@@ -31,6 +31,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { CopyCode } from "@/components/copy-code";
 import { PageHeader } from "@/components/page-header";
+import { SectionHeading } from "@/components/section-heading";
 
 export const metadata = {
   title: "API and feeds — rodict",
@@ -68,8 +69,8 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section id={id} className="flex min-w-0 scroll-mt-6 flex-col gap-3">
-      <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
+    <section id={id} className="flex min-w-0 scroll-mt-20 flex-col gap-3">
+      <SectionHeading>{title}</SectionHeading>
       {children}
     </section>
   );
@@ -91,7 +92,7 @@ function Params({
   rows: { name: string; values: React.ReactNode; notes: React.ReactNode }[];
 }) {
   return (
-    <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
+    <div className="overflow-x-auto xl:overflow-visible">
       <Table>
         <TableHeader>
           <TableRow>
@@ -119,7 +120,7 @@ function Params({
 function Examples({ items }: { items: { what: string; code: string }[] }) {
   return (
     <div className="flex min-w-0 flex-col gap-2">
-      <h3 className="text-sm font-medium">Examples</h3>
+      <h3 className="text-[13px] text-muted-foreground">Examples</h3>
       {items.map((e) => (
         <div key={e.code} className="flex min-w-0 flex-col gap-1">
           <span className="text-xs text-muted-foreground">{e.what}</span>
@@ -143,7 +144,7 @@ const RANGE_PARAM = (notes: React.ReactNode) => ({
 
 export default function ApiDocsPage() {
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-8 p-6">
+    <div className="page-stack min-w-0">
       <PageHeader
         title="API and feeds"
         description="Download rodict's tables as CSV or JSON, follow a watchlist or the weekly recap in a feed reader, and embed a live badge. Everything is a plain GET: no key, no account."
@@ -208,8 +209,8 @@ export default function ApiDocsPage() {
           per row. Both are sent as a download named like <code>rodict-games-2026-10-01.csv</code>.
         </p>
 
-        <div id="export-games" className="flex min-w-0 scroll-mt-6 flex-col gap-3 pt-2">
-          <h3 className="font-medium">games</h3>
+        <div id="export-games" className="flex min-w-0 scroll-mt-20 flex-col gap-3 pt-2">
+          <SectionHeading as="h3">games</SectionHeading>
           <Endpoint path="/api/export/games" />
           <p className="max-w-3xl text-sm text-muted-foreground">
             The games list, filtered and sorted like{" "}
@@ -288,8 +289,8 @@ export default function ApiDocsPage() {
           />
         </div>
 
-        <div id="export-trending" className="flex min-w-0 scroll-mt-6 flex-col gap-3 pt-2">
-          <h3 className="font-medium">trending</h3>
+        <div id="export-trending" className="flex min-w-0 scroll-mt-20 flex-col gap-3 pt-2">
+          <SectionHeading as="h3">trending</SectionHeading>
           <Endpoint path="/api/export/trending" />
           <p className="max-w-3xl text-sm text-muted-foreground">
             The rising games or genres from{" "}
@@ -323,8 +324,8 @@ export default function ApiDocsPage() {
           />
         </div>
 
-        <div id="export-snapshots" className="flex min-w-0 scroll-mt-6 flex-col gap-3 pt-2">
-          <h3 className="font-medium">snapshots</h3>
+        <div id="export-snapshots" className="flex min-w-0 scroll-mt-20 flex-col gap-3 pt-2">
+          <SectionHeading as="h3">snapshots</SectionHeading>
           <Endpoint path="/api/export/snapshots" />
           <p className="max-w-3xl text-sm text-muted-foreground">
             One game&apos;s raw readings, oldest first, as collected from Roblox&apos;s public API:
@@ -360,7 +361,7 @@ export default function ApiDocsPage() {
         </p>
 
         <div className="flex min-w-0 flex-col gap-3">
-          <h3 className="font-medium">Watchlist feed</h3>
+          <SectionHeading as="h3">Watchlist feed</SectionHeading>
           <Endpoint path="/feed?games={ids}&genres={slugs}" />
           <p className="max-w-3xl text-sm text-muted-foreground">
             Flagged spikes and drops and big week-over-week moves (24h average players changing by
@@ -389,7 +390,7 @@ export default function ApiDocsPage() {
         </div>
 
         <div className="flex min-w-0 flex-col gap-3 pt-2">
-          <h3 className="font-medium">Weekly recap feed</h3>
+          <SectionHeading as="h3">Weekly recap feed</SectionHeading>
           <Endpoint path="/weekly/feed" />
           <p className="max-w-3xl text-sm text-muted-foreground">
             One entry per ISO week: the top risers, new entrants, games that went dead and the

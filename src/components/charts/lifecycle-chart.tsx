@@ -15,6 +15,7 @@ import type { NameType, ValueType } from "recharts/types/component/DefaultToolti
 
 import { formatCompact } from "@/lib/format";
 import type { BenchmarkBandPoint } from "@/lib/launch-benchmark";
+import { EmptyState } from "@/components/empty-state";
 
 export interface LifecyclePoint {
   weekAge: number;
@@ -77,12 +78,11 @@ export function LifecycleChart({
 }) {
   if (data.length < 2 && band.length < 2) {
     return (
-      <div className="flex h-56 flex-col items-center justify-center gap-1 rounded-lg border border-dashed text-center text-muted-foreground">
-        <p>Not enough longitudinal history to plot a lifecycle curve yet.</p>
-        <p className="text-sm">
-          This fills in as weeks of snapshots accumulate — expected during cold start.
-        </p>
-      </div>
+      <EmptyState
+        title="Not enough history to plot a lifecycle curve yet"
+        hint="This fills in as weeks of snapshots accumulate."
+        style={{ minHeight: 224 }}
+      />
     );
   }
 
@@ -167,7 +167,7 @@ export function LifecycleChart({
           <Line
             type="monotone"
             dataKey="avgPlaying"
-            stroke="var(--primary)"
+            stroke="var(--chart-line)"
             strokeWidth={2}
             dot={false}
             connectNulls

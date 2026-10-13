@@ -35,6 +35,10 @@ import { GameIcon } from "@/components/game-icon";
 import { GenreDot } from "@/components/genre-badge";
 import { PageHeader } from "@/components/page-header";
 import { MobileCards } from "@/components/data-table/mobile-cards";
+import { SectionHeading } from "@/components/section-heading";
+import { Rank } from "@/components/rank";
+import { LeadFigure, LeadRow } from "@/components/lead-figure";
+import { EmptyState } from "@/components/empty-state";
 
 export const metadata = { title: "New releases — rodict" };
 
@@ -109,15 +113,31 @@ export default async function NewReleasesPage(props: PageProps<"/new">) {
   const newOnRoblox = rows.filter((r) => r.kind === "new-on-roblox").length;
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-6">
+    <div className="page-stack">
       <PageHeader
         title="New releases"
         description={`Games created on Roblox or first tracked here in the last ${NEW_RELEASE_DAYS} days, and how their first days compare with others in their genre.`}
       />
 
-      <div className="rounded-lg border p-3 text-sm">
+      <LeadRow
+        lead={
+          <LeadFigure
+            label={`New on Roblox, last ${NEW_RELEASE_DAYS} days`}
+            value={newOnRoblox.toLocaleString("en-US")}
+            note="Tracked games created on Roblox in the window. Only games discovery has found."
+          />
+        }
+      >
+        <StatTile label="Newly tracked" value={formatCompact(rows.length - newOnRoblox)} />
+        <StatTile
+          label="Playing now"
+          value={formatCompact(rows.reduce((s, r) => s + r.currentPlaying, 0))}
+        />
+      </LeadRow>
+
+      <div className="max-w-[75ch] text-sm">
         <p>
-          <span className="font-medium">
+          <span className="font-semibold">
             Discovery last ran{" "}
             {discovery ? (
               <>
@@ -141,31 +161,20 @@ export default async function NewReleasesPage(props: PageProps<"/new">) {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <StatTile label="New on Roblox" value={formatCompact(newOnRoblox)} />
-        <StatTile label="Newly tracked" value={formatCompact(rows.length - newOnRoblox)} />
-        <StatTile
-          label="Playing now"
-          value={formatCompact(rows.reduce((s, r) => s + r.currentPlaying, 0))}
-        />
-      </div>
-
       {chosen && (
-        <section id="curve" className="flex scroll-mt-4 flex-col gap-3">
+        <section id="curve" className="flex scroll-mt-20 flex-col gap-3">
+          <SectionHeading>
+            Early curve:{" "}
+            <Link href={`/games/${chosen.universeId}`} className="hover:underline">
+              {chosen.name}
+            </Link>
+          </SectionHeading>
+          <p className="max-w-[75ch] text-sm text-muted-foreground">
+            Daily average players by day since the game was created on Roblox, over the median and
+            middle half of other {chosen.currentGenre ? chosen.currentGenre.name : "same-genre"}{" "}
+            games at the same age. Pick another game with &ldquo;Curve&rdquo; in the table.
+          </p>
           <div>
-            <h2 className="font-medium">
-              Early curve:{" "}
-              <Link href={`/games/${chosen.universeId}`} className="hover:underline">
-                {chosen.name}
-              </Link>
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Daily average players by day since the game was created on Roblox, over the median and
-              middle half of other {chosen.currentGenre ? chosen.currentGenre.name : "same-genre"}{" "}
-              games at the same age. Pick another game with &ldquo;Curve&rdquo; in the table.
-            </p>
-          </div>
-          <div className="rounded-lg border p-4">
             {curve ? (
               <EarlyCurveChart
                 game={curve.game}
@@ -175,14 +184,15 @@ export default async function NewReleasesPage(props: PageProps<"/new">) {
                 maxDays={EARLY_CURVE_DAYS}
               />
             ) : (
-              <div className="flex h-40 items-center justify-center text-center text-muted-foreground">
-                {chosen.name} was created on Roblox long before we started tracking it, so there are
-                no early days to draw.
-              </div>
+              <EmptyState
+                title="No early days to draw"
+                hint={`${chosen.name} was created on Roblox long before rodict started tracking it.`}
+                style={{ minHeight: 160 }}
+              />
             )}
           </div>
           {curve && (
-            <p className="text-xs text-muted-foreground">
+            <p className="max-w-[75ch] text-xs text-muted-foreground">
               {curve.genre.length === 0
                 ? chosen.currentGenre
                   ? `Not enough ${chosen.currentGenre.name} games were tracked from launch to draw a genre band yet (it needs ${LIFECYCLE_MIN_GAMES}+ games at a given age). Only games created after collection began can have readings from their first days, so this fills in over time.`
@@ -194,20 +204,23 @@ export default async function NewReleasesPage(props: PageProps<"/new">) {
       )}
 
       <section className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-medium">
-            {total > rows.length
-              ? `Top ${rows.length} of ${formatCompact(total)} by players`
-              : `${rows.length} game${rows.length === 1 ? "" : "s"}`}
-          </h2>
-          <PresetLinks
-            param="sort"
-            options={SORT_OPTIONS}
-            current={sort}
-            clearValue="players"
-            baseParams={{ game: get("game") }}
-          />
-        </div>
+        <SectionHeading
+          aside={
+            <>
+              <PresetLinks
+                param="sort"
+                options={SORT_OPTIONS}
+                current={sort}
+                clearValue="players"
+                baseParams={{ game: get("game") }}
+              />
+            </>
+          }
+        >
+          {total > rows.length
+            ? `Top ${rows.length} of ${formatCompact(total)} by players`
+            : `${rows.length} game${rows.length === 1 ? "" : "s"}`}
+        </SectionHeading>
         <MobileCards
           empty={`No games created or first tracked in the last ${NEW_RELEASE_DAYS} days.`}
           items={sorted.map((g, i) => ({
@@ -233,11 +246,11 @@ export default async function NewReleasesPage(props: PageProps<"/new">) {
             ],
           }))}
         />
-        <div className="hidden overflow-x-auto rounded-lg border sm:block xl:overflow-visible">
+        <div className="hidden overflow-x-auto sm:block xl:overflow-visible">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-10">#</TableHead>
+                <TableHead className="w-10 text-right">Pos.</TableHead>
                 <TableHead>Game</TableHead>
                 <TableHead>Genre</TableHead>
                 <TableHead className="text-right">Created</TableHead>
@@ -259,7 +272,9 @@ export default async function NewReleasesPage(props: PageProps<"/new">) {
               )}
               {sorted.map((g, i) => (
                 <TableRow key={g.id} className={g.id === chosen?.id ? "bg-muted/50" : undefined}>
-                  <TableCell className="text-muted-foreground tabular-nums">{i + 1}</TableCell>
+                  <TableCell className="text-right">
+                    <Rank value={i + 1} size="sm" />
+                  </TableCell>
                   <TableCell className="min-w-56 whitespace-normal">
                     <div className="flex flex-wrap items-center gap-1.5">
                       <GameIcon src={g.icon} className="mr-1" />
@@ -318,7 +333,7 @@ export default async function NewReleasesPage(props: PageProps<"/new">) {
             </TableBody>
           </Table>
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="max-w-[75ch] text-xs text-muted-foreground">
           {/* One string: a text chunk after an expression that wraps loses its
               leading space (see the note in /about), and Prettier removes {" "}. */}
           {`Lists the ${NEW_RELEASES_LIMIT} most-played new games at most; sorting by change reorders those. 7-day change compares average players in the 24h up to each game’s latest reading with the same 24h a week earlier, and shows “—” for a game without readings a week back. “Newly tracked” games are older games that discovery only just found.`}

@@ -25,6 +25,8 @@ import { LocalTime } from "@/components/local-time";
 import { GameIcon } from "@/components/game-icon";
 import { GenreDot } from "@/components/genre-badge";
 import { PageHeader } from "@/components/page-header";
+import { SectionHeading } from "@/components/section-heading";
+import { LeadFigure, LeadRow } from "@/components/lead-figure";
 
 /** Icons for at most this many of a creator's games (most played first). */
 const ICON_LIMIT = 100;
@@ -67,7 +69,7 @@ export default async function CreatorPage(props: PageProps<"/creators/[id]">) {
     String(universeId) in icons ? icons[String(universeId)] : undefined;
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-6">
+    <div className="page-stack">
       <PageHeader
         breadcrumbs={[{ label: "Creators", href: "/creators" }]}
         title={name}
@@ -90,13 +92,20 @@ export default async function CreatorPage(props: PageProps<"/creators/[id]">) {
         </div>
       </PageHeader>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <LeadRow
+        lead={
+          <LeadFigure
+            label="Players now"
+            value={summary.totalPlaying.toLocaleString("en-US")}
+            note="Across this creator's tracked games at the last collection."
+          />
+        }
+      >
         <StatTile
           label="Games tracked"
           value={formatCompact(summary.games)}
           hint={summary.active < summary.games ? `${summary.active} active` : undefined}
         />
-        <StatTile label="Players now" value={formatCompact(summary.totalPlaying)} />
         <StatTile
           label="Hits"
           value={formatCompact(summary.hits)}
@@ -108,18 +117,20 @@ export default async function CreatorPage(props: PageProps<"/creators/[id]">) {
           value={formatUsdRange(earnings.low, earnings.high)}
           badge="Est."
         />
-      </div>
-      <p className="-mt-3 text-sm text-muted-foreground">
-        A <span className="font-medium text-foreground">hit</span> is our own threshold: an all-time
-        peak of at least {formatCompact(HIT_PEAK_PLAYERS)} concurrent players. The peak only covers
-        the time since we started tracking each game, so an older game&apos;s launch peak can be
-        missed.
+      </LeadRow>
+      <p className="-mt-2 max-w-[75ch] text-[13px] text-muted-foreground">
+        A <span className="font-semibold text-foreground">hit</span> is our own threshold: an
+        all-time peak of at least {formatCompact(HIT_PEAK_PLAYERS)} concurrent players. The peak
+        only covers the time since we started tracking each game, so an older game&apos;s launch
+        peak can be missed.
       </p>
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-medium">Genres covered</h2>
+        <SectionHeading>Genres covered</SectionHeading>
         {summary.genres.length === 0 ? (
-          <p className="text-sm text-muted-foreground">None of their games has a genre yet.</p>
+          <p className="max-w-[75ch] text-sm text-muted-foreground">
+            None of their games has a genre yet.
+          </p>
         ) : (
           <div className="flex flex-wrap gap-2">
             {summary.genres.map((g) => (
@@ -134,14 +145,14 @@ export default async function CreatorPage(props: PageProps<"/creators/[id]">) {
           </div>
         )}
         {summary.unclassified > 0 && (
-          <p className="text-sm text-muted-foreground">
+          <p className="max-w-[75ch] text-sm text-muted-foreground">
             {summary.unclassified} game{summary.unclassified === 1 ? " has" : "s have"} no genre.
           </p>
         )}
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-medium">Games</h2>
+        <SectionHeading>Games</SectionHeading>
         <MobileCards
           items={games.map((game) => ({
             key: game.id,
@@ -167,7 +178,7 @@ export default async function CreatorPage(props: PageProps<"/creators/[id]">) {
             ],
           }))}
         />
-        <div className="hidden overflow-x-auto rounded-lg border sm:block xl:overflow-visible">
+        <div className="hidden overflow-x-auto sm:block xl:overflow-visible">
           <Table>
             <TableHeader>
               <TableRow>
@@ -182,7 +193,7 @@ export default async function CreatorPage(props: PageProps<"/creators/[id]">) {
             <TableBody>
               {games.map((game) => (
                 <TableRow key={game.id}>
-                  <TableCell className="min-w-48 font-medium whitespace-normal">
+                  <TableCell className="min-w-48 font-bold whitespace-normal">
                     <span className="flex flex-wrap items-center gap-1.5">
                       <GameIcon src={iconOf(game.universeId)} className="mr-1" />
                       <Link href={`/games/${game.universeId}`} className="hover:underline">

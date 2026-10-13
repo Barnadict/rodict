@@ -70,7 +70,7 @@ export function GenreThemeMatrix({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="max-h-[36rem] overflow-auto rounded-lg border">
+      <div className="max-h-[36rem] overflow-auto border-y">
         <table className="w-max border-separate border-spacing-0.5 text-xs">
           <caption className="sr-only">
             Median current players per game for each genre and theme combination, with the number of

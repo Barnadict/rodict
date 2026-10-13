@@ -30,6 +30,7 @@ import { GenreBadge } from "@/components/genre-badge";
 import { GameIcon } from "@/components/game-icon";
 import { Sparkline } from "@/components/sparkline";
 import { PageHeader } from "@/components/page-header";
+import { Rank } from "@/components/rank";
 import { MobileCards } from "@/components/data-table/mobile-cards";
 import {
   Table,
@@ -233,10 +234,10 @@ export default async function GamesPage(props: PageProps<"/games">) {
   const headerParams = { ...filterParams, range: rangeParam, view: viewParam };
 
   return (
-    <div className="flex flex-1 flex-col gap-4 p-6">
+    <div className="page-stack">
       <PageHeader
         title="Games"
-        description={`${total.toLocaleString()} tracked game${total === 1 ? "" : "s"} — sortable by players, visits, favorites, like ratio, growth and est. session length.`}
+        description={`${total.toLocaleString("en-US")} tracked game${total === 1 ? "" : "s"}${Object.values(filterParams).some(Boolean) ? " match these filters" : ""}. Sort by players, visits, favorites, like ratio, growth or est. session length.`}
       >
         {sort === "likeRatio" && (
           <p className="mt-1 text-sm text-muted-foreground">
@@ -267,7 +268,7 @@ export default async function GamesPage(props: PageProps<"/games">) {
         )}
       </PageHeader>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 border-b pb-5 xl:flex-row xl:items-end xl:justify-between">
         <GamesFilters genres={genres} themes={themes} hasRange={range !== RANGE_CLEAR_VALUE} />
         <div className="flex flex-wrap items-center gap-3">
           <ExportLinks
@@ -298,7 +299,7 @@ export default async function GamesPage(props: PageProps<"/games">) {
       </div>
 
       {view === "grid" ? (
-        <GamesGrid games={games} icons={icons} />
+        <GamesGrid games={games} icons={icons} startRank={(page - 1) * PAGE_SIZE + 1} />
       ) : (
         <>
           <MobileCards
@@ -323,14 +324,14 @@ export default async function GamesPage(props: PageProps<"/games">) {
               };
             })}
           />
-          <div className="hidden overflow-x-auto rounded-lg border sm:block xl:overflow-visible">
+          <div className="hidden overflow-x-auto sm:block xl:overflow-visible">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-8">
                     <span className="sr-only">Watch</span>
                   </TableHead>
-                  <TableHead className="w-10">#</TableHead>
+                  <TableHead className="w-10 text-right">Pos.</TableHead>
                   <TableHead>Game</TableHead>
                   <TableHead>Genre</TableHead>
                   <TableHead>Last {SPARK_DAYS}d</TableHead>
@@ -404,9 +405,9 @@ export default async function GamesPage(props: PageProps<"/games">) {
                   <TableRow>
                     <TableCell
                       colSpan={10 + (growthByGame ? 1 : 0) + (sessionByGame ? 1 : 0)}
-                      className="h-24 text-center text-muted-foreground"
+                      className="h-24 text-muted-foreground"
                     >
-                      No games match these filters.
+                      No games match these filters. Loosen a filter or clear the search.
                     </TableCell>
                   </TableRow>
                 )}
@@ -428,10 +429,10 @@ export default async function GamesPage(props: PageProps<"/games">) {
                           size="icon"
                         />
                       </TableCell>
-                      <TableCell className="text-muted-foreground tabular-nums">
-                        {(page - 1) * PAGE_SIZE + i + 1}
+                      <TableCell className="text-right">
+                        <Rank value={(page - 1) * PAGE_SIZE + i + 1} size="sm" />
                       </TableCell>
-                      <TableCell className="min-w-48 font-medium whitespace-normal">
+                      <TableCell className="min-w-48 font-bold whitespace-normal">
                         <div className="flex items-center gap-2.5">
                           <GameIcon src={icons?.get(String(game.universeId))} />
                           <div className="min-w-0">
@@ -452,7 +453,7 @@ export default async function GamesPage(props: PageProps<"/games">) {
                       <TableCell>
                         <Sparkline values={sparks?.[game.id] ?? []} />
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="text-right text-base font-figure">
                         {formatCompact(game.currentPlaying)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">

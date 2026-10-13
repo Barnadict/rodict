@@ -76,6 +76,11 @@ import {
 import { pageMetadata } from "@/lib/site";
 
 import { getGenreShare } from "./share";
+import { SectionHeading } from "@/components/section-heading";
+import { LeadFigure } from "@/components/lead-figure";
+import { ShareBar } from "@/components/share-bar";
+import { Rank } from "@/components/rank";
+import { EmptyState } from "@/components/empty-state";
 
 type SearchParams = PageProps<"/genres/[slug]">["searchParams"];
 
@@ -242,7 +247,7 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
   const id = genre.id;
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-6">
+    <div className="page-stack">
       <PageHeader
         breadcrumbs={[{ label: "Genres", href: "/genres" }]}
         crumb={genre.name}
@@ -261,20 +266,26 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="Games" value={formatCompact(stat?.gameCount ?? 0)} />
-        <StatTile label="Players now" value={formatCompact(stat?.totalPlaying ?? 0)} />
-        <StatTile label="Total visits" value={formatCompact(stat?.totalVisits ?? 0)} />
-        <StatTile
-          label="Est. earnings/day"
-          help="earnings"
-          value={earnings ? formatUsdRange(earnings.low, earnings.high) : "—"}
-          badge="Est."
-        />
-      </div>
+      <LeadFigure
+        label="Players now"
+        value={(stat?.totalPlaying ?? 0).toLocaleString("en-US")}
+        note={`Across ${formatCompact(stat?.gameCount ?? 0)} tracked ${genre.name} games at the last collection. A sample, not every ${genre.name} game on Roblox.`}
+      />
 
-      <div className="flex flex-col gap-2">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <Suspense fallback={<SectionSkeleton title="Players over time" className="h-72" />}>
+        <PlayersSection head={head} searchParams={props.searchParams} />
+      </Suspense>
+
+      <div className="flex flex-col gap-3">
+        <div className="grid grid-cols-2 gap-x-5 gap-y-4 sm:grid-cols-3">
+          <StatTile label="Games" value={formatCompact(stat?.gameCount ?? 0)} />
+          <StatTile label="Total visits" value={formatCompact(stat?.totalVisits ?? 0)} />
+          <StatTile
+            label="Est. earnings/day"
+            help="earnings"
+            value={earnings ? formatUsdRange(earnings.low, earnings.high) : "—"}
+            badge="Est."
+          />
           <StatTile
             label="Est. session length"
             help="session"
@@ -300,7 +311,7 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
             hint="All votes across the genre"
           />
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="max-w-[75ch] text-xs text-muted-foreground">
           Est. session length is the genre&apos;s players ÷ its visits per hour over the last{" "}
           {SESSION_ESTIMATE.windowHours}h (Little&apos;s law), so busier games weigh more.{" "}
           <Link
@@ -318,10 +329,6 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
 
       <Suspense fallback={<SectionSkeleton title="Insights" className="h-24" />}>
         <InsightsSection genreId={id} />
-      </Suspense>
-
-      <Suspense fallback={<SectionSkeleton title="Players over time" className="h-72" />}>
-        <PlayersSection head={head} searchParams={props.searchParams} />
       </Suspense>
 
       <Suspense fallback={<SectionSkeleton title="Market concentration" className="h-64" />}>
@@ -349,15 +356,13 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
       </Suspense>
 
       {serverSize && serverSize.games > 0 && (
-        <section id="servers" className="flex scroll-mt-6 flex-col gap-3">
-          <div>
-            <h2 className="font-medium">Server size</h2>
-            <p className="text-sm text-muted-foreground">
-              Players per server (the developer&apos;s max-players setting), from each game&apos;s
-              latest reading in the last {SESSION_ESTIMATE.windowHours}h.
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <section id="servers" className="flex scroll-mt-20 flex-col gap-3">
+          <SectionHeading>Server size</SectionHeading>
+          <p className="max-w-[75ch] text-sm text-muted-foreground">
+            Players per server (the developer&apos;s max-players setting), from each game&apos;s
+            latest reading in the last {SESSION_ESTIMATE.windowHours}h.
+          </p>
+          <div className="grid grid-cols-2 gap-x-5 gap-y-4 sm:grid-cols-4">
             <StatTile
               label="Typical server size"
               value={serverSize.median !== null ? formatCompact(serverSize.median) : "—"}
@@ -382,7 +387,7 @@ export default async function GenreDetailPage(props: PageProps<"/genres/[slug]">
               }
             />
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="max-w-[75ch] text-xs text-muted-foreground">
             The correlation runs from −1 to 1: above 0 means this genre&apos;s games with bigger
             servers tend to have more players, below 0 fewer. It&apos;s a rank correlation across
             games and says nothing about cause: popular kinds of game may simply use bigger servers.
@@ -407,19 +412,24 @@ async function InsightsSection({ genreId }: { genreId: string }) {
     <>
       {hasAnalytics && (
         <section className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="font-medium">Insights</h2>
-            <span className="text-xs text-muted-foreground">
-              Precomputed
-              {analyticsAt && (
-                <>
-                  {" "}
-                  · updated <LocalTime value={analyticsAt} />
-                </>
-              )}
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <SectionHeading
+            aside={
+              <>
+                <span className="text-xs text-muted-foreground">
+                  Precomputed
+                  {analyticsAt && (
+                    <>
+                      {" "}
+                      · updated <LocalTime value={analyticsAt} />
+                    </>
+                  )}
+                </span>
+              </>
+            }
+          >
+            Insights
+          </SectionHeading>
+          <div className="grid grid-cols-2 gap-x-5 gap-y-4 sm:grid-cols-4">
             <StatTile
               label="Opportunity score"
               help="opportunity"
@@ -448,8 +458,8 @@ async function InsightsSection({ genreId }: { genreId: string }) {
             />
           </div>
           {clustering && Object.keys(clustering.archetypeCounts).length > 0 && (
-            <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3">
-              <span className="text-sm text-muted-foreground">Trajectory shapes:</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[13px] text-muted-foreground">Trajectory shapes</span>
               {Object.entries(clustering.archetypeCounts).map(([label, count]) => (
                 <Badge key={label} variant="secondary">
                   {label} · {count}
@@ -459,20 +469,20 @@ async function InsightsSection({ genreId }: { genreId: string }) {
           )}
           {topMovers.length > 0 && (
             <div className="flex flex-col gap-2">
-              <div className="flex flex-col divide-y rounded-lg border">
-                <div className="p-3 text-sm text-muted-foreground">Top movers · 7 days</div>
+              <div className="flex flex-col divide-y border-b">
+                <div className="py-2 text-[13px] text-muted-foreground">Top movers · 7 days</div>
                 {topMovers.map((m) => (
                   <Link
                     key={m.gameId}
                     href={`/games/${moverUniverseIds[m.gameId]}`}
-                    className="flex items-center justify-between gap-3 p-3 hover:bg-muted/50"
+                    className="flex items-center justify-between gap-3 py-2.5 hover:bg-muted/60"
                   >
-                    <span className="min-w-0 truncate font-medium">{m.name}</span>
+                    <span className="min-w-0 truncate font-bold">{m.name}</span>
                     <GrowthBadge growth={m.growth7d} />
                   </Link>
                 ))}
               </div>
-              <p className="text-xs text-muted-foreground">
+              <p className="max-w-[75ch] text-xs text-muted-foreground">
                 Change from each game&apos;s first to its latest reading in the last 7 days. Single
                 readings swing with the time of day, so small games can move a lot; the Trending
                 page compares daily averages instead.
@@ -516,27 +526,32 @@ async function PlayersSection({
   return (
     <>
       <section className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h2 className="font-medium">Players over time</h2>
-          <PresetLinks
-            param="range"
-            options={RANGE_OPTIONS}
-            current={range}
-            clearValue={RANGE_CLEAR_VALUE}
-          />
-        </div>
-        <div className="rounded-lg border p-4">
+        <SectionHeading
+          aside={
+            <>
+              <PresetLinks
+                param="range"
+                options={RANGE_OPTIONS}
+                current={range}
+                clearValue={RANGE_CLEAR_VALUE}
+              />
+            </>
+          }
+        >
+          Players over time
+        </SectionHeading>
+        <div>
           <TrendChart
             data={trendData}
             unit="players"
             color={genreColor(genre.slug)}
             movingAverageWindow={5}
             projection={projection}
-            emptyMessage="No genre snapshots yet — the collector has only just started."
+            emptyMessage="No genre snapshots in this range yet."
             ariaLabel={`Line chart of total concurrent players over time for ${genre.name}`}
           />
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="max-w-[75ch] text-xs text-muted-foreground">
           Each point sums the genre&apos;s games at one collection run. Quiet games are collected
           about once a day, so between collections their latest reading is carried forward for up to{" "}
           {GENRE_CARRY_MAX_AGE_HOURS}h; older readings are left out. The tooltip shows the share of
@@ -544,7 +559,7 @@ async function PlayersSection({
           {Math.round(LOW_COVERAGE * 100)}%. Shaded spans are periods with no collection.
         </p>
         {forecast?.status === "ok" ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="max-w-[75ch] text-xs text-muted-foreground">
             <span className="font-medium text-foreground">Projection</span> (dashed, Est.): trend{" "}
             <Badge
               variant={
@@ -571,8 +586,8 @@ async function PlayersSection({
           </p>
         ) : (
           forecast && (
-            <p className="text-xs text-muted-foreground">
-              Not enough genre snapshots yet to project — expected during cold start.
+            <p className="max-w-[75ch] text-xs text-muted-foreground">
+              Not enough genre snapshots yet to project. This fills in as collection continues.
             </p>
           )
         )}
@@ -589,23 +604,21 @@ async function ConcentrationSection({ head }: { head: GenreHead }) {
   return (
     <>
       {conc && concentration && (
-        <section id="concentration" className="flex scroll-mt-6 flex-col gap-3">
-          <div>
-            <h2 className="font-medium">Market concentration</h2>
-            <p className="text-sm text-muted-foreground">
-              How much of the genre&apos;s players its biggest games hold, from each game&apos;s
-              daily average players (UTC days). On {conc.latest.day} its{" "}
-              {formatCompact(conc.latest.n)} games with a reading looked like{" "}
-              <span className="font-medium text-foreground">
-                {concentrationLevel(conc.latest.hhi)}
-              </span>
-              .{" "}
-              <Link href="/saturation#concentration" className="underline underline-offset-2">
-                Compare genres
-              </Link>
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <section id="concentration" className="flex scroll-mt-20 flex-col gap-3">
+          <SectionHeading>Market concentration</SectionHeading>
+          <p className="max-w-[75ch] text-sm text-muted-foreground">
+            How much of the genre&apos;s players its biggest games hold, from each game&apos;s daily
+            average players (UTC days). On {conc.latest.day} its {formatCompact(conc.latest.n)}{" "}
+            games with a reading looked like{" "}
+            <span className="font-medium text-foreground">
+              {concentrationLevel(conc.latest.hhi)}
+            </span>
+            .{" "}
+            <Link href="/saturation#concentration" className="underline underline-offset-2">
+              Compare genres
+            </Link>
+          </p>
+          <div className="grid grid-cols-2 gap-x-5 gap-y-4 sm:grid-cols-4">
             {(["top1", "top5", "top10"] as const).map((k) => (
               <StatTile
                 key={k}
@@ -625,7 +638,7 @@ async function ConcentrationSection({ head }: { head: GenreHead }) {
               hint={`Like ${effectiveGames(conc.latest.hhi)?.toFixed(1) ?? "—"} equal-sized games`}
             />
           </div>
-          <div className="rounded-lg border p-4">
+          <div>
             <DailyLinesChart
               data={concentrationRows(concentration.days)}
               lines={[
@@ -637,7 +650,7 @@ async function ConcentrationSection({ head }: { head: GenreHead }) {
               ariaLabel={`Line chart of the share of ${genre.name} players held by its top 1, 5 and 10 games per day`}
             />
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="max-w-[75ch] text-xs text-muted-foreground">
             HHI is the sum of every game&apos;s squared share, on a 0–10,000 scale: under 1,500 is
             many small games, over 2,500 a few giants (the usual antitrust bands, used here only as
             labels). A day needs {concentration.minGames}+ games with a reading. Days with no
@@ -659,28 +672,26 @@ async function LifecycleSection({ head }: { head: GenreHead }) {
 
   return (
     <>
-      <section id="lifecycle" className="flex scroll-mt-6 flex-col gap-3">
+      <section id="lifecycle" className="flex scroll-mt-20 flex-col gap-3">
+        <SectionHeading>Lifecycle</SectionHeading>
+        <p className="max-w-[75ch] text-sm text-muted-foreground">
+          Average players by weeks since a game&apos;s launch, across this genre.
+          {launchBand.length > 0 && launchBenchmark && (
+            <>
+              {" "}
+              The shaded band is the{" "}
+              <LabelWithHelp term="launchBenchmark">
+                <span className="text-foreground">launch benchmark</span>
+              </LabelWithHelp>
+              : the middle half of daily average players at each day since launch, over the first{" "}
+              {launchBenchmark.maxDay} days, from {formatCompact(launchBenchmark.nGames)} games we
+              started tracking within {launchBenchmark.nearLaunchDays} days of launch. Games found
+              later are left out, since they were found because they were doing well. A day needs{" "}
+              {launchBenchmark.minGames}+ games.
+            </>
+          )}
+        </p>
         <div>
-          <h2 className="font-medium">Lifecycle</h2>
-          <p className="text-sm text-muted-foreground">
-            Average players by weeks since a game&apos;s launch, across this genre.
-            {launchBand.length > 0 && launchBenchmark && (
-              <>
-                {" "}
-                The shaded band is the{" "}
-                <LabelWithHelp term="launchBenchmark">
-                  <span className="text-foreground">launch benchmark</span>
-                </LabelWithHelp>
-                : the middle half of daily average players at each day since launch, over the first{" "}
-                {launchBenchmark.maxDay} days, from {formatCompact(launchBenchmark.nGames)} games we
-                started tracking within {launchBenchmark.nearLaunchDays} days of launch. Games found
-                later are left out, since they were found because they were doing well. A day needs{" "}
-                {launchBenchmark.minGames}+ games.
-              </>
-            )}
-          </p>
-        </div>
-        <div className="rounded-lg border p-4">
           <LifecycleChart
             data={lifecycle}
             band={launchBand}
@@ -702,16 +713,14 @@ async function AnalyticsSections({ head }: { head: GenreHead }) {
   return (
     <>
       {survival && (
-        <section id="survival" className="flex scroll-mt-6 flex-col gap-3">
+        <section id="survival" className="flex scroll-mt-20 flex-col gap-3">
+          <SectionHeading>Survival</SectionHeading>
+          <p className="max-w-[75ch] text-sm text-muted-foreground">
+            Kaplan-Meier estimate of the share of this genre&apos;s games still alive at each age,
+            by the &ldquo;dead&rdquo; rule (&lt;5% of peak for 7+ days). Games still alive count up
+            to their latest reading.
+          </p>
           <div>
-            <h2 className="font-medium">Survival</h2>
-            <p className="text-sm text-muted-foreground">
-              Kaplan-Meier estimate of the share of this genre&apos;s games still alive at each age,
-              by the &ldquo;dead&rdquo; rule (&lt;5% of peak for 7+ days). Games still alive count
-              up to their latest reading.
-            </p>
-          </div>
-          <div className="rounded-lg border p-4">
             {survivalCurve ? (
               <SurvivalChart
                 data={survivalCurve}
@@ -719,21 +728,22 @@ async function AnalyticsSections({ head }: { head: GenreHead }) {
                 ariaLabel={`Survival curve: share of ${genre.name} games still alive by weeks since launch`}
               />
             ) : (
-              <div className="flex h-40 flex-col items-center justify-center gap-1 text-center text-muted-foreground">
-                <p>
-                  {survival.status === "insufficient_games"
+              <EmptyState
+                title={
+                  survival.status === "insufficient_games"
                     ? "Too few games with a known launch date to estimate survival."
-                    : "Survival needs games followed until they die by the dead rule."}
-                </p>
-                <p className="text-sm">
-                  {survival.nDeaths === 0
-                    ? "None observed yet — expected during cold start."
-                    : "Not enough deaths yet to draw a curve."}
-                </p>
-              </div>
+                    : "Survival needs games followed until they die by the dead rule."
+                }
+                hint={
+                  survival.nDeaths === 0
+                    ? "None observed yet. Deaths take weeks of tracking to show up."
+                    : "Not enough deaths yet to draw a curve."
+                }
+                style={{ minHeight: 160 }}
+              />
             )}
           </div>
-          <p className="text-xs text-muted-foreground tabular-nums">
+          <p className="max-w-[75ch] text-xs text-muted-foreground">
             n = {formatCompact(survival.nGames)} games · {formatCompact(survival.nDeaths)} deaths
             observed
             {survival.status === "ok" &&
@@ -746,14 +756,12 @@ async function AnalyticsSections({ head }: { head: GenreHead }) {
 
       {cohorts && cohorts.cohorts.length > 0 && (
         <section className="flex flex-col gap-3">
-          <div>
-            <h2 className="font-medium">Launch cohorts</h2>
-            <p className="text-sm text-muted-foreground">
-              This genre&apos;s games grouped by launch quarter. Older cohorts with fewer current
-              players is a cross-sectional decline signal.
-            </p>
-          </div>
-          <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
+          <SectionHeading>Launch cohorts</SectionHeading>
+          <p className="max-w-[75ch] text-sm text-muted-foreground">
+            This genre&apos;s games grouped by launch quarter. Older cohorts with fewer current
+            players is a cross-sectional decline signal.
+          </p>
+          <div className="overflow-x-auto xl:overflow-visible">
             <CohortTable cohorts={cohorts.cohorts} />
           </div>
         </section>
@@ -761,15 +769,13 @@ async function AnalyticsSections({ head }: { head: GenreHead }) {
 
       {seasonality && (
         <section className="flex flex-col gap-3">
+          <SectionHeading>When players are on</SectionHeading>
+          <p className="max-w-[75ch] text-sm text-muted-foreground">
+            The genre&apos;s players at each weekday and hour, relative to its own average over
+            everything collected: 1.30× means 30% more players than average. Blank cells are hours
+            the collector didn&apos;t run.
+          </p>
           <div>
-            <h2 className="font-medium">When players are on</h2>
-            <p className="text-sm text-muted-foreground">
-              The genre&apos;s players at each weekday and hour, relative to its own average over
-              everything collected: 1.30× means 30% more players than average. Blank cells are hours
-              the collector didn&apos;t run.
-            </p>
-          </div>
-          <div className="rounded-lg border p-4">
             {seasonality.status === "ok" && seasonality.byWeekdayHour?.length ? (
               <SeasonalityHeatmap cells={seasonality.byWeekdayHour} />
             ) : seasonality.status === "ok" ? (
@@ -782,7 +788,7 @@ async function AnalyticsSections({ head }: { head: GenreHead }) {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">
+              <p className="max-w-[75ch] text-sm text-muted-foreground">
                 Needs ≥7 days of history to show weekday and hour patterns
                 {seasonality.distinctDays !== undefined
                   ? ` (have ${seasonality.distinctDays}).`
@@ -805,18 +811,15 @@ async function CadenceSection({ genreId }: { genreId: string }) {
   return (
     <>
       {cadence && (
-        <section id="updates" className="flex scroll-mt-6 flex-col gap-3">
-          <div>
-            <h2 className="font-medium">Update cadence</h2>
-            <p className="text-sm text-muted-foreground">
-              How often this genre&apos;s games change on Roblox (a publish, or some settings
-              edits).{" "}
-              <Link href="/updates" className="underline underline-offset-2">
-                All genres and the most-updated games
-              </Link>
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <section id="updates" className="flex scroll-mt-20 flex-col gap-3">
+          <SectionHeading>Update cadence</SectionHeading>
+          <p className="max-w-[75ch] text-sm text-muted-foreground">
+            How often this genre&apos;s games change on Roblox (a publish, or some settings edits).{" "}
+            <Link href="/updates" className="underline underline-offset-2">
+              All genres and the most-updated games
+            </Link>
+          </p>
+          <div className="grid grid-cols-2 gap-x-5 gap-y-4 sm:grid-cols-4">
             <StatTile
               label={`Updated in the last ${cadenceDays} days`}
               value={
@@ -851,15 +854,15 @@ async function CadenceSection({ genreId }: { genreId: string }) {
             />
           </div>
           {cadenceTop.length > 0 && (
-            <div className="flex flex-col divide-y rounded-lg border">
-              <div className="p-3 text-sm text-muted-foreground">
+            <div className="flex flex-col divide-y border-b">
+              <div className="py-2 text-[13px] text-muted-foreground">
                 Most updated · last {cadenceDays} days
               </div>
               {cadenceTop.map((g) => (
                 <Link
                   key={g.id}
                   href={`/games/${g.universeId}`}
-                  className="flex items-center justify-between gap-3 p-3 hover:bg-muted/50"
+                  className="flex items-center justify-between gap-3 py-2.5 hover:bg-muted/60"
                 >
                   <span className="min-w-0 truncate font-medium">{g.name}</span>
                   <span className="shrink-0 text-sm text-muted-foreground tabular-nums">
@@ -870,7 +873,7 @@ async function CadenceSection({ genreId }: { genreId: string }) {
               ))}
             </div>
           )}
-          <p className="text-xs text-muted-foreground">
+          <p className="max-w-[75ch] text-xs text-muted-foreground">
             &ldquo;Updated&rdquo; and &ldquo;days since&rdquo; use every game&apos;s current
             last-updated time. Days between and counts use the updates we recorded, which only
             started recently and see at most one update per collection, so they undercount games
@@ -889,26 +892,29 @@ async function UpdateImpactSection({ genreId }: { genreId: string }) {
     <>
       {updateImpact && (
         <section className="flex flex-col gap-3">
-          <div>
-            <h2 className="flex items-center gap-2 font-medium">
-              Players after updates <Badge variant="outline">Observational</Badge>
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              How this genre&apos;s games moved after an update (a change in Roblox&apos;s
-              &ldquo;last updated&rdquo; time): average players in the window after it vs. the same
-              window before. Counts only games averaging {updateImpact.minBaseline}+ players before,
-              and leaves out updates with another update in the window. It describes what happened
-              around updates, not what they caused: games tend to update before weekends and events,
-              when play rises anyway.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <SectionHeading aside={<Badge variant="outline">Observational</Badge>}>
+            Players after updates
+          </SectionHeading>
+          <p className="max-w-[75ch] text-sm text-muted-foreground">
+            How this genre&apos;s games moved after an update (a change in Roblox&apos;s &ldquo;last
+            updated&rdquo; time): average players in the window after it vs. the same window before.
+            Counts only games averaging {updateImpact.minBaseline}+ players before, and leaves out
+            updates with another update in the window. It describes what happened around updates,
+            not what they caused: games tend to update before weekends and events, when play rises
+            anyway.
+          </p>
+          <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
             {updateImpact.windows.map((w) => (
-              <div key={w.hours} className="flex flex-col gap-1 rounded-lg border p-4 text-sm">
-                <span className="text-muted-foreground">{w.hours}h after vs. before</span>
+              <div
+                key={w.hours}
+                className="flex flex-col gap-1.5 border-t-2 border-rule pt-2.5 text-sm"
+              >
+                <span className="text-[13px] text-muted-foreground">
+                  {w.hours}h after vs. before
+                </span>
                 {w.status === "ok" ? (
                   <>
-                    <span className="text-xl font-semibold tabular-nums">
+                    <span className="text-[1.75rem] font-figure">
                       <GrowthBadge growth={w.medianChangePct} />{" "}
                       <span className="text-sm font-normal text-muted-foreground">median</span>
                     </span>
@@ -940,20 +946,18 @@ async function PassPricingSection({ head }: { head: GenreHead }) {
   return (
     <>
       {passPricing && passPricing.checkedGames > 0 && (
-        <section id="passes" className="flex scroll-mt-6 flex-col gap-3">
-          <div>
-            <h2 className="font-medium">Game pass pricing</h2>
-            <p className="text-sm text-muted-foreground">
-              Prices of the game passes on sale in this genre&apos;s games, from{" "}
-              {formatCompact(passPricing.checkedGames)} of {formatCompact(stat?.gameCount ?? 0)}{" "}
-              games whose pass list we&apos;ve checked (each game is checked about once a week).
-              These are list prices, not sales: only Roblox knows what sells.{" "}
-              <Link href="/genres#passes" className="underline underline-offset-2">
-                Compare genres
-              </Link>
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <section id="passes" className="flex scroll-mt-20 flex-col gap-3">
+          <SectionHeading>Game pass pricing</SectionHeading>
+          <p className="max-w-[75ch] text-sm text-muted-foreground">
+            Prices of the game passes on sale in this genre&apos;s games, from{" "}
+            {formatCompact(passPricing.checkedGames)} of {formatCompact(stat?.gameCount ?? 0)} games
+            whose pass list we&apos;ve checked (each game is checked about once a week). These are
+            list prices, not sales: only Roblox knows what sells.{" "}
+            <Link href="/genres#passes" className="underline underline-offset-2">
+              Compare genres
+            </Link>
+          </p>
+          <div className="grid grid-cols-2 gap-x-5 gap-y-4 sm:grid-cols-4">
             <StatTile
               label="Games with passes"
               value={`${Math.round((passPricing.gamesWithPasses / passPricing.checkedGames) * 100)}%`}
@@ -988,19 +992,14 @@ async function PassPricingSection({ head }: { head: GenreHead }) {
             />
           </div>
           {passPricing.passes > 0 && (
-            <div className="flex flex-col gap-1.5 rounded-lg border p-4">
-              <span className="text-sm text-muted-foreground">
+            <div className="flex max-w-2xl flex-col gap-1.5">
+              <span className="text-[13px] text-muted-foreground">
                 Price distribution · {formatCompact(passPricing.passes)} passes (Robux)
               </span>
               {PRICE_BUCKETS.map((b, i) => (
                 <div key={b.label} className="flex items-center gap-3 text-sm tabular-nums">
                   <span className="w-16 shrink-0 text-muted-foreground">{b.label}</span>
-                  <div className="h-3 flex-1 rounded-sm bg-muted">
-                    <div
-                      className="h-3 rounded-sm bg-primary"
-                      style={{ width: `${passPricing.distribution[i] * 100}%` }}
-                    />
-                  </div>
+                  <ShareBar value={passPricing.distribution[i]} className="h-3" />
                   <span className="w-10 shrink-0 text-right">
                     {Math.round(passPricing.distribution[i] * 100)}%
                   </span>
@@ -1027,15 +1026,24 @@ async function TopGamesSection({
   return (
     <>
       <section className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-medium">Top games</h2>
-          <ExportLinks dataset="games" params={{ genre: slug }} label="Export all games in genre" />
-        </div>
-        <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
+        <SectionHeading
+          aside={
+            <>
+              <ExportLinks
+                dataset="games"
+                params={{ genre: slug }}
+                label="Export all games in genre"
+              />
+            </>
+          }
+        >
+          Top games
+        </SectionHeading>
+        <div className="overflow-x-auto xl:overflow-visible">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-10">#</TableHead>
+                <TableHead className="w-10 text-right">Pos.</TableHead>
                 <TableHead>Game</TableHead>
                 <TableHead className="text-right">Players</TableHead>
                 <TableHead className="text-right">Visits</TableHead>
@@ -1055,8 +1063,10 @@ async function TopGamesSection({
               )}
               {topGames.games.map((game, i) => (
                 <TableRow key={game.id}>
-                  <TableCell className="text-muted-foreground tabular-nums">{i + 1}</TableCell>
-                  <TableCell className="font-medium">
+                  <TableCell className="text-right">
+                    <Rank value={i + 1} size="sm" />
+                  </TableCell>
+                  <TableCell className="text-base font-bold">
                     <Link href={`/games/${game.universeId}`} className="hover:underline">
                       {game.name}
                     </Link>

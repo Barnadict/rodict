@@ -31,6 +31,8 @@ import { GameIcon } from "@/components/game-icon";
 import { GenreDot } from "@/components/genre-badge";
 import { PageHeader } from "@/components/page-header";
 import { MobileCards } from "@/components/data-table/mobile-cards";
+import { SectionHeading } from "@/components/section-heading";
+import { LeadFigure, LeadRow } from "@/components/lead-figure";
 
 export const metadata = {
   title: "Graveyard — rodict",
@@ -75,7 +77,7 @@ export default async function GraveyardPage(props: PageProps<"/graveyard">) {
   const icons = await getListIcons(rows.map((g) => g.universeId.toString()));
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-6">
+    <div className="page-stack">
       <PageHeader
         title="Graveyard"
         description={
@@ -101,11 +103,15 @@ export default async function GraveyardPage(props: PageProps<"/graveyard">) {
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <StatTile
-          label={genre ? `Dead ${genre.name} games` : "Dead games"}
-          value={formatCompact(summary.count)}
-        />
+      <LeadRow
+        lead={
+          <LeadFigure
+            label={genre ? `Dead ${genre.name} games` : "Dead games"}
+            value={summary.count.toLocaleString("en-US")}
+            note="Under 5% of their all-time peak for 7 or more days in a row."
+          />
+        }
+      >
         <StatTile
           label="Median lifespan"
           value={fmtDays(summary.medianLifespanDays)}
@@ -116,7 +122,7 @@ export default async function GraveyardPage(props: PageProps<"/graveyard">) {
           value={fmtDays(summary.medianPeakToDeathDays)}
           hint="From the peak we observed"
         />
-      </div>
+      </LeadRow>
 
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-1.5">
@@ -134,20 +140,23 @@ export default async function GraveyardPage(props: PageProps<"/graveyard">) {
             );
           })}
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-medium">
-            {filtered.length > rows.length
-              ? `${rows.length} of ${formatCompact(filtered.length)}`
-              : `${rows.length} game${rows.length === 1 ? "" : "s"}`}
-          </h2>
-          <PresetLinks
-            param="sort"
-            options={GRAVE_SORTS}
-            current={sort}
-            clearValue="recent"
-            baseParams={{ genre: genre?.slug }}
-          />
-        </div>
+        <SectionHeading
+          aside={
+            <>
+              <PresetLinks
+                param="sort"
+                options={GRAVE_SORTS}
+                current={sort}
+                clearValue="recent"
+                baseParams={{ genre: genre?.slug }}
+              />
+            </>
+          }
+        >
+          {filtered.length > rows.length
+            ? `${rows.length} of ${formatCompact(filtered.length)}`
+            : `${rows.length} game${rows.length === 1 ? "" : "s"}`}
+        </SectionHeading>
       </div>
 
       <MobileCards
@@ -173,7 +182,7 @@ export default async function GraveyardPage(props: PageProps<"/graveyard">) {
           ],
         }))}
       />
-      <div className="hidden overflow-x-auto rounded-lg border sm:block xl:overflow-visible">
+      <div className="hidden overflow-x-auto sm:block xl:overflow-visible">
         <Table>
           <TableHeader>
             <TableRow>
@@ -197,7 +206,7 @@ export default async function GraveyardPage(props: PageProps<"/graveyard">) {
             )}
             {rows.map((g) => (
               <TableRow key={g.id}>
-                <TableCell className="min-w-48 font-medium whitespace-normal">
+                <TableCell className="min-w-48 font-bold whitespace-normal">
                   <span className="flex items-center gap-2.5">
                     <GameIcon src={icons[g.universeId.toString()]} />
                     <Link href={`/games/${g.universeId}`} className="hover:underline">
@@ -236,7 +245,7 @@ export default async function GraveyardPage(props: PageProps<"/graveyard">) {
           </TableBody>
         </Table>
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="max-w-[75ch] text-xs text-muted-foreground">
         Died is when the final stretch below 5% of peak began. Peaks only cover the time since we
         started tracking a game, so an older game&apos;s launch peak, and the true time from it, can
         be missed. Lifespan needs the Roblox creation date.

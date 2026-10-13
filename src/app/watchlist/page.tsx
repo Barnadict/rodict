@@ -8,7 +8,7 @@ export const metadata = { title: "Watchlist — rodict" };
 
 export default function WatchlistPage() {
   return (
-    <div className="flex flex-1 flex-col gap-4 p-6">
+    <div className="page-stack">
       <PageHeader
         title="Watchlist"
         description="Games and genres you're tracking — saved to this device only, no account needed. Share sends a link that holds the list."

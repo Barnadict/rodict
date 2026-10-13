@@ -20,6 +20,8 @@ import { PresetLinks } from "@/components/filters/preset-links";
 import { StatTile } from "@/components/data-table/stat-tile";
 import { LocalTime } from "@/components/local-time";
 import { TrendChart, type TrendPoint } from "@/components/charts/trend-chart";
+import { SectionHeading } from "@/components/section-heading";
+import { LeadFigure, LeadRow } from "@/components/lead-figure";
 
 export const metadata = pageMetadata({
   title: "Market overview — rodict",
@@ -55,31 +57,43 @@ export default async function MarketPage(props: PageProps<"/market">) {
   }));
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-6">
+    <div className="page-stack">
       <PageHeader
         title="Market overview"
         description="Total players across every tracked game with a genre, over time. This counts the games rodict tracks, not all of Roblox."
       />
 
       {latest && peak && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <StatTile label="Players, latest run" value={formatCompact(latest.totalPlaying)} />
+        <LeadRow
+          lead={
+            <LeadFigure
+              label="Players, latest run"
+              value={latest.totalPlaying.toLocaleString("en-US")}
+              note="Summed over tracked games with a genre. A sample, not all of Roblox."
+            />
+          }
+        >
           <StatTile label="Peak in range" value={formatCompact(peak.totalPlaying)} />
           <StatTile label="Games in latest run" value={formatCompact(latest.totalGames)} />
-        </div>
+        </LeadRow>
       )}
 
       <section className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-medium">Players over time</h2>
-          <PresetLinks
-            param="range"
-            options={RANGE_OPTIONS}
-            current={range}
-            clearValue={RANGE_CLEAR_VALUE}
-          />
-        </div>
-        <div className="rounded-lg border p-4">
+        <SectionHeading
+          aside={
+            <>
+              <PresetLinks
+                param="range"
+                options={RANGE_OPTIONS}
+                current={range}
+                clearValue={RANGE_CLEAR_VALUE}
+              />
+            </>
+          }
+        >
+          Players over time
+        </SectionHeading>
+        <div>
           <TrendChart
             data={trendData}
             unit="players"
@@ -89,7 +103,7 @@ export default async function MarketPage(props: PageProps<"/market">) {
             ariaLabel="Line chart of total concurrent players across tracked games over time"
           />
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="max-w-[75ch] text-xs text-muted-foreground">
           Each point adds up every genre&apos;s players at one collection run (about every 3h), so
           it covers tracked games that have a genre; unclassified games aren&apos;t in it. Quiet
           games are collected about once a day, and their latest reading is carried forward for up
@@ -98,7 +112,7 @@ export default async function MarketPage(props: PageProps<"/market">) {
           an 8-run (about one day) average. &ldquo;{COLLECTION_GAP_LABEL}&rdquo; marks Aug 20 – Sep
           29, 2026, when collection was paused: that span is missing, not zero.
         </p>
-        <p className="text-xs text-muted-foreground">
+        <p className="max-w-[75ch] text-xs text-muted-foreground">
           The total rises when rodict starts tracking more games, not only when more people play.
           For a genre&apos;s own line, open it from{" "}
           <Link href="/genres" className="underline underline-offset-2 hover:text-foreground">

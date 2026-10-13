@@ -20,6 +20,9 @@ import {
 import { GenreThemeMatrix, type MatrixCellView } from "@/components/charts/genre-theme-matrix";
 import { PageHeader } from "@/components/page-header";
 import { MobileCards } from "@/components/data-table/mobile-cards";
+import { SectionHeading } from "@/components/section-heading";
+import { EmptyState } from "@/components/empty-state";
+import { Rank } from "@/components/rank";
 
 export const metadata = { title: "Themes — rodict" };
 
@@ -79,7 +82,7 @@ export default async function ThemesPage() {
   const { themeRows, cells, matrixGenres, matrixThemes, themedGames } = await getThemesPageData();
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-6">
+    <div className="page-stack">
       <PageHeader
         title="Themes"
         description={`The setting of a game (Anime, Fantasy, Space…), tracked separately from its gameplay genre. A game can have several themes or none; ${formatCompact(themedGames)} tracked games have at least one.`}
@@ -98,11 +101,11 @@ export default async function ThemesPage() {
           ],
         }))}
       />
-      <div className="hidden overflow-x-auto rounded-lg border sm:block xl:overflow-visible">
+      <div className="hidden overflow-x-auto sm:block xl:overflow-visible">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-10">#</TableHead>
+              <TableHead className="w-10 text-right">Pos.</TableHead>
               <TableHead>Theme</TableHead>
               <TableHead className="text-right">Games</TableHead>
               <TableHead className="text-right">Players now</TableHead>
@@ -117,8 +120,10 @@ export default async function ThemesPage() {
             {themeRows.map(({ theme, stats, earnings }, i) => {
               return (
                 <TableRow key={theme.id}>
-                  <TableCell className="text-muted-foreground tabular-nums">{i + 1}</TableCell>
-                  <TableCell className="font-medium">
+                  <TableCell className="text-right">
+                    <Rank value={i + 1} size="sm" />
+                  </TableCell>
+                  <TableCell className="font-bold">
                     <Link href={`/themes/${theme.slug}`} className="hover:underline">
                       {theme.name}
                     </Link>
@@ -153,30 +158,26 @@ export default async function ThemesPage() {
           </TableBody>
         </Table>
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="max-w-[75ch] text-xs text-muted-foreground">
         A game with two themes counts toward both, so theme totals overlap and don&apos;t add up to
         the site total.
       </p>
 
       <section className="flex flex-col gap-3">
-        <div>
-          <h2 className="font-medium">Genre × theme</h2>
-          <p className="text-sm text-muted-foreground">
-            Each cell is the median of current players per game among tracked games with that genre
-            and theme, with the number of games (n) under it. Many games with a low median is a
-            crowded combination; few or none is an empty one. Cells with fewer than {MATRIX_MIN_N}{" "}
-            games are greyed out because a handful of games says little. This describes what&apos;s
-            tracked now; it doesn&apos;t say which combination would do well.
-          </p>
-        </div>
+        <SectionHeading>Genre × theme</SectionHeading>
+        <p className="max-w-[75ch] text-sm text-muted-foreground">
+          Each cell is the median of current players per game among tracked games with that genre
+          and theme, with the number of games (n) under it. Many games with a low median is a
+          crowded combination; few or none is an empty one. Cells with fewer than {MATRIX_MIN_N}{" "}
+          games are greyed out because a handful of games says little. This describes what&apos;s
+          tracked now; it doesn&apos;t say which combination would do well.
+        </p>
         {cells.length === 0 ? (
-          <div className="flex h-40 items-center justify-center rounded-lg border border-dashed text-muted-foreground">
-            No themed games with a genre yet.
-          </div>
+          <EmptyState title={<>No themed games with a genre yet.</>} />
         ) : (
           <GenreThemeMatrix genres={matrixGenres} themes={matrixThemes} cells={cells} />
         )}
-        <p className="text-xs text-muted-foreground">
+        <p className="max-w-[75ch] text-xs text-muted-foreground">
           Themes are detected from game names and Roblox&apos;s own tags, so a game whose theme
           isn&apos;t in either is missed. Tracked games are the ones discovery has found, not all of
           Roblox.

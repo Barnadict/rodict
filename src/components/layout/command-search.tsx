@@ -109,19 +109,17 @@ export function CommandSearch() {
       <Dialog.Trigger
         onPointerEnter={prefetch}
         onFocus={prefetch}
-        className="relative flex h-8 w-full max-w-sm items-center gap-2 rounded-lg border border-input bg-transparent px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/50 dark:bg-input/30"
+        className="flex h-9 w-full max-w-64 min-w-0 items-center gap-2 rounded-md bg-muted px-3 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
       >
         <Search aria-hidden="true" className="size-4 shrink-0" />
-        <span className="flex-1 truncate text-left">Search games, genres, creators...</span>
-        <kbd className="hidden rounded border bg-muted px-1.5 font-mono text-[10px] sm:inline">
-          Ctrl K
-        </kbd>
+        <span className="flex-1 truncate text-left">Find a game or genre</span>
+        <kbd className="hidden shrink-0 font-sans text-xs sm:inline">Ctrl K</kbd>
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/20 transition-opacity duration-150 data-ending-style:opacity-0 data-starting-style:opacity-0 supports-backdrop-filter:backdrop-blur-xs" />
-        <Dialog.Popup className="fixed top-[12vh] left-1/2 z-50 flex max-h-[70vh] w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 flex-col overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-lg transition duration-150 data-ending-style:opacity-0 data-starting-style:opacity-0">
+        <Dialog.Backdrop className="fixed inset-0 z-50 bg-band/60 transition-opacity duration-150 data-ending-style:opacity-0 data-starting-style:opacity-0 supports-backdrop-filter:backdrop-blur-xs" />
+        <Dialog.Popup className="fixed top-[12vh] left-1/2 z-50 flex max-h-[70vh] w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 flex-col overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-[0_18px_48px_-12px_rgb(3_9_22/0.55)] transition duration-150 ease-out data-ending-style:opacity-0 data-starting-style:-translate-y-1 data-starting-style:opacity-0">
           <Dialog.Title className="sr-only">Search</Dialog.Title>
-          <div className="flex items-center gap-2 border-b px-3">
+          <div className="flex items-center gap-2.5 border-b-2 border-rule px-4">
             <Search aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
             <input
               autoFocus
@@ -132,8 +130,8 @@ export function CommandSearch() {
               aria-activedescendant={results.length ? optionId(activeIndex) : undefined}
               aria-autocomplete="list"
               aria-label="Search games, genres, themes and creators"
-              placeholder="Search games, genres, themes, creators..."
-              className="h-11 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              placeholder="Game, genre, theme or creator"
+              className="h-13 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value);
@@ -145,7 +143,7 @@ export function CommandSearch() {
           <div className="overflow-y-auto p-1.5">
             {query.trim() === "" ? (
               <p className="px-2 py-6 text-center text-sm text-muted-foreground">
-                Type a name. ↑↓ to move, Enter to open, Esc to close.
+                Type a name. Arrow keys to move, Enter to open, Esc to close.
               </p>
             ) : failed && !index ? (
               <p className="px-2 py-6 text-center text-sm text-muted-foreground">
@@ -167,7 +165,7 @@ export function CommandSearch() {
                       {firstOfKind && (
                         <li
                           role="presentation"
-                          className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground"
+                          className="px-2.5 pt-3 pb-1 text-sm text-muted-foreground font-display"
                         >
                           {KIND_LABEL[r.kind]}
                         </li>
@@ -179,7 +177,7 @@ export function CommandSearch() {
                         onMouseMove={() => setActive(i)}
                         onClick={() => go(r.href)}
                         className={cn(
-                          "flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm",
+                          "flex cursor-pointer items-center gap-2.5 rounded-sm px-2.5 py-2 text-sm",
                           i === activeIndex && "bg-accent text-accent-foreground",
                         )}
                       >

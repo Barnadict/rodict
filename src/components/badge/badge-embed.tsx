@@ -33,7 +33,7 @@ export function BadgeEmbed({ universeId, origin }: { universeId: string; origin:
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border p-3 text-sm">
+    <div className="flex flex-col gap-3 text-sm">
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex gap-1" role="radiogroup" aria-label="Badge shows">
           {METRICS.map((m) => (

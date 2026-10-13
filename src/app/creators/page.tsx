@@ -29,6 +29,9 @@ import { StatTile } from "@/components/data-table/stat-tile";
 import { GameIcon } from "@/components/game-icon";
 import { PageHeader } from "@/components/page-header";
 import { MobileCards } from "@/components/data-table/mobile-cards";
+import { SectionHeading } from "@/components/section-heading";
+import { Rank } from "@/components/rank";
+import { LeadFigure, LeadRow } from "@/components/lead-figure";
 
 export const metadata = {
   title: "Creators — rodict",
@@ -60,18 +63,21 @@ export default async function CreatorsPage(props: PageProps<"/creators">) {
     c.topUniverseId ? (icons[String(c.topUniverseId)] ?? null) : null;
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-6">
+    <div className="page-stack">
       <PageHeader
         title="Creators"
         description="The users and groups behind the games rodict tracks. Counts only cover games our discovery has found, not each creator's whole catalog."
       />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <StatTile
-          label="Creators"
-          value={formatCompact(all.length)}
-          hint={`${formatCompact(groups)} groups · ${formatCompact(all.length - groups)} users`}
-        />
+      <LeadRow
+        lead={
+          <LeadFigure
+            label="Creators behind tracked games"
+            value={all.length.toLocaleString("en-US")}
+            note={`${formatCompact(groups)} groups and ${formatCompact(all.length - groups)} users.`}
+          />
+        }
+      >
         <StatTile
           label="With a hit"
           value={formatCompact(withHit)}
@@ -82,19 +88,27 @@ export default async function CreatorsPage(props: PageProps<"/creators">) {
           value={all.length ? (all.reduce((s, c) => s + c.games, 0) / all.length).toFixed(1) : "—"}
           hint="Average"
         />
-      </div>
+      </LeadRow>
 
       <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-medium">
-            {ranked.length > rows.length
-              ? `Top ${rows.length} of ${formatCompact(ranked.length)}`
-              : `${rows.length} creator${rows.length === 1 ? "" : "s"}`}
-          </h2>
-          <PresetLinks param="sort" options={CREATOR_SORTS} current={sort} clearValue="playing" />
-        </div>
+        <SectionHeading
+          aside={
+            <>
+              <PresetLinks
+                param="sort"
+                options={CREATOR_SORTS}
+                current={sort}
+                clearValue="playing"
+              />
+            </>
+          }
+        >
+          {ranked.length > rows.length
+            ? `Top ${rows.length} of ${formatCompact(ranked.length)}`
+            : `${rows.length} creator${rows.length === 1 ? "" : "s"}`}
+        </SectionHeading>
         {sort === "hitRate" && (
-          <p className="text-sm text-muted-foreground">
+          <p className="max-w-[75ch] text-sm text-muted-foreground">
             Hit rate ranks only creators with at least {HIT_RATE_MIN_GAMES} tracked games, so one
             lucky game doesn&apos;t make a 100%.
           </p>
@@ -115,11 +129,11 @@ export default async function CreatorsPage(props: PageProps<"/creators">) {
             ],
           }))}
         />
-        <div className="hidden overflow-x-auto rounded-lg border sm:block xl:overflow-visible">
+        <div className="hidden overflow-x-auto sm:block xl:overflow-visible">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-10">#</TableHead>
+                <TableHead className="w-10 text-right">Pos.</TableHead>
                 <TableHead>Creator</TableHead>
                 <TableHead className="text-right">Players now</TableHead>
                 <TableHead className="text-right">Games</TableHead>
@@ -140,8 +154,10 @@ export default async function CreatorsPage(props: PageProps<"/creators">) {
                 const href = creatorPath(c.id, c.type)!;
                 return (
                   <TableRow key={href}>
-                    <TableCell className="text-muted-foreground tabular-nums">{i + 1}</TableCell>
-                    <TableCell className="font-medium">
+                    <TableCell className="text-right">
+                      <Rank value={i + 1} size="sm" />
+                    </TableCell>
+                    <TableCell className="font-bold">
                       <span className="flex flex-wrap items-center gap-1.5">
                         <GameIcon src={iconOf(c)} className="mr-1" />
                         <Link href={href} className="hover:underline">
@@ -171,7 +187,7 @@ export default async function CreatorsPage(props: PageProps<"/creators">) {
             </TableBody>
           </Table>
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="max-w-[75ch] text-xs text-muted-foreground">
           A <span className="font-medium text-foreground">hit</span> is a game whose observed
           all-time peak reached {formatCompact(HIT_PEAK_PLAYERS)} concurrent players; hit rate is
           hits ÷ games tracked. Active means not dead by our rule. Peaks only cover the time since

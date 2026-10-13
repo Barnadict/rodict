@@ -2,6 +2,9 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { cacheLife } from "next/cache";
 
+import { Wordmark } from "@/components/logo";
+import { REFERENCE_ITEMS } from "@/lib/nav";
+
 import { DataFreshness } from "./data-freshness";
 
 /**
@@ -18,26 +21,36 @@ async function CopyrightYear() {
 
 export function SiteFooter() {
   return (
-    <footer className="border-t px-6 py-6 text-sm text-muted-foreground">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <p>
-          rodict is an unofficial, personal project. Not affiliated with Roblox Corporation.
-          Earnings figures are estimates — see{" "}
-          <Link href="/about" className="underline underline-offset-4">
-            About the data
-          </Link>
-          . Data on your own site:{" "}
-          <Link href="/api-docs" className="underline underline-offset-4">
-            API and feeds
-          </Link>
-          .
-        </p>
-        <div className="flex items-center gap-4">
+    <footer className="mt-10 border-t-2 border-rule px-6 pt-6 pb-8 text-sm text-muted-foreground">
+      <div className="flex flex-col gap-8 md:flex-row md:justify-between">
+        <div className="flex max-w-md flex-col gap-3">
+          <Wordmark className="text-xl" />
+          <p>
+            An unofficial, personal project. Not affiliated with Roblox Corporation. It tracks a
+            sample of games, not all of Roblox, and earnings figures are estimates.
+          </p>
+        </div>
+        <nav aria-label="Reference" className="flex flex-col gap-2">
+          <h2 className="text-foreground font-display">Reference</h2>
+          <ul className="flex flex-col">
+            {REFERENCE_ITEMS.map((item) => (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  className="inline-flex min-h-8 items-center text-foreground hover:underline"
+                >
+                  {item.title}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+        <div className="flex flex-col gap-2 md:items-end md:text-right">
           {/* Suspense keeps a slow/unreachable DB from blocking the whole footer. */}
           <Suspense fallback={null}>
             <DataFreshness />
           </Suspense>
-          <p className="shrink-0">
+          <p>
             &copy; <CopyrightYear /> rodict
           </p>
         </div>

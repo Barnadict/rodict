@@ -46,6 +46,8 @@ import { SectionSkeleton } from "@/components/data-table/section-skeleton";
 import { GenreDot } from "@/components/genre-badge";
 import { LocalTime } from "@/components/local-time";
 import { PageHeader } from "@/components/page-header";
+import { SectionHeading } from "@/components/section-heading";
+import { EmptyState } from "@/components/empty-state";
 
 export const metadata = { title: "Niche finder — rodict" };
 
@@ -121,7 +123,7 @@ async function getNicheData() {
 
 export default function OpportunitiesPage(props: PageProps<"/opportunities">) {
   return (
-    <div className="flex flex-1 flex-col gap-6 p-6">
+    <div className="page-stack">
       <PageHeader
         title="Niche finder"
         description="Set the kind of market you're looking for and see which genres and themes match, ranked, with what puts each one there. It describes the data; it doesn't say what to build."
@@ -204,10 +206,10 @@ async function NicheResults({
 
   return (
     <>
-      <div className="flex flex-col gap-3 rounded-lg border p-4">
+      <div className="flex flex-col gap-3 border-b pb-5">
         {CONTROLS.map((c) => (
           <div key={c.key} className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
-            <span className="w-32 shrink-0 text-sm font-medium">{c.label}</span>
+            <span className="w-32 shrink-0 text-sm font-semibold">{c.label}</span>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <div className="max-w-full overflow-x-auto">
                 <PresetLinks
@@ -293,24 +295,26 @@ function NicheSection({
 
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="font-medium">
+      <SectionHeading>
         {KIND_TITLE[kind]}{" "}
         <span className="text-sm font-normal text-muted-foreground">
           {`${formatExact(rows.length)} of ${formatExact(pool.length)} match`}
         </span>
-      </h2>
+      </SectionHeading>
       {pool.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-          {kind === "genre"
-            ? "No genre scores yet: they appear after the analytics jobs run."
-            : "No themed games tracked yet."}
-        </p>
+        <EmptyState
+          title={
+            <>
+              {kind === "genre"
+                ? "No genre scores yet: they appear after the analytics jobs run."
+                : "No themed games tracked yet."}
+            </>
+          }
+        />
       ) : rows.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-          {`No ${plural} meet every constraint. Try loosening one.`}
-        </p>
+        <EmptyState title={<>{`No ${plural} meet every constraint. Try loosening one.`}</>} />
       ) : (
-        <ol className="flex flex-col divide-y rounded-lg border">
+        <ol className="flex flex-col divide-y border-b">
           {rows.map((r, i) => (
             <NicheItem key={r.id} row={r} rank={i + 1} pool={pool} weights={weights} />
           ))}

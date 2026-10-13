@@ -1,20 +1,16 @@
+import { MoveArrow } from "@/components/rank";
 import { formatGrowthPct } from "@/lib/stats";
 
-/** Signed, colored growth percentage — green up, red down, muted for none/unknown. */
+/** Signed growth percentage with its arrow: green up, soft red down, muted for none/unknown. */
 export function GrowthBadge({ growth }: { growth: number | null }) {
   if (growth === null) return <span className="text-muted-foreground">—</span>;
-  const positive = growth > 0;
-  const negative = growth < 0;
+  if (growth === 0) return <span className="text-muted-foreground">{formatGrowthPct(growth)}</span>;
+  const up = growth > 0;
   return (
     <span
-      className={
-        positive
-          ? "text-emerald-600 drop-shadow-[0_0_6px_currentColor] dark:text-emerald-400"
-          : negative
-            ? "text-red-600 drop-shadow-[0_0_6px_currentColor] dark:text-red-400"
-            : "text-muted-foreground"
-      }
+      className={`inline-flex items-center gap-1 font-semibold ${up ? "text-up" : "text-down"}`}
     >
+      <MoveArrow direction={up ? "up" : "down"} />
       {formatGrowthPct(growth)}
     </span>
   );

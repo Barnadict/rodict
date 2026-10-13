@@ -20,20 +20,20 @@ export function StatTile({
   help?: GlossaryKey;
 }) {
   return (
-    <div className="rounded-lg border p-3">
-      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+    <div className="border-t-2 border-rule pt-2.5">
+      <div className="flex items-center gap-1 text-[13px] text-muted-foreground">
         {label}
         {help && <MetricHelp term={help} />}
       </div>
-      <div className="mt-1 flex items-center gap-1.5">
-        <span className="text-lg font-semibold tabular-nums">{value}</span>
+      <div className="mt-1.5 flex items-center gap-2">
+        <span className="text-[1.75rem] font-figure">{value}</span>
         {badge && (
           <Badge variant="outline" className="text-[10px]">
             {badge}
           </Badge>
         )}
       </div>
-      {hint && <div className="mt-0.5 text-xs text-muted-foreground">{hint}</div>}
+      {hint && <div className="mt-1 text-xs text-muted-foreground">{hint}</div>}
     </div>
   );
 }

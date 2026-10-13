@@ -39,9 +39,9 @@ export function CopyFeedUrl() {
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-2 border-y py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
       <p className="flex items-start gap-2 text-muted-foreground">
-        <Rss className="mt-0.5 size-4 shrink-0 text-orange-500" aria-hidden="true" />
+        <Rss className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <span>
           Get alerts in a feed reader: an Atom feed of flagged spikes and drops and big weekly moves
           for this watchlist. The URL holds the list, so copy it again after adding or removing

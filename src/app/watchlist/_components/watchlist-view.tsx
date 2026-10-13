@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Bookmark, X, AlertTriangle, Gamepad2, Shapes, Check, Users } from "lucide-react";
+import { Bookmark, X, Check, Users } from "lucide-react";
 
 import { useWatchlist } from "@/lib/watchlist/store";
 import {
@@ -20,6 +20,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { GameIcon } from "@/components/game-icon";
 import { GenreBadge, GenreDot } from "@/components/genre-badge";
 import { Sparkline } from "@/components/sparkline";
+import { SectionHeading } from "@/components/section-heading";
+import { EmptyState } from "@/components/empty-state";
 
 type LoadState =
   | { status: "loading" }
@@ -84,21 +86,23 @@ export function WatchlistView() {
 
   if (games.length === 0 && genres.length === 0) {
     return (
-      <div className="flex h-56 flex-col items-center justify-center gap-2 rounded-lg border border-dashed text-center text-muted-foreground">
-        <Bookmark className="size-6" aria-hidden="true" />
-        <p>Your watchlist is empty.</p>
-        <p className="text-sm">
-          Add games or genres from{" "}
-          <Link href="/games" className="underline hover:text-foreground">
-            Games
-          </Link>{" "}
-          or{" "}
-          <Link href="/genres" className="underline hover:text-foreground">
-            Genres
-          </Link>{" "}
-          — saved on this device only, no account needed.
-        </p>
-      </div>
+      <EmptyState
+        tone="plain"
+        title="Your watchlist is empty"
+        hint={
+          <>
+            Add games or genres from{" "}
+            <Link href="/games" className="underline hover:text-foreground">
+              Games
+            </Link>{" "}
+            or{" "}
+            <Link href="/genres" className="underline hover:text-foreground">
+              Genres
+            </Link>{" "}
+            . It is saved on this device only; no account is needed.
+          </>
+        }
+      />
     );
   }
 
@@ -150,11 +154,11 @@ export function SharedWatchlistView({ list }: { list: SharedList }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 rounded-lg border border-primary/40 bg-primary/5 p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 border-y-2 border-primary py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
         <p className="flex items-start gap-2">
-          <Users className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+          <Users className="mt-0.5 size-4 shrink-0 text-link" aria-hidden="true" />
           <span>
-            <span className="font-medium">A shared watchlist</span>{" "}
+            <span className="font-bold">A shared watchlist</span>{" "}
             <span className="text-muted-foreground">
               with {counts}. Saving adds them to the watchlist on this device; nothing is stored
               anywhere else.
@@ -164,7 +168,7 @@ export function SharedWatchlistView({ list }: { list: SharedList }) {
         <div className="flex shrink-0 items-center gap-2">
           {saved !== null ? (
             <span className="inline-flex items-center gap-1 text-muted-foreground" role="status">
-              <Check className="size-4 text-emerald-500" aria-hidden="true" />
+              <Check className="size-4 text-up" aria-hidden="true" />
               {saved === 0 ? "Already in your watchlist" : `Added ${saved}`}
             </span>
           ) : (
@@ -220,17 +224,15 @@ function WatchlistItems({
 
   if (state.status === "error") {
     return (
-      <div
-        role="alert"
-        className="flex h-48 flex-col items-center justify-center gap-2 rounded-lg border border-dashed text-center text-muted-foreground"
-      >
-        <AlertTriangle className="size-6" aria-hidden="true" />
-        <p>Couldn&apos;t load the watchlist right now.</p>
-        <p className="text-sm">
-          {onRemove
-            ? "Your saved games/genres are still on this device — try reloading."
-            : "Try reloading."}
-        </p>
+      <div role="alert">
+        <EmptyState
+          title="Couldn't load the watchlist right now"
+          hint={
+            onRemove
+              ? "Your saved games and genres are still on this device. Reload the page to try again."
+              : "Reload the page to try again."
+          }
+        />
       </div>
     );
   }
@@ -239,17 +241,15 @@ function WatchlistItems({
   const genreBySlug = new Map(state.genres.map((g) => [g.slug, g]));
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-10">
       {games.length > 0 && (
         <section className="flex flex-col gap-3">
-          <h2 className="flex items-center gap-1.5 font-medium">
-            <Gamepad2 className="size-4" aria-hidden="true" /> Games
-          </h2>
-          <div className="flex flex-col divide-y rounded-lg border">
+          <SectionHeading>Games</SectionHeading>
+          <div className="flex flex-col divide-y border-b">
             {games.map((entry) => {
               const data = gameById.get(entry.id);
               return (
-                <div key={entry.id} className="flex items-center justify-between gap-3 p-3">
+                <div key={entry.id} className="flex items-center justify-between gap-3 py-2.5">
                   <GameIcon src={data?.icon} size={40} />
                   {data ? (
                     <Link
@@ -295,14 +295,12 @@ function WatchlistItems({
 
       {genres.length > 0 && (
         <section className="flex flex-col gap-3">
-          <h2 className="flex items-center gap-1.5 font-medium">
-            <Shapes className="size-4" aria-hidden="true" /> Genres
-          </h2>
-          <div className="flex flex-col divide-y rounded-lg border">
+          <SectionHeading>Genres</SectionHeading>
+          <div className="flex flex-col divide-y border-b">
             {genres.map((entry) => {
               const data = genreBySlug.get(entry.id);
               return (
-                <div key={entry.id} className="flex items-center justify-between gap-3 p-3">
+                <div key={entry.id} className="flex items-center justify-between gap-3 py-2.5">
                   {data ? (
                     <Link
                       href={`/genres/${entry.id}`}

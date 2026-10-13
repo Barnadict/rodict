@@ -93,7 +93,7 @@ export function SurvivalChart({
         <Line
           type="stepAfter"
           dataKey="survival"
-          stroke="var(--primary)"
+          stroke="var(--chart-line)"
           strokeWidth={2}
           dot={false}
           activeDot={{ r: 4, stroke: "var(--background)", strokeWidth: 2 }}

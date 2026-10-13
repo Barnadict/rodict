@@ -16,7 +16,7 @@ interface PresetLinksProps {
 
 export function PresetLinks({ param, options, current, baseParams, clearValue }: PresetLinksProps) {
   return (
-    <div className="inline-flex rounded-md border p-0.5">
+    <div className="flex flex-wrap gap-1.5">
       {options.map((o) => {
         const params = new URLSearchParams();
         for (const [k, v] of Object.entries(baseParams ?? {})) {
@@ -29,11 +29,12 @@ export function PresetLinks({ param, options, current, baseParams, clearValue }:
             key={o.value}
             href={query ? `?${query}` : "?"}
             scroll={false}
+            aria-current={current === o.value ? "true" : undefined}
             className={cn(
-              "rounded-[calc(var(--radius-md)-2px)] px-3 py-1 text-sm transition-colors",
+              "rounded-full border-[1.5px] px-3.5 py-1 text-sm font-semibold transition-colors",
               current === o.value
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:text-foreground",
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-input text-muted-foreground hover:border-foreground/40 hover:text-foreground",
             )}
           >
             {o.label}

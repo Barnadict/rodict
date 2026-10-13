@@ -2,7 +2,9 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+/* `.surface-ink` is a dark surface that stays dark in the light theme (the top
+   bar and the page band), so `dark:` styles apply inside it too. */
+@custom-variant dark (&:is(.dark *, .surface-ink, .surface-ink *));
 
 @theme inline {
   --color-background: var(--background);
@@ -10,14 +12,16 @@
   --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-sans);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
+  --color-rule: var(--rule);
+  --color-bar: var(--bar);
+  --color-band: var(--band);
+  --color-link: var(--link);
+  --color-up: var(--up);
+  --color-down: var(--down);
+  --color-warn: var(--warn);
+  --color-brand: var(--brand);
+  --color-brand-ink: var(--brand-ink);
+  --color-chart-line: var(--chart-line);
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
   --color-chart-3: var(--chart-3);
@@ -48,183 +52,220 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Chart Rundown in the Departure Board colours (PROJECT_PLAN #117, #119).
+   Navy ground, white type; blue only for actions, the active tab and small
+   accents; amber for thin or stale data; soft red for dead or falling; green
+   for rising. The light theme is the same chart printed on cool paper: the
+   ground and type flip, while the top bar and the page band stay ink
+   (`.surface-ink`), so both themes carry the same navy. */
 :root {
-  /* Categorical series for multi-line charts (compare, Task #65): the dataviz
-     reference palette's first four slots, validated for CVD separation. */
+  color-scheme: light;
+  /* Categorical series for multi-line charts (compare): the dataviz reference
+     palette's first four slots, validated for CVD separation. */
   --series-1: #2a78d6;
   --series-2: #eb6834;
   --series-3: #1baf7a;
   --series-4: #eda100;
-  /* One hue per genre (Task #106), 18° apart and spread so neighbours in the
-     taxonomy list sit far apart on the wheel. Twenty hues can't all be told
-     apart by color alone, so a genre color always travels with its name. */
-  --genre-simulator: oklch(0.58 0.15 25);
-  --genre-tycoon: oklch(0.58 0.15 151);
-  --genre-obby: oklch(0.58 0.15 277);
-  --genre-rpg: oklch(0.58 0.15 43);
-  --genre-roleplay-life: oklch(0.58 0.15 169);
-  --genre-tower-defense: oklch(0.58 0.15 295);
-  --genre-fighting: oklch(0.58 0.15 61);
-  --genre-shooter: oklch(0.58 0.15 187);
-  --genre-horror: oklch(0.58 0.15 313);
-  --genre-adventure: oklch(0.58 0.15 79);
-  --genre-survival: oklch(0.58 0.15 205);
-  --genre-sports: oklch(0.58 0.15 331);
-  --genre-racing: oklch(0.58 0.15 97);
-  --genre-clicker-idle: oklch(0.58 0.15 223);
-  --genre-strategy: oklch(0.58 0.15 349);
-  --genre-minigame-party: oklch(0.58 0.15 115);
-  --genre-sandbox-building: oklch(0.58 0.15 241);
-  --genre-escape-story: oklch(0.58 0.15 7);
-  --genre-puzzle: oklch(0.58 0.15 133);
-  --genre-social-hangout: oklch(0.58 0.15 259);
-  --genre-none: oklch(0.556 0 0);
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.546 0.245 262.881);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.623 0.214 259.815);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.546 0.245 262.881);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
-
-.dark {
-  /* Same hues stepped for the dark surface (validated against it). */
-  --series-1: #3987e5;
-  --series-2: #d95926;
-  --series-3: #199e70;
-  --series-4: #c98500;
-  /* Genre hues stepped lighter for the dark surface. */
-  --genre-simulator: oklch(0.72 0.13 25);
-  --genre-tycoon: oklch(0.72 0.13 151);
-  --genre-obby: oklch(0.72 0.13 277);
-  --genre-rpg: oklch(0.72 0.13 43);
-  --genre-roleplay-life: oklch(0.72 0.13 169);
-  --genre-tower-defense: oklch(0.72 0.13 295);
-  --genre-fighting: oklch(0.72 0.13 61);
-  --genre-shooter: oklch(0.72 0.13 187);
-  --genre-horror: oklch(0.72 0.13 313);
-  --genre-adventure: oklch(0.72 0.13 79);
-  --genre-survival: oklch(0.72 0.13 205);
-  --genre-sports: oklch(0.72 0.13 331);
-  --genre-racing: oklch(0.72 0.13 97);
-  --genre-clicker-idle: oklch(0.72 0.13 223);
-  --genre-strategy: oklch(0.72 0.13 349);
-  --genre-minigame-party: oklch(0.72 0.13 115);
-  --genre-sandbox-building: oklch(0.72 0.13 241);
-  --genre-escape-story: oklch(0.72 0.13 7);
-  --genre-puzzle: oklch(0.72 0.13 133);
-  --genre-social-hangout: oklch(0.72 0.13 259);
-  --genre-none: oklch(0.72 0.02 258);
-  --background: oklch(0.16 0.035 258);
-  --foreground: oklch(0.95 0.01 258);
-  --card: oklch(0.21 0.04 258);
-  --card-foreground: oklch(0.95 0.01 258);
-  --popover: oklch(0.21 0.04 258);
-  --popover-foreground: oklch(0.95 0.01 258);
-  --primary: oklch(0.707 0.165 254.624);
-  --primary-foreground: oklch(0.16 0.03 258);
-  --secondary: oklch(0.275 0.04 258);
-  --secondary-foreground: oklch(0.95 0.01 258);
-  --muted: oklch(0.275 0.04 258);
-  --muted-foreground: oklch(0.72 0.02 258);
-  --accent: oklch(0.275 0.04 258);
-  --accent-foreground: oklch(0.95 0.01 258);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(0.9 0.02 258 / 12%);
-  --input: oklch(0.9 0.02 258 / 16%);
-  --ring: oklch(0.707 0.165 254.624);
+  /* One hue per genre, 18° apart and spread so neighbours in the taxonomy list
+     sit far apart on the wheel. Twenty hues can't all be told apart by color
+     alone, so a genre color always travels with its name. */
+  --genre-simulator: oklch(0.55 0.15 25);
+  --genre-tycoon: oklch(0.55 0.15 151);
+  --genre-obby: oklch(0.55 0.15 277);
+  --genre-rpg: oklch(0.55 0.15 43);
+  --genre-roleplay-life: oklch(0.55 0.15 169);
+  --genre-tower-defense: oklch(0.55 0.15 295);
+  --genre-fighting: oklch(0.55 0.15 61);
+  --genre-shooter: oklch(0.55 0.15 187);
+  --genre-horror: oklch(0.55 0.15 313);
+  --genre-adventure: oklch(0.55 0.15 79);
+  --genre-survival: oklch(0.55 0.15 205);
+  --genre-sports: oklch(0.55 0.15 331);
+  --genre-racing: oklch(0.55 0.15 97);
+  --genre-clicker-idle: oklch(0.55 0.15 223);
+  --genre-strategy: oklch(0.55 0.15 349);
+  --genre-minigame-party: oklch(0.55 0.15 115);
+  --genre-sandbox-building: oklch(0.55 0.15 241);
+  --genre-escape-story: oklch(0.55 0.15 7);
+  --genre-puzzle: oklch(0.55 0.15 133);
+  --genre-social-hangout: oklch(0.55 0.15 259);
+  --genre-none: oklch(0.55 0.02 258);
+  --background: #f6f8fc;
+  --foreground: #0a1730;
+  --card: #ffffff;
+  --card-foreground: #0a1730;
+  --popover: #ffffff;
+  --popover-foreground: #0a1730;
+  --primary: #155dfc;
+  --primary-foreground: #ffffff;
+  --secondary: #e9eef8;
+  --secondary-foreground: #0a1730;
+  --muted: #edf1f9;
+  --muted-foreground: #51607f;
+  --accent: #e3eaf8;
+  --accent-foreground: #0a1730;
+  --destructive: #c62828;
+  --border: #d5dcec;
+  --input: #c3cde3;
+  --ring: #155dfc;
+  /* The heavy rule under table heads and section titles. */
+  --rule: #0a1730;
+  /* Blue as text (links). `--primary` is the fill behind white type. */
+  --link: #0f4fe0;
+  --up: #0b7a52;
+  --down: #c0392f;
+  --warn: #946000;
+  /* Wordmark: "ro" in the logo red, "dict" in the ink. Not the soft `--down` red. */
+  --brand: #d92b20;
+  --brand-ink: #0a1730;
+  /* The default line of a single-series chart and of sparklines. */
+  --chart-line: #155dfc;
   --chart-1: oklch(0.87 0.02 258);
   --chart-2: oklch(0.65 0.06 258);
   --chart-3: oklch(0.52 0.07 258);
   --chart-4: oklch(0.4 0.08 258);
   --chart-5: oklch(0.28 0.06 258);
-  --sidebar: oklch(0.185 0.038 258);
-  --sidebar-foreground: oklch(0.95 0.01 258);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.95 0.01 258);
-  --sidebar-accent: oklch(0.27 0.04 258);
-  --sidebar-accent-foreground: oklch(0.95 0.01 258);
-  --sidebar-border: oklch(0.9 0.02 258 / 12%);
-  --sidebar-ring: oklch(0.6 0.03 258);
+  /* Ink surfaces, the same in both themes. */
+  --bar: #06102a;
+  --band: #030916;
+  --radius: 0.375rem;
+}
+
+.dark,
+.surface-ink {
+  color-scheme: dark;
+  /* Same hues stepped for the dark surface (validated against it). */
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  /* Genre hues stepped light for the navy ground. */
+  --genre-simulator: oklch(0.76 0.12 25);
+  --genre-tycoon: oklch(0.76 0.12 151);
+  --genre-obby: oklch(0.76 0.12 277);
+  --genre-rpg: oklch(0.76 0.12 43);
+  --genre-roleplay-life: oklch(0.76 0.12 169);
+  --genre-tower-defense: oklch(0.76 0.12 295);
+  --genre-fighting: oklch(0.76 0.12 61);
+  --genre-shooter: oklch(0.76 0.12 187);
+  --genre-horror: oklch(0.76 0.12 313);
+  --genre-adventure: oklch(0.76 0.12 79);
+  --genre-survival: oklch(0.76 0.12 205);
+  --genre-sports: oklch(0.76 0.12 331);
+  --genre-racing: oklch(0.76 0.12 97);
+  --genre-clicker-idle: oklch(0.76 0.12 223);
+  --genre-strategy: oklch(0.76 0.12 349);
+  --genre-minigame-party: oklch(0.76 0.12 115);
+  --genre-sandbox-building: oklch(0.76 0.12 241);
+  --genre-escape-story: oklch(0.76 0.12 7);
+  --genre-puzzle: oklch(0.76 0.12 133);
+  --genre-social-hangout: oklch(0.76 0.12 259);
+  --genre-none: oklch(0.72 0.03 258);
+  --background: #0a1730;
+  --foreground: #f5f8ff;
+  --card: #0e1e3f;
+  --card-foreground: #f5f8ff;
+  --popover: #11224a;
+  --popover-foreground: #f5f8ff;
+  --primary: #155dfc;
+  --primary-foreground: #ffffff;
+  --secondary: #14274f;
+  --secondary-foreground: #f5f8ff;
+  --muted: #11224a;
+  --muted-foreground: #8ea0c8;
+  --accent: #1a3063;
+  --accent-foreground: #f5f8ff;
+  --destructive: oklch(0.72 0.17 25);
+  --border: #1b2c58;
+  --input: #2a3d75;
+  --ring: #6f9bff;
+  --rule: #33488a;
+  --link: #8fb4ff;
+  --up: #62d4a0;
+  --down: #e0796f;
+  --warn: #ffb000;
+  --brand: #f0473c;
+  --brand-ink: #e3ecff;
+  --chart-line: #6f9bff;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
-  }
   html {
     @apply font-sans;
+    scrollbar-color: color-mix(in oklch, var(--muted-foreground) 55%, transparent) transparent;
+  }
+  body {
+    @apply bg-background text-foreground;
+    /* Every figure lines up in a column, wherever it sits. */
+    font-variant-numeric: tabular-nums;
+    caret-color: var(--link);
+  }
+  ::selection {
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  a {
+    text-underline-offset: 0.2em;
   }
 }
 
-@layer utilities {
-  /* Always-on ambient glow — brand mark, watched items, anything that should
-   * read as "active" at a glance without needing interaction. */
-  .glow-primary {
-    box-shadow:
-      0 0 0 1px color-mix(in oklch, var(--primary) 45%, transparent),
-      0 0 18px 2px color-mix(in oklch, var(--primary) 40%, transparent);
-  }
+/* The display voice: Archivo at its condensed end, heavy and upper-case. For
+   page titles, section titles and nothing longer than a line or two. */
+@utility font-display {
+  font-stretch: 68%;
+  font-weight: 900;
+  line-height: 0.92;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+}
 
-  /* Glow that only appears on hover/focus — for interactive surfaces (cards,
-   * buttons) where a permanent glow would be visual noise. */
-  .glow-primary-hover {
-    transition: box-shadow 200ms ease;
-  }
-  .glow-primary-hover:hover,
-  .glow-primary-hover:focus-visible {
-    box-shadow:
-      0 0 0 1px color-mix(in oklch, var(--primary) 55%, transparent),
-      0 0 24px 3px color-mix(in oklch, var(--primary) 45%, transparent);
-  }
+/* Lead figures and position numerals: condensed and heavy, case untouched. */
+@utility font-figure {
+  font-stretch: 72%;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
 
-  .glow-red {
-    box-shadow:
-      0 0 0 1px color-mix(in oklch, var(--color-red-600) 45%, transparent),
-      0 0 18px 2px color-mix(in oklch, var(--color-red-600) 40%, transparent);
+/* A full-width band inside a page's `p-6` wrapper: pulls out to the edges and
+   up under the top bar. */
+@utility page-band {
+  margin: -1.5rem -1.5rem 0;
+}
+
+/* A page: the band, then its sections down the page. Controls and tables sit
+   close together; a titled section gets more air above it than below. */
+@layer components {
+  .page-stack {
+    display: flex;
+    flex: 1 1 0%;
+    flex-direction: column;
+    gap: 1.5rem;
+    padding: 1.5rem;
+  }
+  .page-stack > section {
+    margin-top: 1.25rem;
   }
 }
 
-/* Page transitions (Task #107): the page area fades out quickly and the new
-   page fades in with a small rise. Header and sidebar are unchanged, so the
-   root cross-fade over them is invisible. */
+/* Page transitions: the page area fades out quickly and the new page fades in
+   with a small rise. The top bar sits outside, so the root cross-fade over it
+   is invisible. */
 ::view-transition-group(root) {
   animation-duration: 150ms;
 }
 ::view-transition-old(.page) {
-  animation: 120ms ease-out both vt-fade-out;
+  animation: 110ms cubic-bezier(0.4, 0, 1, 1) both vt-fade-out;
 }
 ::view-transition-new(.page) {
-  animation: 220ms ease-out 60ms both vt-fade-in;
+  animation: 260ms cubic-bezier(0.16, 1, 0.3, 1) 50ms both vt-fade-in;
 }
 @keyframes vt-fade-out {
   to {

@@ -20,6 +20,10 @@ import { GrowthBadge } from "@/components/data-table/growth-badge";
 import { LocalTime } from "@/components/local-time";
 import { GenreDot } from "@/components/genre-badge";
 import { PageHeader } from "@/components/page-header";
+import { SectionHeading } from "@/components/section-heading";
+import { EmptyState } from "@/components/empty-state";
+import { Rank } from "@/components/rank";
+import { LeadFigure, LeadRow } from "@/components/lead-figure";
 
 export const metadata = {
   title: "Update cadence — rodict",
@@ -54,18 +58,21 @@ export default async function UpdatesPage() {
     .sort((a, b) => (b.updatedRecentlyShare ?? -1) - (a.updatedRecentlyShare ?? -1));
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-6">
+    <div className="page-stack">
       <PageHeader
         title="Update cadence"
         description="How often games change on Roblox, by genre, and which games change most. An “update” is a change in Roblox's last-updated time: a publish, or some settings edits."
       />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile
-          label={`Updated in the last ${recentDays} days`}
-          value={pct(all.updatedRecentlyShare)}
-          hint={`Of ${formatCompact(all.games)} tracked games`}
-        />
+      <LeadRow
+        lead={
+          <LeadFigure
+            label={`Updated in the last ${recentDays} days`}
+            value={pct(all.updatedRecentlyShare)}
+            note={`Of ${formatCompact(all.games)} tracked games, by Roblox's last-updated time.`}
+          />
+        }
+      >
         <StatTile label="Median days since last update" value={days(all.medianDaysSinceUpdate)} />
         <StatTile
           label="Typical days between updates"
@@ -76,11 +83,11 @@ export default async function UpdatesPage() {
           label={`Updates recorded, last ${recentDays} days`}
           value={formatCompact(all.recentUpdates)}
         />
-      </div>
+      </LeadRow>
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-medium">By genre</h2>
-        <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
+        <SectionHeading>By genre</SectionHeading>
+        <div className="overflow-x-auto xl:overflow-visible">
           <Table>
             <TableHeader>
               <TableRow>
@@ -99,7 +106,7 @@ export default async function UpdatesPage() {
             </TableBody>
           </Table>
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="max-w-[75ch] text-xs text-muted-foreground">
           &ldquo;Updated&rdquo; and &ldquo;days since&rdquo; use every game&apos;s current
           last-updated time, so they cover all tracked games. &ldquo;Typical days between&rdquo; is
           the median over games of each game&apos;s own median gap between the updates we recorded
@@ -118,17 +125,15 @@ export default async function UpdatesPage() {
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-medium">Most frequently updated · last {recentDays} days</h2>
+        <SectionHeading>Most frequently updated · last {recentDays} days</SectionHeading>
         {cadence.top.length === 0 ? (
-          <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-            No updates recorded in the last {recentDays} days yet.
-          </p>
+          <EmptyState title={<>No updates recorded in the last {recentDays} days yet.</>} />
         ) : (
-          <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
+          <div className="overflow-x-auto xl:overflow-visible">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-10">#</TableHead>
+                  <TableHead className="w-10 text-right">Pos.</TableHead>
                   <TableHead>Game</TableHead>
                   <TableHead>Genre</TableHead>
                   <TableHead className="text-right">Updates</TableHead>
@@ -140,8 +145,10 @@ export default async function UpdatesPage() {
                   const genre = g.genreId ? genreById.get(g.genreId) : undefined;
                   return (
                     <TableRow key={g.id}>
-                      <TableCell className="text-muted-foreground tabular-nums">{i + 1}</TableCell>
-                      <TableCell className="font-medium">
+                      <TableCell className="text-right">
+                        <Rank value={i + 1} size="sm" />
+                      </TableCell>
+                      <TableCell className="font-bold">
                         <Link href={`/games/${g.universeId}`} className="hover:underline">
                           {g.name}
                         </Link>
@@ -176,9 +183,9 @@ export default async function UpdatesPage() {
 
       <section className="flex flex-col gap-3">
         <div>
-          <h2 className="flex items-center gap-2 font-medium">
-            Update cadence vs. player change <Badge variant="outline">Associational</Badge>
-          </h2>
+          <SectionHeading aside={<Badge variant="outline">Associational</Badge>}>
+            Update cadence vs. player change
+          </SectionHeading>
           <p className="max-w-2xl text-sm text-muted-foreground">
             Games grouped by how many updates we recorded in the last {recentDays} days, with the
             median change in their daily average players over the same {recentDays} days (the
@@ -187,7 +194,7 @@ export default async function UpdatesPage() {
             growing get more attention from their developers, and live games update more.
           </p>
         </div>
-        <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
+        <div className="overflow-x-auto xl:overflow-visible">
           <Table>
             <TableHeader>
               <TableRow>
@@ -201,7 +208,7 @@ export default async function UpdatesPage() {
             <TableBody>
               {cadence.buckets.map((b) => (
                 <TableRow key={b.label}>
-                  <TableCell className="font-medium">{b.label}</TableCell>
+                  <TableCell className="font-bold">{b.label}</TableCell>
                   <TableCell className="text-right tabular-nums">
                     {formatCompact(b.games)}
                   </TableCell>
@@ -217,7 +224,7 @@ export default async function UpdatesPage() {
             </TableBody>
           </Table>
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="max-w-[75ch] text-xs text-muted-foreground">
           A group needs 10+ games with a player change to show a median. Collection paused from
           2026-08-20 to 2026-09-29 and update recording is new, so until {recentDays} days of
           collection have built up the change covers a shorter span than {recentDays} days.
@@ -230,7 +237,7 @@ export default async function UpdatesPage() {
 function GenreRow({ row }: { row: GenreCadence & { slug: string; name: string } }) {
   return (
     <TableRow>
-      <TableCell className="font-medium">
+      <TableCell className="font-bold">
         <Link
           href={`/genres/${row.slug}#updates`}
           className="inline-flex items-center gap-2 hover:underline"

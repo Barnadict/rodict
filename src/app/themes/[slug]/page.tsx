@@ -24,6 +24,9 @@ import { GameIcon } from "@/components/game-icon";
 import { GenreBadge, GenreDot } from "@/components/genre-badge";
 import { PageHeader } from "@/components/page-header";
 import { THEMES } from "@/lib/taxonomy/themes";
+import { SectionHeading } from "@/components/section-heading";
+import { Rank } from "@/components/rank";
+import { LeadFigure, LeadRow } from "@/components/lead-figure";
 
 /** Every theme is built at deploy (Task #96); the list is the fixed taxonomy. */
 export function generateStaticParams() {
@@ -72,16 +75,23 @@ export default async function ThemeDetailPage(props: PageProps<"/themes/[slug]">
   const { theme, stats, byGenre, unclassified, top, earnings, icons } = data;
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-6">
+    <div className="page-stack">
       <PageHeader
         breadcrumbs={[{ label: "Themes", href: "/themes" }]}
         title={theme.name}
         description={`Tracked games with the ${theme.name} theme, across every genre.`}
       />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <LeadRow
+        lead={
+          <LeadFigure
+            label="Players now"
+            value={(stats?.totalPlaying ?? 0).toLocaleString("en-US")}
+            note="Across the tracked games carrying this theme, at the last collection."
+          />
+        }
+      >
         <StatTile label="Games" value={formatCompact(stats?.n ?? 0)} />
-        <StatTile label="Players now" value={formatCompact(stats?.totalPlaying ?? 0)} />
         <StatTile
           label="Median players/game"
           value={stats ? formatCompact(stats.medianPlaying) : "—"}
@@ -92,19 +102,17 @@ export default async function ThemeDetailPage(props: PageProps<"/themes/[slug]">
           value={earnings ? formatUsdRange(earnings.low, earnings.high) : "—"}
           badge="Est."
         />
-      </div>
+      </LeadRow>
 
       <section className="flex flex-col gap-3">
-        <div>
-          <h2 className="font-medium">By genre</h2>
-          <p className="text-sm text-muted-foreground">
-            This theme&apos;s games split by gameplay genre, most games first. Rows with fewer than{" "}
-            {MATRIX_MIN_N} games are greyed out.
-            {unclassified > 0 &&
-              ` ${unclassified} game${unclassified === 1 ? " has" : "s have"} no genre and aren't listed.`}
-          </p>
-        </div>
-        <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
+        <SectionHeading>By genre</SectionHeading>
+        <p className="max-w-[75ch] text-sm text-muted-foreground">
+          This theme&apos;s games split by gameplay genre, most games first. Rows with fewer than{" "}
+          {MATRIX_MIN_N} games are greyed out.
+          {unclassified > 0 &&
+            ` ${unclassified} game${unclassified === 1 ? " has" : "s have"} no genre and aren't listed.`}
+        </p>
+        <div className="overflow-x-auto xl:overflow-visible">
           <Table>
             <TableHeader>
               <TableRow>
@@ -127,7 +135,7 @@ export default async function ThemeDetailPage(props: PageProps<"/themes/[slug]">
                   key={genre.id}
                   className={cell!.n < MATRIX_MIN_N ? "text-muted-foreground" : undefined}
                 >
-                  <TableCell className="font-medium">
+                  <TableCell className="font-bold">
                     <Link
                       href={`/genres/${genre.slug}`}
                       className="inline-flex items-center gap-2 hover:underline"
@@ -151,15 +159,20 @@ export default async function ThemeDetailPage(props: PageProps<"/themes/[slug]">
       </section>
 
       <section className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="font-medium">Top games</h2>
-          <Link
-            href={`/games?theme=${theme.slug}&view=table`}
-            className="text-sm text-muted-foreground hover:text-foreground"
-          >
-            All {formatCompact(top.total)} in Games →
-          </Link>
-        </div>
+        <SectionHeading
+          aside={
+            <>
+              <Link
+                href={`/games?theme=${theme.slug}&view=table`}
+                className="text-sm text-muted-foreground hover:text-foreground"
+              >
+                All {formatCompact(top.total)} in Games →
+              </Link>
+            </>
+          }
+        >
+          Top games
+        </SectionHeading>
         <MobileCards
           empty="No games tracked with this theme yet."
           items={top.games.map((game, i) => ({
@@ -177,11 +190,11 @@ export default async function ThemeDetailPage(props: PageProps<"/themes/[slug]">
             ],
           }))}
         />
-        <div className="hidden overflow-x-auto rounded-lg border sm:block xl:overflow-visible">
+        <div className="hidden overflow-x-auto sm:block xl:overflow-visible">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-10">#</TableHead>
+                <TableHead className="w-10 text-right">Pos.</TableHead>
                 <TableHead>Game</TableHead>
                 <TableHead>Genre</TableHead>
                 <TableHead className="text-right">Players</TableHead>
@@ -198,8 +211,10 @@ export default async function ThemeDetailPage(props: PageProps<"/themes/[slug]">
               )}
               {top.games.map((game, i) => (
                 <TableRow key={game.id}>
-                  <TableCell className="text-muted-foreground tabular-nums">{i + 1}</TableCell>
-                  <TableCell className="min-w-48 font-medium whitespace-normal">
+                  <TableCell className="text-right">
+                    <Rank value={i + 1} size="sm" />
+                  </TableCell>
+                  <TableCell className="min-w-48 font-bold whitespace-normal">
                     <span className="flex items-center gap-2.5">
                       <GameIcon src={icons[String(game.universeId)]} />
                       <Link href={`/games/${game.universeId}`} className="hover:underline">

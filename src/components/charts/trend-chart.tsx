@@ -136,11 +136,11 @@ function makeTooltip(unit: string, hasMa: boolean, format: TrendValueFormat) {
           <div
             className={
               point.marker.direction === "spike"
-                ? "text-xs font-medium text-emerald-600 dark:text-emerald-400"
-                : "text-xs font-medium text-destructive"
+                ? "text-xs font-semibold text-up"
+                : "text-xs font-semibold text-down"
             }
           >
-            {point.marker.direction === "spike" ? "▲ Flagged spike" : "▼ Flagged drop"}{" "}
+            {point.marker.direction === "spike" ? "Flagged spike" : "Flagged drop"}{" "}
             {formatGrowthPct(point.marker.changePct)}
           </div>
         )}
@@ -179,7 +179,7 @@ export function TrendChart({
   markers = [],
   events = [],
   eventLabel = "Event",
-  color = "var(--primary)",
+  color = "var(--chart-line)",
 }: TrendChartProps) {
   if (data.length === 0) {
     return <ChartEmpty title={emptyMessage} hint={emptyHint} height={height} />;
@@ -279,7 +279,7 @@ export function TrendChart({
           {showProjection && (
             <span className="inline-flex items-center gap-1.5">
               <span
-                className="h-2.5 w-4 rounded-sm border-t-2 border-dashed"
+                className="h-2.5 w-4 border-t-2 border-dashed"
                 style={{
                   borderColor: color,
                   background: `color-mix(in oklch, ${color} 15%, transparent)`,
@@ -290,8 +290,8 @@ export function TrendChart({
           )}
           {showMarkers && (
             <span className="inline-flex items-center gap-1.5">
-              <span className="size-2.5 rounded-full bg-emerald-500" /> Flagged spike
-              <span className="ml-2 size-2.5 rounded-full bg-destructive" /> Flagged drop
+              <span className="size-2.5 rounded-full bg-up" /> Flagged spike
+              <span className="ml-2 size-2.5 rounded-full bg-down" /> Flagged drop
             </span>
           )}
           {showEvents && (
@@ -413,7 +413,7 @@ export function TrendChart({
               x={m.t}
               y={m.value}
               r={5}
-              fill={m.direction === "spike" ? "var(--color-emerald-500)" : "var(--destructive)"}
+              fill={m.direction === "spike" ? "var(--up)" : "var(--down)"}
               stroke="var(--background)"
               strokeWidth={2}
               ifOverflow="discard"
@@ -433,7 +433,7 @@ function renderCoverageDot(props: {
   payload?: { coverage?: number | null };
   color?: string;
 }) {
-  const { cx, cy, index, payload, color = "var(--primary)" } = props;
+  const { cx, cy, index, payload, color = "var(--chart-line)" } = props;
   const key = `dot-${index}`;
   if (cx === undefined || cy === undefined || typeof payload?.coverage !== "number") {
     return <g key={key} />;

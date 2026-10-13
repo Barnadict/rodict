@@ -34,6 +34,9 @@ import {
   rangeToCutoff,
   type RangeKey,
 } from "@/lib/date-range";
+import { SectionHeading } from "@/components/section-heading";
+import { EmptyState } from "@/components/empty-state";
+import { Rank } from "@/components/rank";
 
 export const metadata = { title: "Trending — rodict" };
 
@@ -90,7 +93,7 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
   const hasData = games.length > 0 || genres.length > 0;
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-6">
+    <div className="page-stack">
       <PageHeader
         title="Trending"
         description="Fastest-growing games and genres by average concurrent players over the selected window."
@@ -104,21 +107,28 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
       />
 
       {!hasData ? (
-        <div className="flex h-48 flex-col items-center justify-center gap-1 rounded-lg border border-dashed text-center text-muted-foreground">
-          <p>Nothing has grown in this window yet, or there isn&apos;t enough history.</p>
-          <p className="text-sm">
-            Growth needs {(2 * RISING.avgWindowHours) / 24} days of history in the window and a
-            starting average of at least {RISING.minBaseline} players — this fills in as the
-            collector runs.
-          </p>
-        </div>
+        <EmptyState
+          title={<>Nothing has grown in this window yet, or there isn&apos;t enough history.</>}
+          hint={
+            <>
+              Growth needs {(2 * RISING.avgWindowHours) / 24} days of history in the window and a
+              starting average of at least {RISING.minBaseline} players — this fills in as the
+              collector runs.
+            </>
+          }
+        />
       ) : (
         <div className="grid gap-6 lg:grid-cols-2">
           <section className="flex min-w-0 flex-col gap-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="font-medium">Rising games</h2>
-              <ExportLinks dataset="trending" params={{ kind: "games", range }} />
-            </div>
+            <SectionHeading
+              aside={
+                <>
+                  <ExportLinks dataset="trending" params={{ kind: "games", range }} />
+                </>
+              }
+            >
+              Rising games
+            </SectionHeading>
             <MobileCards
               items={games.map((g, i) => ({
                 key: g.id,
@@ -137,7 +147,7 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
                 aside: <Sparkline values={g.spark} width={64} />,
               }))}
             />
-            <div className="hidden overflow-x-auto rounded-lg border sm:block xl:overflow-visible">
+            <div className="hidden overflow-x-auto sm:block xl:overflow-visible">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -151,7 +161,9 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
                 <TableBody>
                   {games.map((g, i) => (
                     <TableRow key={g.id}>
-                      <TableCell className="text-muted-foreground tabular-nums">{i + 1}</TableCell>
+                      <TableCell className="text-right">
+                        <Rank value={i + 1} size="sm" />
+                      </TableCell>
                       <TableCell className="min-w-44 font-medium whitespace-normal">
                         <div className="flex items-center gap-2.5">
                           <GameIcon src={g.icon} />
@@ -183,10 +195,15 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
           </section>
 
           <section className="flex min-w-0 flex-col gap-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="font-medium">Rising genres</h2>
-              <ExportLinks dataset="trending" params={{ kind: "genres", range }} />
-            </div>
+            <SectionHeading
+              aside={
+                <>
+                  <ExportLinks dataset="trending" params={{ kind: "genres", range }} />
+                </>
+              }
+            >
+              Rising genres
+            </SectionHeading>
             <MobileCards
               items={genres.map((g, i) => ({
                 key: g.id,
@@ -207,7 +224,7 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
                 aside: <Sparkline values={g.spark} width={64} />,
               }))}
             />
-            <div className="hidden overflow-x-auto rounded-lg border sm:block xl:overflow-visible">
+            <div className="hidden overflow-x-auto sm:block xl:overflow-visible">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -221,8 +238,10 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
                 <TableBody>
                   {genres.map((g, i) => (
                     <TableRow key={g.id}>
-                      <TableCell className="text-muted-foreground tabular-nums">{i + 1}</TableCell>
-                      <TableCell className="font-medium">
+                      <TableCell className="text-right">
+                        <Rank value={i + 1} size="sm" />
+                      </TableCell>
+                      <TableCell className="font-bold">
                         <span className="inline-flex items-center gap-2">
                           <GenreDot genre={g.slug} />
                           <Link href={`/genres/${g.slug}`} className="hover:underline">
@@ -253,15 +272,12 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
 
       {recent.length > 0 && (
         <section className="flex flex-col gap-3">
-          <div>
-            <h2 className="font-medium">Recent notable changes</h2>
-            <p className="text-sm text-muted-foreground">
-              Auto-detected spikes and drops — moves that are both large relative to each
-              series&apos; own typical step and substantial in their own right (change-point
-              detection).
-            </p>
-          </div>
-          <div className="flex flex-col divide-y rounded-lg border">
+          <SectionHeading>Recent notable changes</SectionHeading>
+          <p className="max-w-[75ch] text-sm text-muted-foreground">
+            Auto-detected spikes and drops — moves that are both large relative to each series&apos;
+            own typical step and substantial in their own right (change-point detection).
+          </p>
+          <div className="flex flex-col divide-y border-b">
             {recent.map((a, i) => (
               <div
                 key={`${a.id}-${a.at}-${i}`}
@@ -296,7 +312,7 @@ export default async function TrendingPage(props: PageProps<"/trending">) {
         </section>
       )}
 
-      <p className="text-sm text-muted-foreground">
+      <p className="max-w-[75ch] text-sm text-muted-foreground">
         Growth compares average concurrent players over the first {RISING.avgWindowHours}h of the
         window with the last {RISING.avgWindowHours}h, so a game&apos;s daily peak-and-trough cycle
         doesn&apos;t count as growth. Only games and genres averaging at least {RISING.minBaseline}{" "}

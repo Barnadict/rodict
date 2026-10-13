@@ -3,7 +3,8 @@
 ## ▶️ SESSION START — paste this at the beginning of every new session
 
 ```
-Read PROJECT_PLAN.md. Tasks #1–#115 are done. Phase 10 is complete; nothing is planned next.
+Read PROJECT_PLAN.md, PRODUCT.md and DESIGN.md. Tasks #1–#125 are done; Phase 11 (UI rework) awaits the owner's review on `ui-rework`.
+Work on the `ui-rework` branch. Nothing is pushed to main before 2026-11-01.
 The Turso free plan's monthly WRITE limit is a hard constraint on every task (see "Rules").
 Ask me which task to start. Remind me before any task that needs something only I can provide.
 ```
@@ -16,7 +17,7 @@ Ask me which task to start. Remind me before any task that needs something only 
 
 **rodict** is a website Roblox developers use to spot genres and trends worth building next. It shows statistics and never tells anyone what to build: genre popularity, concurrent players, estimated earnings, how long a genre lasts before dying off, all sortable by date.
 
-- **References:** [romonitorstats.com](https://romonitorstats.com/), [rolimons.com/games](https://www.rolimons.com/games). **UI style:** [devforum.roblox.com](https://devforum.roblox.com/), dark and light mode.
+- **References:** [romonitorstats.com](https://romonitorstats.com/), [rolimons.com/games](https://www.rolimons.com/games). **UI style:** being replaced in Phase 11 (was modelled on [devforum.roblox.com](https://devforum.roblox.com/)); dark and light mode both stay. Product facts for design work are in `PRODUCT.md`, the visual system in `DESIGN.md`.
 - **Stack:** Next.js 16 + TypeScript · Tailwind v4 + shadcn/ui (Base UI) · Prisma 7 with libSQL (SQLite locally, Turso hosted) · Recharts · Node collector + Python analytics on GitHub Actions · Vercel.
 - **Live:** `rodict.vercel.app` (no custom domain). Pipeline health is on `/status`.
 
@@ -146,6 +147,41 @@ Full notes for each task are in git history (this file before 2026-10-01) and in
 - [x] **114.** `/market`: total players per collection run, summed from `GenreSnapshot` in SQL (`lib/db/market.ts`, no GameSnapshot scan), with range presets, the outage band, weighted coverage, and a plain "tracked games with a genre, not all of Roblox" note. Linked from the dashboard hero, sidebar, sitemap and `/about` limitations.
 - [x] **115.** `/api-docs`: export API (games/trending/snapshots, every param, limit and column), both Atom feeds and the badge, with copy buttons (`CopyCode`). Limits and options are imported from the code that enforces them (`EXPORT_GAME_SORTS` moved to `export-data.ts`). Linked from the footer, `/about` and the sitemap. Also: `SidebarInset` got `min-w-0`, so long code lines scroll instead of widening the page.
 
+### Phase 11: Full UI rework (planned 2026-10-13)
+
+**Writes: none. No new database reads either**: pages stay cached static shells, and features, data, exports, feeds and badges don't change. Built with the Impeccable skill; product facts are in `PRODUCT.md`.
+
+Why: the site looks like a stock dashboard template, the 18 flat sidebar links make things hard to find, and pages are hard to scan (too many bordered boxes, no clear lead number).
+
+Decided with the owner (2026-10-13): the user is Roblox developers; the name `rodict` stays; the **blue stays the main color** as far as possible; the red logo and two-tone wordmark may be redrawn; structure is open, including merging or renaming pages and changing URLs (old URLs must redirect).
+
+Delivery: on a `ui-rework` branch, one phase at a time, with an owner review after each of 11a–11e. Typecheck, lint and tests at the end of every phase. No push to main before 2026-11-01.
+
+#### 11a — Direction
+
+- [x] **116.** `PRODUCT.md` written from the code and the owner's answers.
+- [x] **117.** Visual direction chosen by the owner (2026-10-13): **Chart Rundown layout in the Departure Board colours**. Layout: top bar with grouped menus and search, a near-black page band, clearly darker than the navy ground, with a heavy condensed title (no large bright-blue fills; the owner found the blue band too harsh), ranked rows with large position numerals, movement arrows, last week, peak and weeks tracked. Colours: navy ground, white type, blue only for actions, the active tab and small accents, amber for thin or stale data, soft red for dead or falling, genre hues stepped light. Kept from the board: no motion or wording that suggests a live feed. Sketch: `.impeccable/mocks/decision/chosen.html` (the other dealt cards sit beside it). Wordmark stays two-tone: "ro" in the logo red, "dict" in an off-white with a slight blue tint (exact tones set in #119; keep it distinct from the soft red used for dead or falling). Open for #119: how the light theme is derived from this navy-first palette.
+- [x] **118.** Local data to design against: `npm run collect` for real games, then `npm run dev:backfill` (`scripts/dev-backfill.ts`, refuses anything but a `file:` DB) invents the history before the latest real reading, then `npm run analytics`. **Local charts and trends are synthetic.** The original `dev.db` is in `backups/dev-before-ui-rework.db`.
+
+#### 11b — Foundation and navigation
+
+- [x] **119.** Tokens in `globals.css`: navy ground, `--rule` (heavy rule), `--link` (blue as text; `--primary` is the fill), `--up` / `--down` / `--warn`, `--brand`, `--chart-line`. **Light theme: the ground and type flip to cool paper and navy ink; the top bar and page band stay ink in both themes** (`.surface-ink`, which also switches on `dark:` styles inside it). Type: Archivo with its width axis; `font-display` (condensed, heavy, upper-case) and `font-figure` (lead numbers). Genre hues restepped (0.55 light, 0.76 dark); compare series kept as validated. Logo redrawn as a three-row rundown on the red tile (`components/logo.tsx`, `app/icon.svg`, `public/rodictLogo.svg`). The glow utilities are gone.
+- [x] **120.** Shell: the sidebar is replaced by a top bar (`site-header.tsx`, `site-nav.tsx`) with grouped menus, search and the theme switch; below `lg` the menus move into a sheet. Footer carries the Reference links and the freshness line. Menu contents live in `lib/nav.ts`. `ui/sidebar.tsx` and `app-sidebar.tsx` deleted.
+- [x] **121.** Shared pieces: `PageHeader` is the near-black band (must be the first child of the page's `p-6` wrapper; `PageHeaderSkeleton` for loading files), stat tiles and tables sit on rules instead of boxes, phone cards use the rank numeral, square genre marks, pill presets, and new `SectionHeading`, `Rank` / `Movement` / `MoveArrow`, `EmptyState`. Charts take `--chart-line`, `--up` and `--down`. Pages still carry their own bordered boxes until #123–#124.
+- [x] **122.** (done with #120; the top bar needed the groups) Navigation regrouped: **Overview** (Home, Market, Weekly recap) · **Explore** (Games, Genres, Themes, Creators) · **What's changing** (Trending, New releases, Updates, Records, Graveyard) · **Research** (Saturation, Niche finder, Compare) · **Yours** (Watchlist) · **Reference**, moved to the footer (About the data, API and feeds, Status). Regrouping only; no URL changes here.
+
+#### 11c — Main pages
+
+- [x] **123.** Home is the players chart (ranked rows, genre chart, all-tracked figure beside it); game and genre pages lead with players now (`LeadFigure`) above the chart; games grid and both lists carry rank numerals; genres list shows each genre's share of players.
+
+#### 11d — Remaining pages
+
+- [x] **124.** Every remaining page moved onto rules: `SectionHeading`, `EmptyState`, `LeadFigure` / `LeadRow`, `ShareBar`, ranked tables, status colours on tokens, `.page-stack` page spacing. **No pages merged and no URLs changed**; merging Trending, New releases and Updates is still open for the owner to decide.
+
+#### 11e — Finish
+
+- [x] **125.** Checked every route at 1440px and 390px in both themes (no sideways scroll, no console errors), Impeccable detector clean, share image and badge redrawn in the new colours, `DESIGN.md` written. Not done: a production build, and the owner's own review of 11c–11e.
+
 ### Later (not planned)
 
 - Discord webhook alerts for the watchlist (proposed 2026-10-01, postponed).
@@ -170,3 +206,7 @@ One line per session or phase. Details are in git history.
 - **2026-10-01:** #112 metric glossary popovers and #113 shareable watchlists. Writes: none.
 - **2026-10-01:** #115 API docs page. Writes: none.
 - **2026-10-01:** #114 market overview (`/market`). Phase 10 done. Writes: none.
+- **2026-10-13:** Phase 11 planned (#116–#125): full UI rework with the Impeccable skill, on a `ui-rework` branch. `PRODUCT.md` written (#116). Writes: none.
+- **2026-10-13:** #118 local design data: 303 real games collected into `dev.db`, synthetic history back-filled, analytics and game passes run locally. Turso untouched.
+- **2026-10-13:** 11b foundation and navigation (#119–#122): tokens and Archivo, redrawn logo, top bar with grouped menus in place of the sidebar, restyled shared components. Typecheck, lint and tests pass. Writes: none.
+- **2026-10-13:** 11c–11e (#123–#125): all pages reworked onto rules with one lead figure or chart each, share image and badge recoloured, `DESIGN.md` written. Home now loads 10 top games instead of 5 (5 more sparklines per cache window) and no longer loads sparklines for the top genres. Typecheck, lint and tests pass. Writes: none.

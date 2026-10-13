@@ -64,9 +64,9 @@ export async function DataFreshness() {
 }
 
 const TONE_DOT = {
-  ok: "bg-emerald-500",
-  warn: "bg-amber-500",
-  error: "bg-red-500",
+  ok: "bg-up",
+  warn: "bg-warn",
+  error: "bg-down",
   muted: "bg-muted-foreground/40",
 } as const;
 
@@ -83,10 +83,10 @@ function FreshnessLine({
     // Links to /status (Task #73), where the run history behind this line lives.
     <Link
       href="/status"
-      className="flex items-center gap-2 underline-offset-4 hover:underline"
+      className="flex items-center gap-2 text-foreground hover:underline"
       title={title}
     >
-      <span aria-hidden="true" className={cn("size-1.5 shrink-0 rounded-full", TONE_DOT[tone])} />
+      <span aria-hidden="true" className={cn("size-2 shrink-0 rounded-[2px]", TONE_DOT[tone])} />
       {text}
     </Link>
   );

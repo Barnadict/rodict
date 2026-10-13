@@ -16,6 +16,7 @@ import type { NameType, ValueType } from "recharts/types/component/DefaultToolti
 
 import { formatCompact } from "@/lib/format";
 import { genreColor } from "@/lib/genre-colors";
+import { EmptyState } from "@/components/empty-state";
 
 export interface SaturationPoint {
   slug: string;
@@ -51,9 +52,11 @@ export function SaturationScatter({
 }) {
   if (data.length === 0) {
     return (
-      <div className="flex h-80 items-center justify-center rounded-lg border border-dashed text-muted-foreground">
-        No genre data yet.
-      </div>
+      <EmptyState
+        title="No genre data yet"
+        hint="The scatter fills in after the first collection."
+        style={{ minHeight: 320 }}
+      />
     );
   }
   return (
@@ -97,7 +100,7 @@ export function SaturationScatter({
           }}
         />
         <Tooltip content={SaturationTooltip} cursor={{ strokeDasharray: "3 3" }} />
-        <Scatter data={data} fill="var(--primary)" stroke="var(--background)" strokeWidth={2}>
+        <Scatter data={data} fill="var(--chart-line)" stroke="var(--background)" strokeWidth={2}>
           {/* Each genre in its own color (Task #106); the label names it. */}
           {data.map((d) => (
             <Cell key={d.slug} fill={genreColor(d.slug)} />

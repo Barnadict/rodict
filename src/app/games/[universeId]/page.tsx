@@ -80,6 +80,8 @@ import {
 import { SITE_URL, pageMetadata } from "@/lib/site";
 
 import { getGameShare } from "./share";
+import { SectionHeading } from "@/components/section-heading";
+import { LeadFigure } from "@/components/lead-figure";
 
 type SearchParams = PageProps<"/games/[universeId]">["searchParams"];
 
@@ -345,7 +347,7 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
   ];
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-6">
+    <div className="page-stack">
       <PageHeader
         breadcrumbs={
           game.currentGenre
@@ -363,11 +365,11 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
               alt=""
               width={64}
               height={64}
-              className="glow-primary shrink-0 rounded-lg border"
+              className="shrink-0 rounded-md border"
               unoptimized
             />
           ) : (
-            <div className="size-16 shrink-0 rounded-lg border bg-muted" />
+            <div className="size-16 shrink-0 rounded-md border bg-muted" />
           )
         }
         actions={
@@ -403,7 +405,7 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
           {game.status === "dead" && <Badge variant="destructive">Dead</Badge>}
         </div>
         {game.creatorName && (
-          <p className="text-sm text-muted-foreground">
+          <p className="max-w-[75ch] text-sm text-muted-foreground">
             by{" "}
             {creatorPage ? (
               <Link
@@ -431,42 +433,40 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
         )}
       </PageHeader>
 
-      <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
-        {lifecycle.map(({ label, at }) => (
-          <div key={label} className="flex flex-col">
-            <dt className="text-muted-foreground">{label}</dt>
-            <dd>
-              {at ? (
-                <>
-                  <LocalTime value={at} options={{ dateStyle: "medium" }} />{" "}
-                  <span className="text-muted-foreground">({formatRelativeTime(at, now)})</span>
-                </>
-              ) : (
-                "—"
-              )}
-            </dd>
-          </div>
-        ))}
-      </dl>
+      <div className="flex flex-wrap items-end justify-between gap-x-12 gap-y-5">
+        <LeadFigure
+          label="Players now"
+          value={game.currentPlaying.toLocaleString("en-US")}
+          note={
+            <>
+              At the last collection. All-time peak{" "}
+              <span className="font-semibold text-foreground">
+                {game.allTimePeakPlayers.toLocaleString("en-US")}
+              </span>
+              {game.status === "dead" && ", and dead by the 5%-of-peak rule"}.
+            </>
+          }
+        />
+        <dl className="grid w-full max-w-md grid-cols-[auto_1fr] gap-x-5 text-sm sm:w-auto">
+          {lifecycle.map(({ label, at }) => (
+            <div key={label} className="col-span-2 grid grid-cols-subgrid border-b py-1.5">
+              <dt className="text-muted-foreground">{label}</dt>
+              <dd className="text-right">
+                {at ? (
+                  <>
+                    <LocalTime value={at} options={{ dateStyle: "medium" }} />{" "}
+                    <span className="text-muted-foreground">({formatRelativeTime(at, now)})</span>
+                  </>
+                ) : (
+                  "—"
+                )}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </div>
 
-      {description && (
-        <details className="group rounded-lg border p-3 text-sm">
-          <summary className="cursor-pointer select-none font-medium">
-            Description
-            <span className="ml-2 font-normal text-muted-foreground group-open:hidden">
-              {descriptionPreview}
-              {descriptionPreview !== description ? "…" : ""}
-            </span>
-          </summary>
-          <p className="mt-2 whitespace-pre-line wrap-break-word text-muted-foreground">
-            {description}
-          </p>
-        </details>
-      )}
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="Players now" value={formatCompact(game.currentPlaying)} />
-        <StatTile label="All-time peak" value={formatCompact(game.allTimePeakPlayers)} />
+      <div className="grid grid-cols-2 gap-x-5 gap-y-4 sm:grid-cols-3">
         <StatTile label="Total visits" value={formatCompact(game.currentVisits)} />
         <StatTile label="Favorites" value={formatCompact(game.currentFavorites)} />
         <StatTile
@@ -516,6 +516,21 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
         />
       </div>
 
+      {description && (
+        <details className="group border-y py-2.5 text-sm">
+          <summary className="cursor-pointer select-none font-semibold">
+            Description
+            <span className="ml-2 font-normal text-muted-foreground group-open:hidden">
+              {descriptionPreview}
+              {descriptionPreview !== description ? "…" : ""}
+            </span>
+          </summary>
+          <p className="mt-2 max-w-[75ch] whitespace-pre-line wrap-break-word text-muted-foreground">
+            {description}
+          </p>
+        </details>
+      )}
+
       <Suspense
         fallback={
           <div className="flex flex-col gap-6">
@@ -540,8 +555,8 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
 
       {passCatalog && (
         <section className="flex flex-col gap-2">
-          <h2 className="font-medium">Game passes</h2>
-          <p className="text-sm text-muted-foreground">
+          <SectionHeading>Game passes</SectionHeading>
+          <p className="max-w-[75ch] text-sm text-muted-foreground">
             {passCatalog.forSaleCount === 0
               ? "No game passes on sale. "
               : `${passCatalog.forSaleCount} on sale; buying every one costs ${formatExact(passCatalog.totalRobux)} Robux. `}
@@ -553,12 +568,16 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
             ). List last changed <LocalTime value={passCatalog.changedAt} />; checked weekly.
           </p>
           {passCatalog.passes.length > 0 && (
-            <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
+            <div className="overflow-x-auto xl:overflow-visible">
               <table className="w-full text-sm">
-                <thead className="bg-muted/50">
+                <thead className="border-b-2 border-rule">
                   <tr>
-                    <th className="px-3 py-1.5 text-left font-medium">Pass</th>
-                    <th className="px-3 py-1.5 text-right font-medium">Price (Robux)</th>
+                    <th className="px-2 py-1.5 text-left text-[13px] font-normal text-muted-foreground">
+                      Pass
+                    </th>
+                    <th className="px-2 py-1.5 text-right text-[13px] font-normal text-muted-foreground">
+                      Price (Robux)
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -566,8 +585,8 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
                     .sort((a, b) => b.price - a.price)
                     .map((p) => (
                       <tr key={p.id} className="border-t">
-                        <td className="px-3 py-1.5">{p.name}</td>
-                        <td className="px-3 py-1.5 text-right tabular-nums">
+                        <td className="px-2 py-1.5">{p.name}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">
                           {formatExact(p.price)}
                         </td>
                       </tr>
@@ -584,8 +603,8 @@ export default async function GameDetailPage(props: PageProps<"/games/[universeI
       </Suspense>
 
       <section id="badge" className="flex flex-col gap-2">
-        <h2 className="font-medium">Embed a live badge</h2>
-        <p className="text-sm text-muted-foreground">
+        <SectionHeading>Embed a live badge</SectionHeading>
+        <p className="max-w-[75ch] text-sm text-muted-foreground">
           Show this game&apos;s players now or its rank on your own page or README. It links back
           here and refreshes within the hour.
         </p>
@@ -646,10 +665,10 @@ async function GameSeriesSections({
   return (
     <>
       {launch && game.currentGenre && (
-        <div className="flex flex-col gap-1 rounded-lg border p-3 text-sm">
+        <div className="flex max-w-[75ch] flex-col gap-1 text-sm">
           <span>
             <LabelWithHelp term="launchBenchmark">
-              <span className="font-medium">Day {launch.day}:</span>
+              <span className="font-bold">Day {launch.day}:</span>
             </LabelWithHelp>{" "}
             {describeLaunchPosition(launch, game.currentGenre.name)}{" "}
             <span className="text-muted-foreground tabular-nums">
@@ -671,38 +690,45 @@ async function GameSeriesSections({
         </div>
       )}
 
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="flex items-center gap-2 font-medium">
-            {chart.title}
-            {metric === "visits" && <Badge variant="outline">Derived</Badge>}
-          </h2>
-          <div className="flex flex-wrap items-center gap-2">
-            <PresetLinks
-              param="metric"
-              options={GAME_METRICS}
-              current={metric}
-              clearValue={DEFAULT_GAME_METRIC}
-              baseParams={{ range: range === RANGE_CLEAR_VALUE ? undefined : range }}
+      <section className="flex flex-col gap-3">
+        <SectionHeading
+          aside={
+            <ExportLinks
+              dataset="snapshots"
+              params={{ game: universeIdParam, range }}
+              label="Export snapshot history"
             />
-            <PresetLinks
-              param="range"
-              options={RANGE_OPTIONS}
-              current={range}
-              clearValue={RANGE_CLEAR_VALUE}
-              baseParams={{ metric: metric === DEFAULT_GAME_METRIC ? undefined : metric }}
-            />
-          </div>
-        </div>
-        {chart.note && <p className="text-sm text-muted-foreground">{chart.note}</p>}
-        <div className="flex justify-end">
-          <ExportLinks
-            dataset="snapshots"
-            params={{ game: universeIdParam, range }}
-            label="Export snapshot history"
+          }
+        >
+          {chart.title}
+        </SectionHeading>
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+          <PresetLinks
+            param="metric"
+            options={GAME_METRICS}
+            current={metric}
+            clearValue={DEFAULT_GAME_METRIC}
+            baseParams={{ range: range === RANGE_CLEAR_VALUE ? undefined : range }}
+          />
+          <PresetLinks
+            param="range"
+            options={RANGE_OPTIONS}
+            current={range}
+            clearValue={RANGE_CLEAR_VALUE}
+            baseParams={{ metric: metric === DEFAULT_GAME_METRIC ? undefined : metric }}
           />
         </div>
-        <div className="rounded-lg border p-4">
+        {chart.note && (
+          <p className="max-w-[75ch] text-sm text-muted-foreground">
+            {metric === "visits" && (
+              <Badge variant="outline" className="mr-1.5">
+                Derived
+              </Badge>
+            )}
+            {chart.note}
+          </p>
+        )}
+        <div>
           <TrendChart
             data={chartData}
             unit={chart.unit}
@@ -724,21 +750,25 @@ async function GameSeriesSections({
             <summary className="cursor-pointer select-none hover:text-foreground">
               View as table
             </summary>
-            <div className="mt-2 max-h-64 overflow-y-auto rounded-md border">
+            <div className="mt-2 max-h-64 max-w-xl overflow-y-auto border-b">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-muted/50">
+                <thead className="sticky top-0 bg-background shadow-[0_2px_0_var(--rule)]">
                   <tr>
-                    <th className="px-3 py-1.5 text-left font-medium">Collected at</th>
-                    <th className="px-3 py-1.5 text-right font-medium">{chart.column}</th>
+                    <th className="px-2 py-1.5 text-left text-[13px] font-normal text-muted-foreground">
+                      Collected at
+                    </th>
+                    <th className="px-2 py-1.5 text-right text-[13px] font-normal text-muted-foreground">
+                      {chart.column}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {[...chartData].reverse().map((p) => (
                     <tr key={p.date} className="border-t">
-                      <td className="px-3 py-1.5">
+                      <td className="px-2 py-1.5">
                         <LocalTime value={p.date} />
                       </td>
-                      <td className="px-3 py-1.5 text-right tabular-nums">
+                      <td className="px-2 py-1.5 text-right tabular-nums">
                         {chart.format === "percent"
                           ? `${(p.value * 100).toFixed(1)}%`
                           : formatExact(p.value)}
@@ -750,40 +780,38 @@ async function GameSeriesSections({
             </div>
           </details>
         )}
-      </div>
+      </section>
 
       {ranks.length > 0 && (
         <section className="flex flex-col gap-3">
+          <SectionHeading>Rank history</SectionHeading>
+          <p className="max-w-[75ch] text-sm text-muted-foreground">
+            Where this game ranked by daily average players each day (UTC), among every tracked game
+            and within {game.currentGenre ? game.currentGenre.name : "unclassified games"}. Games
+            collected more often don&apos;t count more: every game is one daily average.
+            {latestRank && latestRank.overall !== null && (
+              <>
+                {" "}
+                Latest (
+                {new Date(latestRank.date).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  timeZone: "UTC",
+                })}
+                ):{" "}
+                <span className="font-medium text-foreground tabular-nums">
+                  #{formatExact(latestRank.overall)}
+                </span>{" "}
+                of {formatExact(latestRank.overallOf)} overall,{" "}
+                <span className="font-medium text-foreground tabular-nums">
+                  #{formatExact(latestRank.genre!)}
+                </span>{" "}
+                of {formatExact(latestRank.genreOf)} in genre. Best in this range: #
+                {formatExact(bestRank(ranks, "overall")!)} overall.
+              </>
+            )}
+          </p>
           <div>
-            <h2 className="font-medium">Rank history</h2>
-            <p className="text-sm text-muted-foreground">
-              Where this game ranked by daily average players each day (UTC), among every tracked
-              game and within {game.currentGenre ? game.currentGenre.name : "unclassified games"}.
-              Games collected more often don&apos;t count more: every game is one daily average.
-              {latestRank && latestRank.overall !== null && (
-                <>
-                  {" "}
-                  Latest (
-                  {new Date(latestRank.date).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    timeZone: "UTC",
-                  })}
-                  ):{" "}
-                  <span className="font-medium text-foreground tabular-nums">
-                    #{formatExact(latestRank.overall)}
-                  </span>{" "}
-                  of {formatExact(latestRank.overallOf)} overall,{" "}
-                  <span className="font-medium text-foreground tabular-nums">
-                    #{formatExact(latestRank.genre!)}
-                  </span>{" "}
-                  of {formatExact(latestRank.genreOf)} in genre. Best in this range: #
-                  {formatExact(bestRank(ranks, "overall")!)} overall.
-                </>
-              )}
-            </p>
-          </div>
-          <div className="rounded-lg border p-4">
             <DailyLinesChart
               data={hasRanks ? rankRows(ranks) : []}
               lines={[
@@ -805,11 +833,11 @@ async function GameSeriesSections({
 }
 
 const TIMELINE_ICON = {
-  update: { icon: RefreshCw, className: "text-teal-500" },
-  spike: { icon: TrendingUp, className: "text-emerald-500" },
-  drop: { icon: TrendingDown, className: "text-red-500" },
-  rank: { icon: ArrowUpDown, className: "text-indigo-500" },
-  passes: { icon: Ticket, className: "text-amber-500" },
+  update: { icon: RefreshCw, className: "text-link" },
+  spike: { icon: TrendingUp, className: "text-up" },
+  drop: { icon: TrendingDown, className: "text-down" },
+  rank: { icon: ArrowUpDown, className: "text-muted-foreground" },
+  passes: { icon: Ticket, className: "text-muted-foreground" },
 } as const;
 
 const utcDay = (iso: string) =>
@@ -827,19 +855,19 @@ async function TimelineSection({ universeIdParam }: { universeIdParam: string })
 
   return (
     <section id="timeline" className="flex flex-col gap-2">
-      <h2 className="font-medium">Timeline</h2>
-      <p className="text-sm text-muted-foreground">
+      <SectionHeading>Timeline</SectionHeading>
+      <p className="max-w-[75ch] text-sm text-muted-foreground">
         What we recorded for this game, newest first: updates (Roblox&apos;s &ldquo;last
         updated&rdquo; time changing), automatically flagged spikes and drops in players, days its
         overall rank at least halved or doubled, and the latest change to its game-pass list
         (earlier lists aren&apos;t kept). It shows what happened together, not what caused what.
         {total > events.length && ` Showing the latest ${events.length} of ${total}.`}
       </p>
-      <ol className="flex flex-col divide-y rounded-lg border">
+      <ol className="flex flex-col divide-y border-b">
         {events.map((e) => {
           const { icon: Icon, className } = TIMELINE_ICON[e.kind];
           return (
-            <li key={`${e.kind}-${e.at}`} className="flex items-start gap-3 p-3 text-sm">
+            <li key={`${e.kind}-${e.at}`} className="flex items-start gap-3 py-2.5 text-sm">
               <Icon className={`mt-0.5 size-4 shrink-0 ${className}`} aria-hidden />
               <div className="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                 <TimelineText event={e} />
@@ -860,7 +888,7 @@ function TimelineText({ event: e }: { event: TimelineEvent }) {
     case "update":
       return (
         <span>
-          <span className="font-medium">Updated</span>
+          <span className="font-semibold">Updated</span>
           <span className="text-muted-foreground">
             {e.pending
               ? " · 24h after still measuring"
@@ -875,7 +903,9 @@ function TimelineText({ event: e }: { event: TimelineEvent }) {
     case "drop":
       return (
         <span className="tabular-nums">
-          <span className="font-medium">{e.kind === "spike" ? "Player spike" : "Player drop"}</span>{" "}
+          <span className="font-semibold">
+            {e.kind === "spike" ? "Player spike" : "Player drop"}
+          </span>{" "}
           <span className="text-muted-foreground">
             {`${formatCompact(e.from)} → ${formatCompact(e.to)}`}
           </span>{" "}
@@ -885,7 +915,7 @@ function TimelineText({ event: e }: { event: TimelineEvent }) {
     case "rank":
       return (
         <span className="tabular-nums">
-          <span className="font-medium">
+          <span className="font-semibold">
             {e.to < e.from ? "Climbed in overall rank" : "Fell in overall rank"}
           </span>{" "}
           <span className="text-muted-foreground">
@@ -897,7 +927,7 @@ function TimelineText({ event: e }: { event: TimelineEvent }) {
     case "passes":
       return (
         <span className="tabular-nums">
-          <span className="font-medium">Game-pass list last changed</span>{" "}
+          <span className="font-semibold">Game-pass list last changed</span>{" "}
           <span className="text-muted-foreground">
             {e.forSaleCount === 0
               ? "· none on sale"
@@ -915,10 +945,10 @@ async function GameUpdatesSection({ universeIdParam }: { universeIdParam: string
 
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="flex items-center gap-2 font-medium">
-        Updates <Badge variant="outline">Observational</Badge>
-      </h2>
-      <p className="text-sm text-muted-foreground">
+      <SectionHeading aside={<Badge variant="outline">Observational</Badge>}>
+        Updates
+      </SectionHeading>
+      <p className="max-w-[75ch] text-sm text-muted-foreground">
         Each time Roblox&apos;s &ldquo;last updated&rdquo; time changed (a publish, or some settings
         edits), with average players in the 24 and 72 hours before vs. after. This shows what
         happened around an update, not what it caused: weekends, events and other changes land in
@@ -926,26 +956,32 @@ async function GameUpdatesSection({ universeIdParam }: { universeIdParam: string
         earlier updates weren&apos;t kept.
         {total > impacts.length && ` Showing the latest ${impacts.length} of ${total}.`}
       </p>
-      <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
+      <div className="overflow-x-auto xl:overflow-visible">
         <table className="w-full text-sm">
-          <thead className="bg-muted/50">
+          <thead className="border-b-2 border-rule">
             <tr>
-              <th className="px-3 py-1.5 text-left font-medium">Updated</th>
-              <th className="px-3 py-1.5 text-right font-medium">24h before → after</th>
-              <th className="px-3 py-1.5 text-right font-medium">72h before → after</th>
+              <th className="px-2 py-1.5 text-left text-[13px] font-normal text-muted-foreground">
+                Updated
+              </th>
+              <th className="px-2 py-1.5 text-right text-[13px] font-normal text-muted-foreground">
+                24h before → after
+              </th>
+              <th className="px-2 py-1.5 text-right text-[13px] font-normal text-muted-foreground">
+                72h before → after
+              </th>
             </tr>
           </thead>
           <tbody>
             {impacts.map((u) => (
               <tr key={u.updatedAt.toISOString()} className="border-t">
-                <td className="px-3 py-1.5">
+                <td className="px-2 py-1.5">
                   <LocalTime value={u.updatedAt} />{" "}
                   <span className="text-muted-foreground">
                     ({formatRelativeTime(u.updatedAt, now)})
                   </span>
                 </td>
                 {u.windows.map((w) => (
-                  <td key={w.hours} className="px-3 py-1.5 text-right tabular-nums">
+                  <td key={w.hours} className="px-2 py-1.5 text-right tabular-nums">
                     <ImpactCell window={w} />
                   </td>
                 ))}
@@ -964,16 +1000,16 @@ async function SimilarGamesSection({ universeIdParam }: { universeIdParam: strin
 
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="font-medium">Similar games</h2>
-      <p className="text-sm text-muted-foreground">
+      <SectionHeading>Similar games</SectionHeading>
+      <p className="max-w-[75ch] text-sm text-muted-foreground">
         Same genre and a similar number of players right now; games sharing more themes come first.
       </p>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-x-8 sm:grid-cols-2 lg:grid-cols-3">
         {similar.map((g) => (
           <Link
             key={g.id}
             href={`/games/${g.universeId}`}
-            className="flex items-center gap-3 rounded-lg border p-2 transition-colors hover:border-primary/50"
+            className="group flex items-center gap-3 border-b py-2 hover:bg-muted/60"
           >
             {g.icon ? (
               <Image
@@ -988,7 +1024,7 @@ async function SimilarGamesSection({ universeIdParam }: { universeIdParam: strin
               <div className="size-10 shrink-0 rounded-md border bg-muted" />
             )}
             <div className="flex min-w-0 flex-col">
-              <span className="truncate text-sm font-medium">{g.name}</span>
+              <span className="truncate text-sm font-bold group-hover:underline">{g.name}</span>
               <span className="text-xs text-muted-foreground tabular-nums">
                 {formatCompact(g.currentPlaying)} playing
                 {g.sharedThemes > 0 &&

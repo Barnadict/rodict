@@ -15,6 +15,7 @@ import type { NameType, ValueType } from "recharts/types/component/DefaultToolti
 
 import { formatCompact } from "@/lib/format";
 import type { DayPoint, LifecycleBandPoint } from "@/lib/new-releases";
+import { EmptyState } from "@/components/empty-state";
 
 type Row = {
   day: number;
@@ -85,9 +86,11 @@ export function EarlyCurveChart({
 
   if (game.length === 0) {
     return (
-      <div className="flex h-64 items-center justify-center rounded-lg border border-dashed text-center text-muted-foreground">
-        No readings from this game&apos;s first {maxDays} days.
-      </div>
+      <EmptyState
+        title={`No readings from this game's first ${maxDays} days`}
+        hint="The game was found after its launch window, so its early curve was never collected."
+        style={{ minHeight: 256 }}
+      />
     );
   }
 

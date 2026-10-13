@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { cacheLife } from "next/cache";
-import { TrendingUp, ArrowRight, Sparkles, Activity } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 import { getGenreStats } from "@/lib/db/genre-stats";
 import { RISING, getRisingGames, getRisingGenres } from "@/lib/db/trends";
@@ -15,17 +15,23 @@ import { rangeToCutoff } from "@/lib/date-range";
 import { estimateDailyEarningsFromCcu } from "@/lib/earnings/estimate";
 import { formatCompact, formatUsdRange } from "@/lib/format";
 
-import { Badge } from "@/components/ui/badge";
 import { GrowthBadge } from "@/components/data-table/growth-badge";
 import { StatTile } from "@/components/data-table/stat-tile";
 import { LocalTime } from "@/components/local-time";
 import { AnimatedNumber } from "@/components/animated-number";
+import { EmptyState } from "@/components/empty-state";
 import { GameIcon } from "@/components/game-icon";
-import { GenreBadge, GenreDot } from "@/components/genre-badge";
+import { GenreDot } from "@/components/genre-badge";
 import { PageHeader } from "@/components/page-header";
+import { Rank } from "@/components/rank";
+import { SectionHeading } from "@/components/section-heading";
+import { ShareBar } from "@/components/share-bar";
 import { Sparkline } from "@/components/sparkline";
 
 const DAY_MS = 86_400_000;
+/** Rows on the players chart and on the genre chart beside it. */
+const CHART_ROWS = 10;
+const GENRE_ROWS = 8;
 
 /**
  * Cached: the collector only writes every 3h, so re-querying on every request
@@ -58,7 +64,7 @@ async function getDashboardData() {
     getGenreStats({ sort: "totalPlaying", order: "desc" }),
     getRisingGames({ cutoff, limit: 6 }),
     getRisingGenres({ cutoff, limit: 3 }),
-    getTopGamesNow(5),
+    getTopGamesNow(CHART_ROWS),
     getTopNewOnRoblox(new Date(now.getTime() - NEW_RELEASE_DAYS * DAY_MS), 4),
     countGames(),
     getLastCollectedAt(),
@@ -66,20 +72,17 @@ async function getDashboardData() {
   ]);
 
   const classifiedGenres = genreStats.filter((g) => g.genreId && g.gameCount > 0);
-  const topGenres = classifiedGenres.slice(0, 5);
+  const topGenres = classifiedGenres.slice(0, GENRE_ROWS);
   // Every tracked game, classified or not: the headline number.
   const trackedPlaying = genreStats.reduce((sum, g) => sum + g.totalPlaying, 0);
   const classifiedPlaying = classifiedGenres.reduce((sum, g) => sum + g.totalPlaying, 0);
 
-  // Thumbnails and sparklines for just the games and genres shown here.
-  const genreIds = [
-    ...topGenres.flatMap((g) => (g.genreId ? [g.genreId] : [])),
-    ...risingGenres.map((g) => g.id),
-  ];
+  // Thumbnails and sparklines for just the games and genres shown here. The
+  // genre chart shows shares, not lines, so only the rising genres need one.
   const [icons, gameSparks, genreSparks] = await Promise.all([
     getSmallIcons([...risingGames, ...topGames, ...newGames].map((g) => g.universeId)),
     getGameSparklines([...new Set([...risingGames, ...topGames].map((g) => g.id))]),
-    getGenreSparklines([...new Set(genreIds)]),
+    getGenreSparklines(risingGenres.map((g) => g.id)),
   ]);
   const iconOf = (universeId: bigint) => icons.get(String(universeId)) ?? null;
 
@@ -88,7 +91,6 @@ async function getDashboardData() {
     topGenres: topGenres.map((g) => ({
       ...g,
       share: trackedPlaying > 0 ? g.totalPlaying / trackedPlaying : 0,
-      spark: (g.genreId && genreSparks[g.genreId]) || [],
     })),
     topGames: topGames.map((g) => ({
       ...g,
@@ -112,30 +114,87 @@ async function getDashboardData() {
   };
 }
 
-function SectionHeading({
-  icon,
-  title,
+/** First day → last day of a sparkline, when both ends were collected. */
+function sparkChange(values: (number | null)[]): number | null {
+  const first = values[0];
+  const last = values.at(-1);
+  if (first == null || last == null || first <= 0) return null;
+  return (last - first) / first;
+}
+
+const MORE_LINK = "inline-flex items-center gap-1 hover:text-foreground hover:underline";
+// The players chart and the rising list share one set of columns.
+const CHART_GRID =
+  "grid grid-cols-[2rem_2.25rem_minmax(0,1fr)_auto] items-center gap-x-3 sm:grid-cols-[3.25rem_2.5rem_minmax(0,1fr)_6rem_4.75rem_5rem] sm:gap-x-3.5";
+
+function ChartHead({ figure }: { figure: string }) {
+  return (
+    <div
+      aria-hidden="true"
+      className={`${CHART_GRID} border-b-2 border-rule pb-1.5 text-[13px] text-muted-foreground`}
+    >
+      <span className="text-right">Pos.</span>
+      <span />
+      <span>Game</span>
+      <span className="text-right">{figure}</span>
+      <span className="hidden text-right sm:block">Last {SPARK_DAYS}d</span>
+      <span className="hidden sm:block" />
+    </div>
+  );
+}
+
+function ChartRow({
+  position,
   href,
-  linkLabel,
+  icon,
+  name,
+  genre,
+  figure,
+  figureLabel,
+  change,
+  spark,
 }: {
-  icon: React.ReactNode;
-  title: string;
+  position: number;
   href: string;
-  linkLabel: string;
+  icon: string | null;
+  name: string;
+  genre: { slug: string | null; name: string } | null;
+  figure: string;
+  figureLabel: string;
+  change: number | null;
+  spark: (number | null)[];
 }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <h2 className="inline-flex items-center gap-1.5 text-lg font-semibold tracking-tight">
-        {icon}
-        {title}
-      </h2>
-      <Link
-        href={href}
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        {linkLabel} <ArrowRight className="size-3.5" />
+    <li className="border-b">
+      <Link href={href} className={`${CHART_GRID} group py-2.5 hover:bg-muted/60 sm:py-2`}>
+        <Rank value={position} className="text-3xl sm:text-[3.25rem]" />
+        <GameIcon src={icon} size={40} className="size-9 sm:size-10" />
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span className="truncate text-base font-bold group-hover:underline sm:text-[17px]">
+            {name}
+          </span>
+          {genre && (
+            <span className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground">
+              <GenreDot genre={genre.slug ?? genre.name} className="size-2" />
+              <span className="truncate">{genre.name}</span>
+            </span>
+          )}
+        </span>
+        <span className="flex flex-col items-end gap-0.5">
+          <span className="text-xl font-figure">
+            {figure}
+            <span className="sr-only"> {figureLabel}</span>
+          </span>
+          <span className="text-xs sm:hidden">
+            <GrowthBadge growth={change} />
+          </span>
+        </span>
+        <span className="hidden text-right text-sm sm:block">
+          <GrowthBadge growth={change} />
+        </span>
+        <Sparkline values={spark} width={80} className="hidden justify-self-end sm:inline-block" />
       </Link>
-    </div>
+    </li>
   );
 }
 
@@ -154,286 +213,301 @@ export default async function Home() {
     totalEarnings,
   } = await getDashboardData();
 
-  const hasAnyData = totalGames > 0;
-
   return (
-    <div className="flex flex-1 flex-col gap-8 p-6">
+    <div className="flex flex-1 flex-col gap-10 p-6">
       <PageHeader
-        title="Dashboard"
-        description="What's being played now, what's rising, and what's new across everything rodict tracks."
-      />
-
-      {!hasAnyData ? (
-        <div className="flex min-h-64 flex-1 items-center justify-center rounded-lg border border-dashed text-muted-foreground">
-          No data yet — the collector hasn&apos;t run.
-        </div>
-      ) : (
-        <>
-          <section
-            aria-label="Players right now"
-            className="flex flex-col gap-5 rounded-xl border bg-linear-to-br from-primary/10 via-transparent to-transparent p-5 sm:p-6 lg:flex-row lg:items-end lg:justify-between"
-          >
-            <div className="flex flex-col gap-1">
-              <span className="text-sm text-muted-foreground">Playing tracked games right now</span>
-              <AnimatedNumber
-                value={trackedPlaying}
-                className="text-4xl font-semibold tracking-tight tabular-nums sm:text-5xl"
-              />
-              <span className="text-sm text-muted-foreground">
-                {`Across ${formatCompact(totalGames)} tracked games, not all of Roblox.`}{" "}
-                {lastCollectedAt && (
-                  <>
-                    Collected <LocalTime value={lastCollectedAt} />.
-                  </>
-                )}
-              </span>
-              <Link
-                href="/market"
-                className="inline-flex w-fit items-center gap-1 text-sm text-primary hover:underline"
-              >
-                Players over time <ArrowRight className="size-3.5" />
-              </Link>
-            </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <StatTile label="Games tracked" value={formatCompact(totalGames)} />
-              <StatTile label="Genres active" value={formatCompact(classifiedGenreCount)} />
-              <StatTile
-                label="Est. earnings/day"
-                help="earnings"
-                value={formatUsdRange(totalEarnings.low, totalEarnings.high)}
-                badge="Est."
-              />
-            </div>
-          </section>
-
-          <section className="flex flex-col gap-3">
-            <SectionHeading
-              icon={<Activity className="size-4.5" aria-hidden="true" />}
-              title="Happening now"
-              href="/genres"
-              linkLabel="All genres"
-            />
-            <div className="grid gap-6 lg:grid-cols-2">
-              <div className="flex min-w-0 flex-col gap-2">
-                <h3 className="text-sm font-medium text-muted-foreground">Top genres</h3>
-                <div className="flex flex-col divide-y rounded-lg border">
-                  {topGenres.length === 0 && (
-                    <p className="p-4 text-sm text-muted-foreground">No classified genres yet.</p>
-                  )}
-                  {topGenres.map((g, i) => (
-                    <Link
-                      key={g.genreId ?? i}
-                      href={`/genres/${g.slug}`}
-                      className="flex items-center justify-between gap-3 p-3 hover:bg-muted/50"
-                    >
-                      <span className="flex min-w-0 items-center gap-2">
-                        <span className="w-4 text-sm text-muted-foreground tabular-nums">
-                          {i + 1}
-                        </span>
-                        <GenreDot genre={g.slug} />
-                        <span className="truncate font-medium">{g.name}</span>
-                        <Badge variant="secondary" className="hidden text-[10px] sm:inline-flex">
-                          {formatCompact(g.gameCount)} games
-                        </Badge>
-                      </span>
-                      <span className="flex shrink-0 items-center gap-3">
-                        <Sparkline values={g.spark} width={64} className="hidden sm:inline-block" />
-                        <span className="w-24 text-right text-sm tabular-nums">
-                          {formatCompact(g.totalPlaying)}
-                          <span className="text-xs text-muted-foreground">
-                            {` · ${Math.round(g.share * 100)}%`}
-                          </span>
-                        </span>
-                      </span>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-              <div className="flex min-w-0 flex-col gap-2">
-                <h3 className="text-sm font-medium text-muted-foreground">Most played games</h3>
-                <div className="flex flex-col divide-y rounded-lg border">
-                  {topGames.map((g, i) => (
-                    <Link
-                      key={g.id}
-                      href={`/games/${g.universeId}`}
-                      className="flex items-center justify-between gap-3 p-3 hover:bg-muted/50"
-                    >
-                      <span className="flex min-w-0 items-center gap-2.5">
-                        <span className="w-4 text-sm text-muted-foreground tabular-nums">
-                          {i + 1}
-                        </span>
-                        <GameIcon src={g.icon} />
-                        <span className="flex min-w-0 flex-col">
-                          <span className="truncate font-medium">{g.name}</span>
-                          {g.currentGenre && (
-                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                              <GenreDot genre={g.currentGenre.slug} className="size-2" />
-                              {g.currentGenre.name}
-                            </span>
-                          )}
-                        </span>
-                      </span>
-                      <span className="flex shrink-0 items-center gap-3">
-                        <Sparkline values={g.spark} width={64} className="hidden sm:inline-block" />
-                        <span className="w-14 text-right text-sm tabular-nums">
-                          {formatCompact(g.currentPlaying)}
-                        </span>
-                      </span>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section className="flex flex-col gap-3">
-            <SectionHeading
-              icon={<TrendingUp className="size-4.5" aria-hidden="true" />}
-              title="Rising this week"
-              href="/trending?range=7d"
-              linkLabel="All trending"
-            />
-            {risingGames.length === 0 && risingGenres.length === 0 ? (
-              <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                Nothing has grown this week yet, or there isn&apos;t enough history — this fills in
-                as the collector runs.
-              </p>
-            ) : (
+        title="The players chart"
+        description={
+          <>
+            {`${totalGames.toLocaleString("en-US")} tracked games ranked by players at the last collection`}
+            {lastCollectedAt && (
               <>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {risingGames.map((g) => (
-                    <Link
-                      key={g.id}
-                      href={`/games/${g.universeId}`}
-                      className="glow-primary-hover flex flex-col gap-3 rounded-lg border p-3 transition-colors hover:border-primary/50"
-                    >
-                      <div className="flex items-start gap-3">
-                        <GameIcon src={g.icon} size={48} />
-                        <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
-                          <span className="line-clamp-1 font-medium">{g.name}</span>
-                          {g.genreName && <GenreBadge name={g.genreName} />}
-                        </div>
-                        <GrowthBadge growth={g.growthPct} />
-                      </div>
-                      <div className="flex items-end justify-between gap-3">
-                        <span className="text-xs text-muted-foreground tabular-nums">
-                          {`${formatCompact(Math.round(g.basePlaying))} → ${formatCompact(Math.round(g.currentPlaying))} avg players`}
-                        </span>
-                        <Sparkline values={g.spark} width={96} height={28} />
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-                {risingGenres.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {risingGenres.map((g) => (
-                      <Link
-                        key={g.id}
-                        href={`/genres/${g.slug}`}
-                        className="flex items-center gap-2.5 rounded-lg border px-3 py-2 text-sm hover:bg-muted/50"
-                      >
-                        <GenreDot genre={g.slug} />
-                        <span className="font-medium">{g.name}</span>
-                        <Sparkline values={g.spark} width={48} height={20} />
-                        <GrowthBadge growth={g.growthPct} />
-                      </Link>
-                    ))}
-                  </div>
-                )}
+                , <LocalTime value={lastCollectedAt} />
               </>
             )}
-            <p className="text-xs text-muted-foreground">
-              {`Average players on the first day of the week → the last day. Only games averaging at least ${RISING.minBaseline} players at the start are ranked. Lines show the last ${SPARK_DAYS} days' daily average.`}
-            </p>
-          </section>
+            . A sample, not all of Roblox.
+          </>
+        }
+      />
 
-          <section className="flex flex-col gap-3">
-            <SectionHeading
-              icon={<Sparkles className="size-4.5" aria-hidden="true" />}
-              title="New on Roblox"
-              href="/new"
-              linkLabel="All new releases"
-            />
-            {newGames.length === 0 ? (
-              <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                {`No tracked game was created on Roblox in the last ${NEW_RELEASE_DAYS} days.`}
-              </p>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                {newGames.map((g) => (
-                  <Link
+      {totalGames === 0 ? (
+        <EmptyState
+          title="No data yet"
+          hint="The collector hasn't run. The chart fills in after its first collection."
+        />
+      ) : (
+        <>
+          <div className="grid gap-x-11 gap-y-10 lg:grid-cols-[minmax(0,1fr)_22rem]">
+            <section aria-label="Most played games" className="min-w-0">
+              <ChartHead figure="Players" />
+              <ol>
+                {topGames.map((g, i) => (
+                  <ChartRow
                     key={g.id}
+                    position={i + 1}
                     href={`/games/${g.universeId}`}
-                    className="glow-primary-hover flex items-center gap-3 rounded-lg border p-3 transition-colors hover:border-primary/50"
-                  >
-                    <GameIcon src={g.icon} size={40} />
-                    <span className="flex min-w-0 flex-col">
-                      <span className="line-clamp-1 text-sm font-medium">{g.name}</span>
-                      <span className="text-xs text-muted-foreground tabular-nums">
-                        {`${formatCompact(g.currentPlaying)} playing`}
-                      </span>
-                      {g.robloxCreatedAt && (
-                        <span className="text-xs text-muted-foreground">
-                          Created{" "}
-                          <LocalTime value={g.robloxCreatedAt} options={{ dateStyle: "medium" }} />
-                        </span>
-                      )}
-                    </span>
-                  </Link>
+                    icon={g.icon}
+                    name={g.name}
+                    genre={g.currentGenre}
+                    figure={formatCompact(g.currentPlaying)}
+                    figureLabel="players"
+                    change={sparkChange(g.spark)}
+                    spark={g.spark}
+                  />
                 ))}
-              </div>
-            )}
-          </section>
+              </ol>
+              <p className="mt-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-[13px] text-muted-foreground">
+                <span>
+                  {`Last ${SPARK_DAYS}d compares the daily average on the first and last day of the line.`}
+                </span>
+                <Link href="/games?view=table" className={`${MORE_LINK} text-link`}>
+                  {`All ${totalGames.toLocaleString("en-US")} games`}
+                  <ArrowRight aria-hidden="true" className="size-3.5" />
+                </Link>
+              </p>
+            </section>
+
+            <aside className="flex min-w-0 flex-col gap-8">
+              <section className="flex flex-col">
+                <SectionHeading
+                  aside={
+                    <Link href="/genres" className={MORE_LINK}>
+                      {`All ${classifiedGenreCount}`}
+                      <ArrowRight aria-hidden="true" className="size-3.5" />
+                    </Link>
+                  }
+                >
+                  Genre chart
+                </SectionHeading>
+                {topGenres.length === 0 ? (
+                  <EmptyState title="No classified genres yet" className="border-t-0" />
+                ) : (
+                  <ol>
+                    {topGenres.map((g, i) => (
+                      <li key={g.genreId ?? i} className="border-b">
+                        <Link
+                          href={`/genres/${g.slug}`}
+                          className="group grid grid-cols-[1.75rem_0.75rem_minmax(0,1fr)_auto_2.75rem] items-center gap-x-2.5 py-1.5 hover:bg-muted/60"
+                        >
+                          <Rank value={i + 1} size="sm" />
+                          <GenreDot genre={g.slug} className="size-3" />
+                          <span className="truncate font-bold group-hover:underline">{g.name}</span>
+                          <span className="text-right">
+                            {formatCompact(g.totalPlaying)}
+                            <span className="sr-only"> players</span>
+                          </span>
+                          <span className="text-right text-[13px] text-muted-foreground">
+                            {`${Math.round(g.share * 100)}%`}
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+                <p className="mt-2 text-[13px] text-muted-foreground">
+                  Players now, and each genre&apos;s share of all tracked players.
+                </p>
+              </section>
+
+              <section className="flex flex-col gap-4">
+                <SectionHeading
+                  aside={
+                    <Link href="/market" className={MORE_LINK}>
+                      Over time
+                      <ArrowRight aria-hidden="true" className="size-3.5" />
+                    </Link>
+                  }
+                >
+                  All tracked
+                </SectionHeading>
+                <div className="flex flex-col gap-1">
+                  <AnimatedNumber
+                    value={trackedPlaying}
+                    className="text-[clamp(2.75rem,9vw,3.75rem)] font-figure"
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    players in tracked games at the last collection
+                  </span>
+                </div>
+                <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-x-5">
+                  <StatTile label="Genres active" value={formatCompact(classifiedGenreCount)} />
+                  <StatTile
+                    label="Est. earnings/day"
+                    help="earnings"
+                    value={
+                      <span className="text-xl whitespace-nowrap">
+                        {formatUsdRange(totalEarnings.low, totalEarnings.high)}
+                      </span>
+                    }
+                    badge="Est."
+                  />
+                </div>
+              </section>
+            </aside>
+          </div>
+
+          <div className="grid gap-x-11 gap-y-10 lg:grid-cols-[minmax(0,1fr)_22rem]">
+            <section className="flex min-w-0 flex-col">
+              <SectionHeading
+                className="mb-3"
+                aside={
+                  <Link href="/trending?range=7d" className={MORE_LINK}>
+                    All trending
+                    <ArrowRight aria-hidden="true" className="size-3.5" />
+                  </Link>
+                }
+              >
+                Rising this week
+              </SectionHeading>
+              {risingGames.length === 0 ? (
+                <EmptyState
+                  className="border-t-0"
+                  title="Nothing has risen this week yet"
+                  hint="Either no game grew, or there isn't a week of history to compare. This fills in as collection continues."
+                />
+              ) : (
+                <>
+                  <ChartHead figure="Avg players" />
+                  <ol>
+                    {risingGames.map((g, i) => (
+                      <ChartRow
+                        key={g.id}
+                        position={i + 1}
+                        href={`/games/${g.universeId}`}
+                        icon={g.icon}
+                        name={g.name}
+                        genre={g.genreName ? { slug: null, name: g.genreName } : null}
+                        figure={formatCompact(Math.round(g.currentPlaying))}
+                        figureLabel="average players"
+                        change={g.growthPct}
+                        spark={g.spark}
+                      />
+                    ))}
+                  </ol>
+                  <p className="mt-3 max-w-[75ch] text-[13px] text-muted-foreground">
+                    {`Ranked by growth in average players from the first day of the week to the last. Only games averaging at least ${RISING.minBaseline} players at the start are ranked.`}
+                  </p>
+                </>
+              )}
+            </section>
+
+            <aside className="flex min-w-0 flex-col gap-8">
+              {risingGenres.length > 0 && (
+                <section className="flex flex-col">
+                  <SectionHeading>Rising genres</SectionHeading>
+                  <ul>
+                    {risingGenres.map((g) => (
+                      <li key={g.id} className="border-b">
+                        <Link
+                          href={`/genres/${g.slug}`}
+                          className="group grid grid-cols-[0.75rem_minmax(0,1fr)_auto_5.25rem] items-center gap-x-2.5 py-2 hover:bg-muted/60"
+                        >
+                          <GenreDot genre={g.slug} className="size-3" />
+                          <span className="truncate font-bold group-hover:underline">{g.name}</span>
+                          <Sparkline values={g.spark} width={56} height={20} />
+                          <span className="text-right text-sm">
+                            <GrowthBadge growth={g.growthPct} />
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              <section className="flex flex-col">
+                <SectionHeading
+                  aside={
+                    <Link href="/new" className={MORE_LINK}>
+                      All new
+                      <ArrowRight aria-hidden="true" className="size-3.5" />
+                    </Link>
+                  }
+                >
+                  New on Roblox
+                </SectionHeading>
+                {newGames.length === 0 ? (
+                  <EmptyState
+                    className="border-t-0"
+                    tone="plain"
+                    title={`No tracked game was created in the last ${NEW_RELEASE_DAYS} days`}
+                  />
+                ) : (
+                  <ul>
+                    {newGames.map((g) => (
+                      <li key={g.id} className="border-b">
+                        <Link
+                          href={`/games/${g.universeId}`}
+                          className="group flex items-center gap-3 py-2 hover:bg-muted/60"
+                        >
+                          <GameIcon src={g.icon} size={36} />
+                          <span className="flex min-w-0 flex-1 flex-col">
+                            <span className="truncate font-bold group-hover:underline">
+                              {g.name}
+                            </span>
+                            {g.robloxCreatedAt && (
+                              <span className="text-[13px] text-muted-foreground">
+                                Created{" "}
+                                <LocalTime
+                                  value={g.robloxCreatedAt}
+                                  options={{ dateStyle: "medium" }}
+                                />
+                              </span>
+                            )}
+                          </span>
+                          <span className="text-right">
+                            {formatCompact(g.currentPlaying)}
+                            <span className="sr-only"> players</span>
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </aside>
+          </div>
 
           {correlation && correlation.status === "ok" && (
             <section className="flex flex-col gap-3">
-              <div>
-                <h2 className="font-medium">What&apos;s associated with more players</h2>
-                <p className="text-sm text-muted-foreground">
-                  How each stat lines up with a game&apos;s current player count. Associational, not
-                  causal · n={correlation.n}.
-                </p>
-              </div>
-              <div className="grid gap-3 lg:grid-cols-2">
-                <div className="flex flex-col divide-y rounded-lg border">
-                  <div className="p-3 text-sm text-muted-foreground">
-                    Rank correlation (−1 to +1)
-                  </div>
-                  {correlation.correlations.map((c) => {
-                    const pct = Math.min(100, Math.abs(c.spearman) * 100);
-                    const positive = c.spearman >= 0;
-                    return (
-                      <div key={c.feature} className="flex items-center gap-3 p-3">
-                        <span className="w-32 shrink-0 text-sm font-medium">{c.label}</span>
-                        <div className="flex h-2 flex-1 overflow-hidden rounded-full bg-muted">
-                          <div
-                            className={positive ? "bg-emerald-500" : "bg-red-500"}
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                        <span className="w-14 shrink-0 text-right text-sm tabular-nums text-muted-foreground">
-                          {c.spearman >= 0 ? "+" : "−"}
-                          {Math.abs(c.spearman).toFixed(2)}
-                        </span>
-                      </div>
-                    );
-                  })}
+              <SectionHeading aside={`n = ${correlation.n.toLocaleString("en-US")} games`}>
+                What goes with more players
+              </SectionHeading>
+              <p className="max-w-[75ch] text-sm text-muted-foreground">
+                How each stat lines up with a game&apos;s current player count. Correlation says
+                whether a stat rises with player count; importance says how much a model leans on it
+                to predict player count, including non-linear effects. Neither says a stat causes
+                more players.
+              </p>
+              <div className="grid gap-x-11 gap-y-6 lg:grid-cols-2">
+                <div className="flex flex-col">
+                  <h3 className="border-b pb-1.5 text-[13px] text-muted-foreground">
+                    Rank correlation, −1 to +1
+                  </h3>
+                  {correlation.correlations.map((c) => (
+                    <div key={c.feature} className="flex items-center gap-3 border-b py-2">
+                      <span className="w-32 shrink-0 text-sm font-semibold">{c.label}</span>
+                      <ShareBar
+                        value={Math.abs(c.spearman)}
+                        tone={c.spearman >= 0 ? "up" : "down"}
+                      />
+                      <span className="w-14 shrink-0 text-right text-sm">
+                        {c.spearman >= 0 ? "+" : "−"}
+                        {Math.abs(c.spearman).toFixed(2)}
+                      </span>
+                    </div>
+                  ))}
                 </div>
                 {correlation.importances.length > 0 && (
-                  <div className="flex flex-col divide-y rounded-lg border">
-                    <div className="p-3 text-sm text-muted-foreground">
-                      Importance in a random-forest model (shares sum to 100%)
-                    </div>
+                  <div className="flex flex-col">
+                    <h3 className="border-b pb-1.5 text-[13px] text-muted-foreground">
+                      Importance in a random-forest model, shares sum to 100%
+                    </h3>
                     {correlation.importances.map((imp) => (
-                      <div key={imp.feature} className="flex items-center gap-3 p-3">
-                        <span className="w-32 shrink-0 text-sm font-medium">{imp.label}</span>
-                        <div className="flex h-2 flex-1 overflow-hidden rounded-full bg-muted">
-                          <div
-                            className="bg-primary"
-                            style={{ width: `${Math.min(100, imp.importance * 100)}%` }}
-                          />
-                        </div>
-                        <span className="w-14 shrink-0 text-right text-sm tabular-nums text-muted-foreground">
+                      <div key={imp.feature} className="flex items-center gap-3 border-b py-2">
+                        <span className="w-32 shrink-0 text-sm font-semibold">{imp.label}</span>
+                        <ShareBar value={imp.importance} />
+                        <span className="w-14 shrink-0 text-right text-sm">
                           {Math.round(imp.importance * 100)}%
                         </span>
                       </div>
@@ -441,13 +515,8 @@ export default async function Home() {
                   </div>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground">
-                Correlation says whether a stat rises with player count; importance says how much a
-                model leans on it to predict player count, including non-linear effects. Neither
-                says a stat causes more players.
-              </p>
               {correlation.note && (
-                <p className="text-xs text-muted-foreground">{correlation.note}</p>
+                <p className="max-w-[75ch] text-xs text-muted-foreground">{correlation.note}</p>
               )}
             </section>
           )}

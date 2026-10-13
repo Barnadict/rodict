@@ -26,7 +26,6 @@ import {
 } from "@/lib/status";
 import { cn } from "@/lib/utils";
 
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -41,6 +40,7 @@ import { StatTilesSkeleton } from "@/components/data-table/stat-tiles-skeleton";
 import { TableSkeleton } from "@/components/data-table/table-skeleton";
 import { LocalTime } from "@/components/local-time";
 import { PageHeader } from "@/components/page-header";
+import { SectionHeading } from "@/components/section-heading";
 
 export const metadata = {
   title: "Status — rodict",
@@ -98,7 +98,7 @@ async function getStatusData() {
 
 export default function StatusPage() {
   return (
-    <div className="flex flex-1 flex-col gap-8 p-6">
+    <div className="page-stack">
       <PageHeader
         title="Status"
         description={
@@ -132,7 +132,7 @@ async function StatusContent() {
       <PipelinesSection health={data.health} now={now} />
       <CoverageSection coverage={data.coverage} />
       <RecentRunsSection runs={data.runs.slice(0, RECENT_RUNS_SHOWN)} now={now} />
-      <p className="text-xs text-muted-foreground">
+      <p className="max-w-[75ch] text-xs text-muted-foreground">
         Figures as of <LocalTime value={data.computedAt} /> (refreshed every few minutes).
       </p>
     </>
@@ -150,10 +150,8 @@ function Section({
 }) {
   return (
     <section className="space-y-3">
-      <div className="space-y-1">
-        <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
-        {description && <p className="max-w-2xl text-sm text-muted-foreground">{description}</p>}
-      </div>
+      <SectionHeading>{title}</SectionHeading>
+      {description && <p className="max-w-[75ch] text-sm text-muted-foreground">{description}</p>}
       {children}
     </section>
   );
@@ -235,9 +233,9 @@ function BudgetSection({ data }: { data: Awaited<ReturnType<typeof getStatusData
         pace={guard.paceAllowance / cap}
       />
 
-      {guard.reason && <p className="text-sm text-amber-600 dark:text-amber-400">{guard.reason}</p>}
+      {guard.reason && <p className="text-sm text-warn">{guard.reason}</p>}
       {budget.unmeasuredRuns > 0 && (
-        <p className="text-xs text-muted-foreground">
+        <p className="max-w-[75ch] text-xs text-muted-foreground">
           {formatExact(budget.unmeasuredRuns)} run{budget.unmeasuredRuns === 1 ? "" : "s"} this
           month recorded no write count, so the true total may be a little higher.
         </p>
@@ -259,15 +257,11 @@ function BudgetBar({
 }) {
   const pct = (v: number) => `${Math.min(100, Math.max(0, v * 100))}%`;
   const tone =
-    used >= BUDGET_GUARD.pauseAt
-      ? "bg-red-500"
-      : used >= BUDGET_GUARD.reduceAt
-        ? "bg-amber-500"
-        : "bg-emerald-500";
+    used >= BUDGET_GUARD.pauseAt ? "bg-down" : used >= BUDGET_GUARD.reduceAt ? "bg-warn" : "bg-up";
   return (
     <div className="space-y-1.5">
       <div
-        className="relative h-3 w-full overflow-hidden rounded-full bg-muted"
+        className="relative h-3 w-full overflow-hidden rounded-[2px] bg-muted"
         role="img"
         aria-label={`${formatShare(used)} of the monthly write cap used, pace line at ${formatShare(pace)}${projected === null ? "" : `, ${formatShare(projected)} projected by month end (estimate)`}`}
       >
@@ -285,16 +279,16 @@ function BudgetBar({
             style={{ left: pct(mark) }}
           />
         ))}
-        <div className="absolute inset-y-0 w-0.5 bg-sky-500" style={{ left: pct(pace) }} />
+        <div className="absolute inset-y-0 w-0.5 bg-link" style={{ left: pct(pace) }} />
       </div>
       <div className="flex justify-between text-xs text-muted-foreground">
         <span>0</span>
-        <span>
-          Solid: written so far · Faint: projected (Est.) · Blue: pace line today · Lines: slow-down
-          and pause points
-        </span>
         <span>{formatCompact(TURSO_FREE_PLAN.rowsWrittenPerMonth)}</span>
       </div>
+      <p className="max-w-[75ch] text-xs text-muted-foreground">
+        Solid: written so far · Faint: projected (Est.) · Blue: pace line today · Lines: slow-down
+        and pause points
+      </p>
     </div>
   );
 }
@@ -307,15 +301,12 @@ function PipelinesSection({ health, now }: { health: JobHealth[]; now: Date }) {
       title="Pipelines"
       description={`Outcomes over the last ${STATUS_WINDOW_DAYS} days. A partial run finished but skipped some games or was slowed by the write-budget guard.`}
     >
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-x-8 gap-y-6 md:grid-cols-3">
         {health.map((h) => (
-          <div key={h.job} className="space-y-2 rounded-lg border p-4">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="font-medium">{JOB_LABELS[h.job] ?? h.job}</h3>
-              <Badge variant="outline" className="text-[10px]">
-                {JOB_SCHEDULES[h.job] ?? "scheduled"}
-              </Badge>
-            </div>
+          <div key={h.job} className="space-y-2">
+            <SectionHeading as="h3" aside={JOB_SCHEDULES[h.job] ?? "scheduled"}>
+              {JOB_LABELS[h.job] ?? h.job}
+            </SectionHeading>
             {h.lastRun ? (
               <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
                 <dt className="text-muted-foreground">Last run</dt>
@@ -353,7 +344,7 @@ function PipelinesSection({ health, now }: { health: JobHealth[]; now: Date }) {
                 </dd>
               </dl>
             ) : (
-              <p className="text-sm text-muted-foreground">
+              <p className="max-w-[75ch] text-sm text-muted-foreground">
                 No runs in the last {STATUS_WINDOW_DAYS} days.
               </p>
             )}
@@ -391,7 +382,7 @@ function CoverageSection({ coverage }: { coverage: TierCoverage[] }) {
       title="Collection coverage"
       description="The share of tracked games collected recently. Quiet games are collected once a day rather than every run, to stay within the write budget, so their 6-hour share is expected to be low."
     >
-      <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
+      <div className="overflow-x-auto xl:overflow-visible">
         <Table>
           <TableHeader>
             <TableRow>
@@ -405,7 +396,7 @@ function CoverageSection({ coverage }: { coverage: TierCoverage[] }) {
           <TableBody>
             {coverage.map((t) => (
               <TableRow key={t.tier}>
-                <TableCell className="font-medium whitespace-normal">
+                <TableCell className="font-bold whitespace-normal">
                   {TIER_INFO[t.tier].label}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">{formatExact(t.total)}</TableCell>
@@ -421,7 +412,7 @@ function CoverageSection({ coverage }: { coverage: TierCoverage[] }) {
               </TableRow>
             ))}
             <TableRow>
-              <TableCell className="font-medium">All tracked games</TableCell>
+              <TableCell className="font-bold">All tracked games</TableCell>
               <TableCell className="text-right tabular-nums">{formatExact(total.total)}</TableCell>
               <TableCell className="text-right tabular-nums">
                 {formatShare(share(total.within6h, total.total))}
@@ -447,11 +438,11 @@ function RecentRunsSection({ runs, now }: { runs: StatusRun[]; now: Date }) {
       description="Newest first. Rows written counts every database row a run inserted, updated or deleted, including its own entry in this log. Runs from before write counting began show —."
     >
       {runs.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="max-w-[75ch] text-sm text-muted-foreground">
           No runs in the last {STATUS_WINDOW_DAYS} days.
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
+        <div className="overflow-x-auto xl:overflow-visible">
           <Table>
             <TableHeader>
               <TableRow>
@@ -500,9 +491,9 @@ function RecentRunsSection({ runs, now }: { runs: StatusRun[]; now: Date }) {
 type Tone = "ok" | "warn" | "error";
 
 const TONE_TEXT: Record<Tone, string> = {
-  ok: "text-emerald-600 dark:text-emerald-400",
-  warn: "text-amber-600 dark:text-amber-400",
-  error: "text-red-600 dark:text-red-400",
+  ok: "text-up",
+  warn: "text-warn",
+  error: "text-down",
 };
 
 function ToneText({ tone, children }: { tone: Tone; children: React.ReactNode }) {
@@ -516,20 +507,20 @@ function StatusPill({ status }: { status: string }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 text-sm font-medium",
+        "inline-flex items-center gap-1.5 text-sm font-semibold",
         tone ? TONE_TEXT[tone] : "text-muted-foreground",
       )}
     >
       <span
         aria-hidden="true"
         className={cn(
-          "size-1.5 rounded-full",
+          "size-2 rounded-[2px]",
           tone === "ok"
-            ? "bg-emerald-500"
+            ? "bg-up"
             : tone === "warn"
-              ? "bg-amber-500"
+              ? "bg-warn"
               : tone === "error"
-                ? "bg-red-500"
+                ? "bg-down"
                 : "bg-muted-foreground/40",
         )}
       />

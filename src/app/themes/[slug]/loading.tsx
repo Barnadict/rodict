@@ -4,7 +4,7 @@ import { TableSkeleton } from "@/components/data-table/table-skeleton";
 
 export default function ThemeDetailLoading() {
   return (
-    <div className="flex flex-1 flex-col gap-6 p-6" aria-busy="true">
+    <div className="page-stack" aria-busy="true">
       <span className="sr-only">Loading theme…</span>
       <div className="flex flex-col gap-2">
         <Skeleton className="h-4 w-20" />

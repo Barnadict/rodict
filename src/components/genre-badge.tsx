@@ -1,13 +1,12 @@
 import Link from "next/link";
 
-import { Badge } from "@/components/ui/badge";
 import { genreColor, genreSlugOf } from "@/lib/genre-colors";
 import { cn } from "@/lib/utils";
 
 /**
- * A genre chip with the genre's color as a dot (Task #106). The text stays in
- * the normal ink so it reads in both themes; the dot carries the identity.
- * With `link`, the chip goes to the genre's page.
+ * A genre's name behind its color square. The text stays in the normal ink so
+ * it reads in both themes; the square carries the identity. With `link`, it
+ * goes to the genre's page.
  */
 export function GenreBadge({
   name,
@@ -20,36 +19,32 @@ export function GenreBadge({
   link?: boolean;
   className?: string;
 }) {
-  const color = genreColor(slug ?? name);
   const href = link ? genreSlugOf(slug ?? name) : null;
+  const classes = cn(
+    "inline-flex w-fit shrink-0 items-center gap-1.5 text-xs font-medium whitespace-nowrap text-foreground",
+    className,
+  );
   const content = (
     <>
-      <span
-        aria-hidden="true"
-        className="size-2 shrink-0 rounded-full"
-        style={{ background: color }}
-      />
+      <GenreDot genre={slug ?? name} className="size-2" />
       {name}
     </>
   );
-  return (
-    <Badge
-      variant="secondary"
-      className={cn("text-[10px]", className)}
-      style={{ boxShadow: `inset 0 0 0 1px color-mix(in oklch, ${color} 35%, transparent)` }}
-      render={href ? <Link href={`/genres/${href}`} /> : undefined}
-    >
+  return href ? (
+    <Link href={`/genres/${href}`} className={cn(classes, "hover:underline")}>
       {content}
-    </Badge>
+    </Link>
+  ) : (
+    <span className={classes}>{content}</span>
   );
 }
 
-/** Just the genre's color dot, for legends and dense rows. */
+/** Just the genre's color square, for legends and dense rows. */
 export function GenreDot({ genre, className }: { genre: string | null; className?: string }) {
   return (
     <span
       aria-hidden="true"
-      className={cn("inline-block size-2.5 shrink-0 rounded-full", className)}
+      className={cn("inline-block size-2.5 shrink-0 rounded-[2px]", className)}
       style={{ background: genreColor(genre) }}
     />
   );

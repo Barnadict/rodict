@@ -1,8 +1,9 @@
-import { LineChart as LineChartIcon } from "lucide-react";
+import { EmptyState } from "@/components/empty-state";
 
 /**
- * The empty state for a time chart that can't draw a line yet (Task #109):
- * an icon, what's missing, and an optional line on when it fills in.
+ * The empty state for a time chart that can't draw a line yet: what's missing,
+ * and an optional line on when it fills in. Holds the chart's height so the
+ * page doesn't jump when data arrives.
  */
 export function ChartEmpty({
   title,
@@ -13,14 +14,5 @@ export function ChartEmpty({
   hint?: React.ReactNode;
   height: number;
 }) {
-  return (
-    <div
-      className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted/30 px-6 text-center"
-      style={{ minHeight: height }}
-    >
-      <LineChartIcon className="size-6 text-muted-foreground" aria-hidden="true" />
-      <p className="font-medium text-foreground">{title}</p>
-      {hint && <p className="max-w-md text-sm text-muted-foreground">{hint}</p>}
-    </div>
-  );
+  return <EmptyState title={title} hint={hint} style={{ minHeight: height }} />;
 }

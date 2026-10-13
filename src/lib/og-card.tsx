@@ -3,19 +3,25 @@ import { ImageResponse } from "next/og";
 /**
  * Open Graph share images (Task #72), rendered with `next/og`.
  *
- * One layout for every route so shared links look like one site: brand mark,
- * a kicker ("Game", "Genre"), the title, a subtitle, and up to three stats.
+ * One layout for every route so shared links look like one site: the page band
+ * from the site (near-black, blue edge), the mark and wordmark, what kind of
+ * page it is, the title, a subtitle, and up to three stats on heavy rules.
  * Satori (the renderer) needs `display: flex` on any element with more than one
  * child, and supports only inline styles, hence the verbose style objects.
+ * Colours are the dark-theme tokens from `globals.css`, written out because
+ * Satori can't read CSS variables.
  */
 
 export const OG_SIZE = { width: 1200, height: 630 };
 export const OG_CONTENT_TYPE = "image/png";
 
-const BRAND_RED = "#e2231a";
-const BG = "#0b0b0f";
-const FG = "#f5f5f7";
-const MUTED = "#a1a1aa";
+const BAND = "#030916";
+const FG = "#f5f8ff";
+const MUTED = "#8ea0c8";
+const RULE = "#33488a";
+const PRIMARY = "#155dfc";
+const BRAND = "#f0473c";
+const BRAND_INK = "#e3ecff";
 
 export interface OgStat {
   label: string;
@@ -52,46 +58,37 @@ export function renderOgCard({ kicker, title, subtitle, stats = [], imageUrl }: 
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
-        padding: 64,
-        background: BG,
+        padding: "56px 64px 56px 84px",
+        background: BAND,
         color: FG,
-        borderTop: `12px solid ${BRAND_RED}`,
+        borderLeft: `20px solid ${PRIMARY}`,
       }}
     >
-      {/* Brand mark: the same three rising bars as the sidebar logo. */}
+      {/* The mark: the same three-row rundown as `components/logo.tsx`. */}
       <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
         <div
           style={{
             display: "flex",
-            alignItems: "flex-end",
-            gap: 6,
+            flexDirection: "column",
+            justifyContent: "center",
+            gap: 5,
             width: 56,
             height: 56,
-            padding: "12px 12px",
-            borderRadius: 12,
-            background: BRAND_RED,
+            padding: "0 11px",
+            borderRadius: 9,
+            background: BRAND,
           }}
         >
-          <div style={{ width: 8, height: 14, background: "#fff", borderRadius: 2 }} />
-          <div style={{ width: 8, height: 22, background: "#fff", borderRadius: 2 }} />
-          <div style={{ width: 8, height: 32, background: "#fff", borderRadius: 2 }} />
+          <div style={{ width: 34, height: 8, background: "#fff", borderRadius: 1 }} />
+          <div style={{ width: 23, height: 8, background: "#fff", borderRadius: 1 }} />
+          <div style={{ width: 14, height: 8, background: "#fff", borderRadius: 1 }} />
         </div>
-        <div style={{ display: "flex", fontSize: 36, fontWeight: 700 }}>
-          <span style={{ color: BRAND_RED }}>ro</span>
-          <span>dict</span>
+        <div style={{ display: "flex", fontSize: 40, fontWeight: 700, letterSpacing: -1 }}>
+          <span style={{ color: BRAND }}>ro</span>
+          <span style={{ color: BRAND_INK }}>dict</span>
         </div>
         {kicker ? (
-          <div
-            style={{
-              display: "flex",
-              marginLeft: 12,
-              padding: "6px 16px",
-              borderRadius: 999,
-              border: `2px solid ${MUTED}`,
-              color: MUTED,
-              fontSize: 24,
-            }}
-          >
+          <div style={{ display: "flex", marginLeft: 14, color: MUTED, fontSize: 28 }}>
             {kicker}
           </div>
         ) : null}
@@ -105,7 +102,7 @@ export function renderOgCard({ kicker, title, subtitle, stats = [], imageUrl }: 
             width={180}
             height={180}
             alt=""
-            style={{ borderRadius: 28, flexShrink: 0 }}
+            style={{ borderRadius: 12, flexShrink: 0 }}
           />
         ) : null}
         <div style={{ display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
@@ -114,7 +111,9 @@ export function renderOgCard({ kicker, title, subtitle, stats = [], imageUrl }: 
               display: "flex",
               fontSize: titleSize(safeTitle),
               fontWeight: 700,
-              lineHeight: 1.1,
+              lineHeight: 1.02,
+              letterSpacing: -1.5,
+              textTransform: "uppercase",
             }}
           >
             {safeTitle}
@@ -127,9 +126,19 @@ export function renderOgCard({ kicker, title, subtitle, stats = [], imageUrl }: 
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 64 }}>
+      <div style={{ display: "flex", gap: 40 }}>
         {stats.slice(0, 3).map((s) => (
-          <div key={s.label} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div
+            key={s.label}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+              flex: 1,
+              paddingTop: 14,
+              borderTop: `3px solid ${RULE}`,
+            }}
+          >
             <div style={{ display: "flex", fontSize: 24, color: MUTED }}>{s.label}</div>
             <div style={{ display: "flex", fontSize: 48, fontWeight: 700 }}>{s.value}</div>
           </div>

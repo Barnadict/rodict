@@ -33,6 +33,8 @@ import { GameIcon } from "@/components/game-icon";
 import { GenreDot } from "@/components/genre-badge";
 import { PageHeader } from "@/components/page-header";
 import { MobileCards, type MobileCard } from "@/components/data-table/mobile-cards";
+import { SectionHeading } from "@/components/section-heading";
+import { Rank } from "@/components/rank";
 
 export const metadata = {
   title: "Records — rodict",
@@ -159,15 +161,11 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section id={id} className="flex scroll-mt-6 flex-col gap-3">
-      <div>
-        <h2 className="font-medium">{title}</h2>
-        <p className="text-sm text-muted-foreground">{description}</p>
-      </div>
+    <section id={id} className="flex scroll-mt-20 flex-col gap-3">
+      <SectionHeading>{title}</SectionHeading>
+      <p className="max-w-[75ch] text-sm text-muted-foreground">{description}</p>
       <MobileCards items={cards} empty={empty} />
-      <div className="hidden overflow-x-auto rounded-lg border sm:block xl:overflow-visible">
-        {children}
-      </div>
+      <div className="hidden overflow-x-auto sm:block xl:overflow-visible">{children}</div>
     </section>
   );
 }
@@ -186,7 +184,7 @@ export default async function RecordsPage() {
   const { peaks, moves, longevity, speeds, asOf, icons } = await getRecords();
 
   return (
-    <div className="flex flex-1 flex-col gap-8 p-6">
+    <div className="page-stack">
       <PageHeader
         title="Records"
         description="The extremes in everything rodict tracks. Records only cover what we've observed: peaks and moves since each game was first tracked, and nothing from the collection gap of 20 Aug – 29 Sep 2026."
@@ -232,7 +230,7 @@ export default async function RecordsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-10">#</TableHead>
+              <TableHead className="w-10 text-right">Pos.</TableHead>
               <TableHead>Game</TableHead>
               <TableHead>Genre</TableHead>
               <TableHead className="text-right">Peak players</TableHead>
@@ -243,7 +241,9 @@ export default async function RecordsPage() {
             {peaks.length === 0 && <EmptyRow cols={5}>No games tracked yet.</EmptyRow>}
             {peaks.map((g, i) => (
               <TableRow key={g.id}>
-                <TableCell className="text-muted-foreground tabular-nums">{i + 1}</TableCell>
+                <TableCell className="text-right">
+                  <Rank value={i + 1} size="sm" />
+                </TableCell>
                 <TableCell>
                   <GameCell game={g} icons={icons} />
                 </TableCell>
@@ -324,7 +324,7 @@ export default async function RecordsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-10">#</TableHead>
+                <TableHead className="w-10 text-right">Pos.</TableHead>
                 <TableHead>Game</TableHead>
                 <TableHead>Genre</TableHead>
                 <TableHead className="text-right">Players</TableHead>
@@ -338,7 +338,9 @@ export default async function RecordsPage() {
               )}
               {table.rows.map((m, i) => (
                 <TableRow key={`${m.gameId}-${m.at}`}>
-                  <TableCell className="text-muted-foreground tabular-nums">{i + 1}</TableCell>
+                  <TableCell className="text-right">
+                    <Rank value={i + 1} size="sm" />
+                  </TableCell>
                   <TableCell>
                     <GameCell game={m.game} icons={icons} />
                   </TableCell>
@@ -364,20 +366,18 @@ export default async function RecordsPage() {
         </Section>
       ))}
 
-      <section id="fastest" className="flex scroll-mt-6 flex-col gap-3">
-        <div>
-          <h2 className="font-medium">Fastest launches</h2>
-          <p className="text-sm text-muted-foreground">
-            Time from a game&apos;s creation on Roblox to its first reading at or above the mark.
-            Only games we started tracking within {NEAR_LAUNCH_DAYS} days of launch count; for an
-            older game we can&apos;t know when it first got there. &ldquo;≤&rdquo; means the very
-            first reading was already over the mark, so it got there sooner.
-          </p>
-        </div>
+      <section id="fastest" className="flex scroll-mt-20 flex-col gap-3">
+        <SectionHeading>Fastest launches</SectionHeading>
+        <p className="max-w-[75ch] text-sm text-muted-foreground">
+          Time from a game&apos;s creation on Roblox to its first reading at or above the mark. Only
+          games we started tracking within {NEAR_LAUNCH_DAYS} days of launch count; for an older
+          game we can&apos;t know when it first got there. &ldquo;≤&rdquo; means the very first
+          reading was already over the mark, so it got there sooner.
+        </p>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {speeds.map(({ threshold, rows }) => (
             <div key={threshold} className="flex flex-col gap-2">
-              <h3 className="text-sm font-medium">To {formatCompact(threshold)} players</h3>
+              <SectionHeading as="h3">To {formatCompact(threshold)} players</SectionHeading>
               <MobileCards
                 empty="No game tracked from launch has got there yet."
                 items={rows.map((r, i) =>
@@ -386,11 +386,11 @@ export default async function RecordsPage() {
                   ]),
                 )}
               />
-              <div className="hidden overflow-x-auto rounded-lg border sm:block xl:overflow-visible">
+              <div className="hidden overflow-x-auto sm:block xl:overflow-visible">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-10">#</TableHead>
+                      <TableHead className="w-10 text-right">Pos.</TableHead>
                       <TableHead>Game</TableHead>
                       <TableHead>Genre</TableHead>
                       <TableHead className="text-right">Took</TableHead>
@@ -402,8 +402,8 @@ export default async function RecordsPage() {
                     )}
                     {rows.map((r, i) => (
                       <TableRow key={r.row.id}>
-                        <TableCell className="text-muted-foreground tabular-nums">
-                          {i + 1}
+                        <TableCell className="text-right">
+                          <Rank value={i + 1} size="sm" />
                         </TableCell>
                         <TableCell>
                           <GameCell game={r.row} icons={icons} />
@@ -440,7 +440,7 @@ export default async function RecordsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-10">#</TableHead>
+              <TableHead className="w-10 text-right">Pos.</TableHead>
               <TableHead>Game</TableHead>
               <TableHead>Genre</TableHead>
               <TableHead className="text-right">Players now</TableHead>
@@ -452,7 +452,9 @@ export default async function RecordsPage() {
             {longevity.length === 0 && <EmptyRow cols={6}>No games qualify yet.</EmptyRow>}
             {longevity.map((g, i) => (
               <TableRow key={g.id}>
-                <TableCell className="text-muted-foreground tabular-nums">{i + 1}</TableCell>
+                <TableCell className="text-right">
+                  <Rank value={i + 1} size="sm" />
+                </TableCell>
                 <TableCell>
                   <GameCell game={g} icons={icons} />
                 </TableCell>

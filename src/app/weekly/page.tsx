@@ -16,6 +16,8 @@ import { LocalTime } from "@/components/local-time";
 import { GameIcon } from "@/components/game-icon";
 import { GenreBadge, GenreDot } from "@/components/genre-badge";
 import { PageHeader } from "@/components/page-header";
+import { SectionHeading } from "@/components/section-heading";
+import { EmptyState } from "@/components/empty-state";
 
 export const metadata = {
   ...pageMetadata({
@@ -36,7 +38,7 @@ export default async function WeeklyPage() {
   const { risingGames, risingGenres, spikes, entrants, deaths } = data;
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-6">
+    <div className="page-stack">
       <PageHeader
         title="Weekly recap"
         description={
@@ -48,22 +50,22 @@ export default async function WeeklyPage() {
         actions={
           <a
             href="/weekly/feed"
-            className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm hover:bg-muted"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors hover:bg-muted"
           >
-            <Rss className="size-4 text-orange-500" aria-hidden="true" />
+            <Rss className="size-4" aria-hidden="true" />
             Atom feed
           </a>
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-x-5 gap-y-4 sm:grid-cols-4">
         <StatTile label="Rising games" value={risingGames.length} hint="top by 7-day growth" />
         <StatTile label="Biggest spikes" value={spikes.length} hint="flagged this week" />
         <StatTile label="New entrants" value={formatCompact(entrants.total)} />
         <StatTile label="Went dead" value={formatCompact(deaths.total)} />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-x-11 gap-y-10 lg:grid-cols-2">
         <RecapList
           title="Top rising games"
           href="/trending?range=7d"
@@ -173,7 +175,7 @@ export default async function WeeklyPage() {
         />
       </div>
 
-      <p className="text-sm text-muted-foreground">
+      <p className="max-w-[75ch] text-sm text-muted-foreground">
         Rising uses the /trending rule over {WEEKLY_DAYS} days: average players over the first{" "}
         {RISING.avgWindowHours}h vs. the last {RISING.avgWindowHours}h, from a start of at least{" "}
         {RISING.minBaseline}. Spikes are the automatically flagged jumps between two collections.
@@ -211,16 +213,23 @@ function RecapList({
 }) {
   return (
     <section className="flex min-w-0 flex-col gap-3">
-      <div className="flex items-baseline justify-between gap-2">
-        <h2 className="font-medium">{title}</h2>
-        <Link href={href} className="text-sm text-muted-foreground hover:underline">
-          {total !== undefined && total > rows.length ? `All ${formatCompact(total)} →` : "More →"}
-        </Link>
-      </div>
+      <SectionHeading
+        aside={
+          <>
+            <Link href={href} className="text-sm text-muted-foreground hover:underline">
+              {total !== undefined && total > rows.length
+                ? `All ${formatCompact(total)} →`
+                : "More →"}
+            </Link>
+          </>
+        }
+      >
+        {title}
+      </SectionHeading>
       {rows.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">{empty}</p>
+        <EmptyState title={<>{empty}</>} />
       ) : (
-        <ol className="flex flex-col divide-y rounded-lg border">
+        <ol className="flex flex-col divide-y border-b">
           {rows.map((r, i) => (
             <li key={r.key} className="flex items-center justify-between gap-3 p-3 text-sm">
               <span className="flex min-w-0 items-center gap-2">

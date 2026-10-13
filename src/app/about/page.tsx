@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
+import { SectionHeading } from "@/components/section-heading";
 
 export const metadata = {
   title: "About the data — rodict",
@@ -57,8 +58,8 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section id={id} className="scroll-mt-6 space-y-3">
-      <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
+    <section id={id} className="scroll-mt-20 space-y-3">
+      <SectionHeading>{title}</SectionHeading>
       {children}
     </section>
   );
@@ -66,23 +67,26 @@ function Section({
 
 export default function AboutPage() {
   return (
-    <div className="flex flex-1 flex-col gap-8 p-6">
+    <div className="page-stack">
       <PageHeader
         title="About the data"
         description={
           <>
             rodict shows statistics about Roblox games and genres so you can spot patterns yourself.
             It never tells you what to build. This page explains exactly where every number comes
-            from, how it&apos;s collected, and — importantly — which numbers are{" "}
+            from, how it&apos;s collected, and which numbers are{" "}
             <span className="font-medium text-foreground">estimates rather than facts</span>.
           </>
         }
       />
 
       {/* The single most important disclosure on the site gets the most prominent treatment. */}
-      <div className="space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-4">
-        <h2 className="font-semibold">Earnings and forecasts are estimates</h2>
-        <p className="max-w-2xl text-sm text-muted-foreground">
+      <div className="space-y-2 border-y-2 border-warn py-4">
+        <h2 className="flex items-center gap-2.5 text-2xl font-display">
+          <span aria-hidden="true" className="size-3 shrink-0 rounded-[2px] bg-warn" />
+          Earnings and forecasts are estimates
+        </h2>
+        <p className="max-w-[75ch] text-muted-foreground">
           Roblox publishes no per-game revenue. Every earnings figure on this site is{" "}
           <span className="font-medium text-foreground">derived from public signals</span> (player
           counts and visits) multiplied by rough assumptions — never a real revenue figure. They
@@ -100,7 +104,7 @@ export default function AboutPage() {
           the same endpoints the Roblox website itself calls. No private, scraped-from-HTML, or
           logged-in data is used, and nothing is collected about individual players.
         </p>
-        <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
+        <div className="overflow-x-auto xl:overflow-visible">
           <Table>
             <TableHeader>
               <TableRow>
@@ -110,7 +114,7 @@ export default function AboutPage() {
             </TableHeader>
             <TableBody>
               <TableRow>
-                <TableCell className="font-medium">
+                <TableCell className="font-bold">
                   Game details — name, creator, created/updated dates, concurrent players, visits,
                   favorites, genre tags
                 </TableCell>
@@ -119,19 +123,19 @@ export default function AboutPage() {
                 </TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">Likes / dislikes</TableCell>
+                <TableCell className="font-bold">Likes / dislikes</TableCell>
                 <TableCell className="font-mono text-xs text-muted-foreground">
                   games.roblox.com/v1/games/votes
                 </TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">Icons and thumbnails</TableCell>
+                <TableCell className="font-bold">Icons and thumbnails</TableCell>
                 <TableCell className="font-mono text-xs text-muted-foreground">
                   thumbnails.roblox.com/v1
                 </TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">
+                <TableCell className="font-bold">
                   Game discovery (finding new games to track)
                 </TableCell>
                 <TableCell className="font-mono text-xs text-muted-foreground">
@@ -216,8 +220,10 @@ export default function AboutPage() {
           that was in effect on the snapshot&apos;s date.
         </p>
 
-        <h3 className="pt-2 font-medium">The assumptions</h3>
-        <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
+        <SectionHeading as="h3" className="mt-2">
+          The assumptions
+        </SectionHeading>
+        <div className="overflow-x-auto xl:overflow-visible">
           <Table>
             <TableHeader>
               <TableRow>
@@ -229,7 +235,7 @@ export default function AboutPage() {
             </TableHeader>
             <TableBody>
               <TableRow>
-                <TableCell className="font-medium">
+                <TableCell className="font-bold">
                   Robux earned per concurrent player, per day
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
@@ -243,7 +249,7 @@ export default function AboutPage() {
                 </TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">Robux earned per new visit</TableCell>
+                <TableCell className="font-bold">Robux earned per new visit</TableCell>
                 <TableCell className="text-right tabular-nums">
                   {EARNINGS_ASSUMPTIONS.robuxPerVisit.low}
                 </TableCell>
@@ -264,7 +270,9 @@ export default function AboutPage() {
           precision that does not exist.
         </p>
 
-        <h3 className="pt-2 font-medium">Game passes position the range</h3>
+        <SectionHeading as="h3" className="mt-2">
+          Game passes position the range
+        </SectionHeading>
         <p className="max-w-2xl text-muted-foreground">
           Game-pass <em>prices</em> are public, even though sales aren&apos;t. Once a week rodict
           reads each active game&apos;s on-sale passes and uses them to narrow a single game&apos;s
@@ -298,13 +306,15 @@ export default function AboutPage() {
           list is only re-saved when it changes.
         </p>
 
-        <h3 className="pt-2 font-medium">The DevEx rate</h3>
+        <SectionHeading as="h3" className="mt-2">
+          The DevEx rate
+        </SectionHeading>
         <p className="max-w-2xl text-muted-foreground">
           Robux is converted to USD at the <strong>Developer Exchange (DevEx)</strong> rate — what
           Roblox actually pays out per Robux cashed out. The rate changes over time, so an estimate
           for an older snapshot uses the rate that was in effect on that date:
         </p>
-        <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
+        <div className="overflow-x-auto xl:overflow-visible">
           <Table>
             <TableHeader>
               <TableRow>
@@ -316,7 +326,7 @@ export default function AboutPage() {
             <TableBody>
               {DEVEX_SCHEDULES.standard.map((r) => (
                 <TableRow key={`standard-${r.usdPerRobux}`}>
-                  <TableCell className="font-medium">Standard</TableCell>
+                  <TableCell className="font-bold">Standard</TableCell>
                   <TableCell className="tabular-nums text-muted-foreground">
                     {r.from.getUTCFullYear() <= 2000 ? "(legacy)" : utcDate(r.from)}
                   </TableCell>
@@ -327,7 +337,7 @@ export default function AboutPage() {
               ))}
               {DEVEX_SCHEDULES.us18Plus.map((r) => (
                 <TableRow key={`us18-${r.usdPerRobux}`}>
-                  <TableCell className="font-medium">
+                  <TableCell className="font-bold">
                     US 18+ in-experience
                     <span className="ml-2 text-xs font-normal text-muted-foreground">
                       not the default
@@ -349,7 +359,9 @@ export default function AboutPage() {
           applied, since we can&apos;t know what share of a game&apos;s Robux would qualify.
         </p>
 
-        <h3 className="pt-2 font-medium">What the estimate cannot know</h3>
+        <SectionHeading as="h3" className="mt-2">
+          What the estimate cannot know
+        </SectionHeading>
         <ul className="max-w-2xl list-disc space-y-1 pl-5 text-muted-foreground">
           <li>How a specific game monetizes, or whether it monetizes at all.</li>
           <li>Actual gamepass, developer-product, or premium-payout revenue.</li>
@@ -366,7 +378,7 @@ export default function AboutPage() {
         <p className="max-w-2xl text-muted-foreground">
           Several figures on this site are computed, not observed. Each is labeled where it appears:
         </p>
-        <div className="overflow-x-auto rounded-lg border xl:overflow-visible">
+        <div className="overflow-x-auto xl:overflow-visible">
           <Table>
             <TableHeader>
               <TableRow>
@@ -376,7 +388,7 @@ export default function AboutPage() {
             </TableHeader>
             <TableBody>
               <TableRow>
-                <TableCell className="font-medium">Forecast / projection</TableCell>
+                <TableCell className="font-bold">Forecast / projection</TableCell>
                 <TableCell className="text-muted-foreground">
                   Holt&apos;s exponential smoothing extended from the recent trend, with an ~80%
                   uncertainty band that widens the further out it goes. It assumes the recent trend
@@ -385,15 +397,15 @@ export default function AboutPage() {
                   dashed after the real data, always with its band.
                 </TableCell>
               </TableRow>
-              <TableRow id={GLOSSARY.opportunity.anchor} className="scroll-mt-6">
-                <TableCell className="font-medium">Opportunity score (0–100)</TableCell>
+              <TableRow id={GLOSSARY.opportunity.anchor} className="scroll-mt-20">
+                <TableCell className="font-bold">Opportunity score (0–100)</TableCell>
                 <TableCell className="text-muted-foreground">
                   <span className="text-foreground">{GLOSSARY.opportunity.definition}</span> The
                   weights are a judgment call.
                 </TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">Median genre lifespan</TableCell>
+                <TableCell className="font-bold">Median genre lifespan</TableCell>
                 <TableCell className="text-muted-foreground">
                   Kaplan-Meier survival analysis using the dead rule below. Games still alive are
                   correctly censored rather than counted as dead, and games we started watching
@@ -403,7 +415,7 @@ export default function AboutPage() {
                 </TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">When players are on (seasonality)</TableCell>
+                <TableCell className="font-bold">When players are on (seasonality)</TableCell>
                 <TableCell className="text-muted-foreground">
                   A genre&apos;s players averaged by weekday and hour, divided by its overall
                   average, shown in your own timezone. It describes when players were online over
@@ -413,7 +425,7 @@ export default function AboutPage() {
                 </TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">Rising games and genres</TableCell>
+                <TableCell className="font-bold">Rising games and genres</TableCell>
                 <TableCell className="text-muted-foreground">
                   Average players over the first {RISING.avgWindowHours}h of the chosen window
                   compared with the last {RISING.avgWindowHours}h, so the daily cycle of Roblox
@@ -423,7 +435,7 @@ export default function AboutPage() {
                 </TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">Genre players over time</TableCell>
+                <TableCell className="font-bold">Genre players over time</TableCell>
                 <TableCell className="text-muted-foreground">
                   Each point sums one collection run. Quiet games, collected about daily, count with
                   their latest reading for up to {GENRE_CARRY_MAX_AGE_HOURS}h; older readings are
@@ -433,7 +445,7 @@ export default function AboutPage() {
                 </TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">Notable changes (spikes / drops)</TableCell>
+                <TableCell className="font-bold">Notable changes (spikes / drops)</TableCell>
                 <TableCell className="text-muted-foreground">
                   A step is flagged only if it is both statistically unusual for that game&apos;s
                   own curve (robust z-score of at least 5 using median/MAD) <em>and</em> large in
@@ -447,8 +459,8 @@ export default function AboutPage() {
                   at all.
                 </TableCell>
               </TableRow>
-              <TableRow id={GLOSSARY.launchBenchmark.anchor} className="scroll-mt-6">
-                <TableCell className="font-medium">Launch benchmarks</TableCell>
+              <TableRow id={GLOSSARY.launchBenchmark.anchor} className="scroll-mt-20">
+                <TableCell className="font-bold">Launch benchmarks</TableCell>
                 <TableCell className="text-muted-foreground">
                   <span className="text-foreground">{GLOSSARY.launchBenchmark.definition}</span> For
                   each day since launch (up to day 90), the spread of a genre&apos;s games&apos;
@@ -461,8 +473,8 @@ export default function AboutPage() {
                   Recomputed after each collection.
                 </TableCell>
               </TableRow>
-              <TableRow id={GLOSSARY.session.anchor} className="scroll-mt-6">
-                <TableCell className="font-medium">Est. session length</TableCell>
+              <TableRow id={GLOSSARY.session.anchor} className="scroll-mt-20">
+                <TableCell className="font-bold">Est. session length</TableCell>
                 <TableCell className="text-muted-foreground">
                   <span className="text-foreground">{GLOSSARY.session.definition}</span>{" "}
                   Little&apos;s law: average players = arrivals per hour × average time each stays,
@@ -480,8 +492,8 @@ export default function AboutPage() {
                   Labeled <Badge variant="secondary">Est.</Badge> everywhere.
                 </TableCell>
               </TableRow>
-              <TableRow id={GLOSSARY.favoritesPer1k.anchor} className="scroll-mt-6">
-                <TableCell className="font-medium">Favorites per 1K visits · like ratio</TableCell>
+              <TableRow id={GLOSSARY.favoritesPer1k.anchor} className="scroll-mt-20">
+                <TableCell className="font-bold">Favorites per 1K visits · like ratio</TableCell>
                 <TableCell className="text-muted-foreground">
                   <span className="text-foreground">
                     {GLOSSARY.favoritesPer1k.term}: {GLOSSARY.favoritesPer1k.definition}{" "}
@@ -496,15 +508,15 @@ export default function AboutPage() {
                 </TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">Correlations</TableCell>
+                <TableCell className="font-bold">Correlations</TableCell>
                 <TableCell className="text-muted-foreground">
                   Spearman rank correlation and random-forest feature importance, shown as{" "}
                   <strong>associational, not causal</strong>. That visits correlate with players
                   does not mean visits cause players.
                 </TableCell>
               </TableRow>
-              <TableRow id={GLOSSARY.concentration.anchor} className="scroll-mt-6">
-                <TableCell className="font-medium">Market concentration</TableCell>
+              <TableRow id={GLOSSARY.concentration.anchor} className="scroll-mt-20">
+                <TableCell className="font-bold">Market concentration</TableCell>
                 <TableCell className="text-muted-foreground">
                   <span className="text-foreground">{GLOSSARY.concentration.definition}</span> Per
                   genre and UTC day, the share of the genre&apos;s players held by its top 1, 5 and
@@ -516,7 +528,7 @@ export default function AboutPage() {
                 </TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">Rank history</TableCell>
+                <TableCell className="font-bold">Rank history</TableCell>
                 <TableCell className="text-muted-foreground">
                   A game&apos;s rank on a day is 1 + the number of tracked games with a higher daily
                   average (rounded to whole players; ties share a rank), overall and within its
@@ -526,7 +538,7 @@ export default function AboutPage() {
                 </TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">Game timeline</TableCell>
+                <TableCell className="font-bold">Game timeline</TableCell>
                 <TableCell className="text-muted-foreground">
                   A game page&apos;s timeline merges what is already recorded above: updates,
                   flagged spikes and drops, and the latest change to its game-pass list (earlier
@@ -541,7 +553,7 @@ export default function AboutPage() {
                 </TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">Niche finder</TableCell>
+                <TableCell className="font-bold">Niche finder</TableCell>
                 <TableCell className="text-muted-foreground">
                   <Link href="/opportunities" className="underline underline-offset-2">
                     /opportunities
@@ -559,7 +571,7 @@ export default function AboutPage() {
                 </TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">Update cadence</TableCell>
+                <TableCell className="font-bold">Update cadence</TableCell>
                 <TableCell className="text-muted-foreground">
                   An update is a change in Roblox&apos;s last-updated time. The share updated
                   recently and days since the last update use every game&apos;s current timestamp.
@@ -569,7 +581,7 @@ export default function AboutPage() {
                 </TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">Game pass pricing</TableCell>
+                <TableCell className="font-bold">Game pass pricing</TableCell>
                 <TableCell className="text-muted-foreground">
                   From each checked game&apos;s on-sale pass list (re-checked about weekly). Median
                   and middle half are over every pass in the genre; passes per game counts checked
@@ -578,7 +590,7 @@ export default function AboutPage() {
                 </TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">Server size</TableCell>
+                <TableCell className="font-bold">Server size</TableCell>
                 <TableCell className="text-muted-foreground">
                   The max players per server Roblox reports for each game, from its latest reading
                   in the last day. The genre figure is the median over its games; &ldquo;size vs.
@@ -587,7 +599,7 @@ export default function AboutPage() {
                 </TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">Trajectory archetypes</TableCell>
+                <TableCell className="font-bold">Trajectory archetypes</TableCell>
                 <TableCell className="text-muted-foreground">
                   k-means clustering on scale-free curve-shape features, labeled from the cluster
                   centroids. The labels (Rising, Fading, Volatile, Steady) are our names for
@@ -595,7 +607,7 @@ export default function AboutPage() {
                 </TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="font-medium">Players after updates</TableCell>
+                <TableCell className="font-bold">Players after updates</TableCell>
                 <TableCell className="text-muted-foreground">
                   Average players in the {UPDATE_WINDOWS_HOURS.join("h and ")}h before a game&apos;s
                   Roblox &ldquo;last updated&rdquo; time vs. the same span after. Roblox also bumps

@@ -41,6 +41,8 @@ import { LabelWithHelp } from "@/components/metric-help";
 import type { GlossaryKey } from "@/lib/glossary";
 import { CompareSync } from "./_components/compare-sync";
 import { CompareSuggestions } from "./_components/compare-suggestions";
+import { EmptyState } from "@/components/empty-state";
+import { SectionHeading } from "@/components/section-heading";
 
 export const metadata = { title: "Compare — rodict" };
 
@@ -109,7 +111,7 @@ export default async function ComparePage(props: PageProps<"/compare">) {
       key={`${kind}:${id}`}
       className="inline-flex items-center gap-1.5 rounded-full border py-0.5 pr-1 pl-2.5 text-sm"
     >
-      <span className="size-2.5 rounded-full" style={{ background: colorFor(kind, id, i) }} />
+      <span className="size-2.5 rounded-[2px]" style={{ background: colorFor(kind, id, i) }} />
       <Link
         href={kind === "game" ? `/games/${id}` : `/genres/${id}`}
         className="max-w-56 truncate hover:underline"
@@ -127,7 +129,7 @@ export default async function ComparePage(props: PageProps<"/compare">) {
   );
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-6">
+    <div className="page-stack">
       <CompareSync selection={selection} />
       <PageHeader
         title="Compare"
@@ -155,7 +157,7 @@ export default async function ComparePage(props: PageProps<"/compare">) {
         )}
         <CompareSuggestions selection={selection} extra={extra} />
         {dropped > 0 && (
-          <p className="text-sm text-muted-foreground">
+          <p className="max-w-[75ch] text-sm text-muted-foreground">
             {dropped} item{dropped === 1 ? " in the link isn't" : "s in the link aren't"} tracked
             and {dropped === 1 ? "was" : "were"} left out.
           </p>
@@ -163,29 +165,31 @@ export default async function ComparePage(props: PageProps<"/compare">) {
       </div>
 
       {empty && (
-        <div className="flex h-48 flex-col items-center justify-center gap-1 rounded-lg border border-dashed text-center text-muted-foreground">
-          <p>Nothing to compare yet.</p>
-          <p className="text-sm">
-            Open a{" "}
-            <Link href="/games" className="underline">
-              game
-            </Link>{" "}
-            or{" "}
-            <Link href="/genres" className="underline">
-              genre
-            </Link>{" "}
-            and press Compare.
-          </p>
-        </div>
+        <EmptyState
+          title={<>Nothing to compare yet.</>}
+          hint={
+            <>
+              Open a{" "}
+              <Link href="/games" className="underline">
+                game
+              </Link>{" "}
+              or{" "}
+              <Link href="/genres" className="underline">
+                genre
+              </Link>{" "}
+              and press Compare.
+            </>
+          }
+        />
       )}
 
       {gameRows.length > 0 && (
         <section className="flex flex-col gap-3">
+          <SectionHeading>Games</SectionHeading>
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="mr-1 font-medium">Games</h2>
             {gameRows.map(({ game }, i) => chip("game", game.universeId.toString(), game.name, i))}
           </div>
-          <div className="rounded-lg border p-4">
+          <div>
             <CompareChart
               series={gameRows.map(({ game, points }, i) => ({
                 key: `s${i}`,
@@ -251,11 +255,11 @@ export default async function ComparePage(props: PageProps<"/compare">) {
 
       {genreRows.length > 0 && (
         <section className="flex flex-col gap-3">
+          <SectionHeading>Genres</SectionHeading>
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="mr-1 font-medium">Genres</h2>
             {genreRows.map(({ genre }, i) => chip("genre", genre.slug, genre.name, i))}
           </div>
-          <div className="rounded-lg border p-4">
+          <div>
             <CompareChart
               series={genreRows.map(({ genre, points }, i) => ({
                 key: `s${i}`,
@@ -310,7 +314,7 @@ export default async function ComparePage(props: PageProps<"/compare">) {
       )}
 
       {!empty && (
-        <p className="text-xs text-muted-foreground">
+        <p className="max-w-[75ch] text-xs text-muted-foreground">
           {/* One string: a text chunk after an expression that wraps loses its
               leading space (see the note in /about), and Prettier removes {" "}. */}
           {`Games are collected at different rates (every 3h when busy, about daily when quiet), so lines are drawn between each one’s own readings, and the tooltip shows each one’s latest real reading. Gaps longer than ${SERIES_GAP_DAYS} days are left unconnected. The indexed scale sets each line to 100 at its first reading in the range, so games of very different sizes can be compared as relative change. “Change in range” compares the average over the first ${RISING.avgWindowHours}h of the range with the last ${RISING.avgWindowHours}h, and needs two full windows of readings.`}
@@ -342,11 +346,11 @@ function EntityCard({
   status?: string;
 }) {
   return (
-    <div className="flex flex-col gap-2 rounded-lg border p-3">
+    <div className="flex flex-col gap-2 border-t-2 border-rule pt-2.5">
       <div className="flex items-start gap-2">
-        <span className="mt-1.5 size-2.5 shrink-0 rounded-full" style={{ background: color }} />
+        <span className="mt-1.5 size-2.5 shrink-0 rounded-[2px]" style={{ background: color }} />
         <div className="min-w-0">
-          <Link href={href} className="block truncate font-medium hover:underline">
+          <Link href={href} className="block truncate font-bold hover:underline">
             {title}
           </Link>
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">

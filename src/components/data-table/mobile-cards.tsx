@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { GameIcon } from "@/components/game-icon";
+import { Rank } from "@/components/rank";
 import { cn } from "@/lib/utils";
 
 export interface MobileCard {
@@ -20,7 +21,8 @@ export interface MobileCard {
 
 /**
  * The phone layout of a wide table (Task #104): below `sm` each row becomes a
- * stacked card instead of a table that scrolls sideways. Pages render this
+ * stacked row under the same heavy rule instead of a table that scrolls
+ * sideways. Pages render this
  * next to the table and hide the table below `sm` (`hidden sm:block`).
  */
 export function MobileCards({
@@ -33,25 +35,28 @@ export function MobileCards({
   className?: string;
 }) {
   return (
-    <ul className={cn("flex flex-col divide-y rounded-lg border sm:hidden", className)}>
-      {items.length === 0 && <li className="p-4 text-sm text-muted-foreground">{empty}</li>}
+    <ul
+      className={cn(
+        "flex flex-col divide-y border-t-2 border-b border-t-rule sm:hidden",
+        className,
+      )}
+    >
+      {items.length === 0 && <li className="py-6 text-sm text-muted-foreground">{empty}</li>}
       {items.map((item) => (
-        <li key={item.key} className="flex items-start gap-3 p-3">
+        <li key={item.key} className="flex items-start gap-3 py-3">
           {item.rank !== undefined && (
-            <span className="w-5 shrink-0 pt-0.5 text-right text-xs text-muted-foreground tabular-nums">
-              {item.rank}
-            </span>
+            <Rank value={item.rank} size="sm" className="w-8 shrink-0 pt-1" />
           )}
           {item.icon !== undefined && <GameIcon src={item.icon} size={40} />}
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <div className="flex items-start justify-between gap-2">
               <div className="flex min-w-0 flex-col gap-0.5">
                 {item.href ? (
-                  <Link href={item.href} className="line-clamp-2 font-medium hover:underline">
+                  <Link href={item.href} className="line-clamp-2 font-bold hover:underline">
                     {item.title}
                   </Link>
                 ) : (
-                  <span className="line-clamp-2 font-medium">{item.title}</span>
+                  <span className="line-clamp-2 font-bold">{item.title}</span>
                 )}
                 {item.subtitle && (
                   <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
@@ -65,7 +70,7 @@ export function MobileCards({
               {item.stats.map((s) => (
                 <div key={s.label} className="flex gap-1">
                   <dt className="text-muted-foreground">{s.label}</dt>
-                  <dd className="font-medium tabular-nums">{s.value}</dd>
+                  <dd className="font-semibold tabular-nums">{s.value}</dd>
                 </div>
               ))}
             </dl>

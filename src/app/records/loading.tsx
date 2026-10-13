@@ -1,14 +1,11 @@
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeaderSkeleton } from "@/components/page-header";
 import { TableSkeleton } from "@/components/data-table/table-skeleton";
 
 export default function RecordsLoading() {
   return (
-    <div className="flex flex-1 flex-col gap-8 p-6" aria-busy="true">
+    <div className="page-stack" aria-busy="true">
       <span className="sr-only">Loading records…</span>
-      <div>
-        <Skeleton className="h-8 w-32" />
-        <Skeleton className="mt-2 h-4 w-96 max-w-full" />
-      </div>
+      <PageHeaderSkeleton />
       <TableSkeleton rows={10} cols={5} />
       <TableSkeleton rows={10} cols={6} />
     </div>

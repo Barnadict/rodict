@@ -1,3 +1,4 @@
+import { SectionHeading } from "@/components/section-heading";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
@@ -15,8 +16,8 @@ export function SectionSkeleton({
 }) {
   return (
     <section className="flex flex-col gap-3" aria-busy="true">
-      {title ? <h2 className="font-medium">{title}</h2> : <Skeleton className="h-5 w-40" />}
-      <Skeleton className={`w-full rounded-lg ${className}`} />
+      {title ? <SectionHeading>{title}</SectionHeading> : <Skeleton className="h-7 w-40" />}
+      <Skeleton className={`w-full ${className}`} />
     </section>
   );
 }
