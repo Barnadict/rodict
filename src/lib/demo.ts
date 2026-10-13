@@ -4,6 +4,6 @@
  *
  * The snapshot is a copy of a local dev DB: each game's latest reading is real,
  * but the history before it comes from `scripts/dev-backfill.ts` and is
- * invented. The layout says so on every page while this is on.
+ * invented.
  */
 export const IS_DEMO_DATA = /(^|[\\/])demo\.db$/.test(process.env.DATABASE_URL ?? "");

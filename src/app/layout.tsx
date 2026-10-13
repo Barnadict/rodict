@@ -7,7 +7,6 @@ import { SiteHeader } from "@/components/layout/site-header";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
-import { IS_DEMO_DATA } from "@/lib/demo";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 
 // One family for everything. The width axis gives the condensed display voice
@@ -55,15 +54,6 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <TooltipProvider delay={200}>
             <SiteHeader />
-            {IS_DEMO_DATA && (
-              <p
-                role="note"
-                className="border-b-2 border-rule bg-muted px-4 py-2 text-center text-sm text-foreground md:px-6"
-              >
-                Demo data: live collection is paused until November, so the history and trends shown
-                here are sample figures.
-              </p>
-            )}
             {/* min-w-0: a long unbreakable line (an embed snippet, a URL) scrolls in
                 its own box instead of widening the page past the screen. */}
             <main className="flex min-w-0 flex-1 flex-col">
