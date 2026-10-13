@@ -47,6 +47,8 @@ next-env.d.ts
 *.db-journal
 prisma/*.db
 prisma/*.db-journal
+# the bundled demo snapshot is the one DB file that ships (src/lib/demo.ts)
+!/data/demo.db
 
 # local run logs (scripts/windows/run-discovery.ps1)
 /logs/

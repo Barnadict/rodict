@@ -1,3 +1,7 @@
+import { copyFileSync, existsSync, renameSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
 import { PrismaLibSql } from "@prisma/adapter-libsql";
 
 import { PrismaClient } from "@/generated/prisma/client";
@@ -12,8 +16,26 @@ import { PrismaClient } from "@/generated/prisma/client";
 // CLI (via dotenv in prisma.config.ts). DATABASE_AUTH_TOKEN is optional — local
 // SQLite doesn't need one; Turso does. (The libSQL client also accepts a token
 // embedded as a `?authToken=` query param on the URL itself, so either form works.)
+//
+// A `file:` DB on Vercel is the bundled demo snapshot (src/lib/demo.ts). The
+// deployment's files are read-only, so it is copied to the temp dir once per
+// instance and opened from there. Copy-then-rename keeps parallel build workers
+// from opening a half-written file.
+function resolveDatabaseUrl(): string {
+  const url = process.env.DATABASE_URL ?? "";
+  if (!process.env.VERCEL || !url.startsWith("file:")) return url;
+  const source = path.resolve(/* turbopackIgnore: true */ process.cwd(), url.slice(5));
+  const target = path.join(tmpdir(), path.basename(source));
+  if (!existsSync(target)) {
+    const partial = `${target}.${process.pid}`;
+    copyFileSync(source, partial);
+    renameSync(partial, target);
+  }
+  return `file:${target}`;
+}
+
 const adapter = new PrismaLibSql({
-  url: process.env.DATABASE_URL ?? "",
+  url: resolveDatabaseUrl(),
   authToken: process.env.DATABASE_AUTH_TOKEN,
 });
 

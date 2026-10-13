@@ -14,6 +14,14 @@ const nextConfig: NextConfig = {
    * Cached loaders (`cacheLife("hours")`) live next to the pages that own them.
    */
   cacheComponents: true,
+  /**
+   * Ships the demo snapshot with every server route, for when DATABASE_URL
+   * points at it (src/lib/demo.ts). Nothing imports the file, so tracing would
+   * otherwise leave it out of the deployment.
+   */
+  outputFileTracingIncludes: {
+    "/*": ["./data/demo.db"],
+  },
   experimental: {
     /**
      * React's <ViewTransition> tied into navigations (Task #107): route changes
