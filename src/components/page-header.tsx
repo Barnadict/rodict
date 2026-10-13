@@ -18,14 +18,15 @@ function titleSize(title: React.ReactNode): { size: string; long: boolean } {
 }
 
 /**
- * The one page header every page uses: a near-black band across the top of the
- * page with an optional breadcrumb trail, the title in the display face, a
- * description and actions on the right. `children` sits under the description
- * for page-specific notes. Breadcrumbs list the pages above this one; the
- * current page is added from `crumb` (or the title).
+ * The one page header every page uses: an optional breadcrumb trail, the title
+ * in the display face, a description and actions on the right, on an ink band
+ * (navy in both themes, like the top bar) over the heavy rule. `children` sits
+ * under the description for
+ * page-specific notes. Breadcrumbs list the pages above this one; the current
+ * page is added from `crumb` (or the title).
  *
- * The band is an ink surface in both themes and pulls out of the page's `p-6`
- * wrapper (`page-band`), so it must be that wrapper's first child.
+ * The band pulls out of the page's `p-6` wrapper (`page-band`), so it must be
+ * that wrapper's first child.
  */
 export function PageHeader({
   title,
@@ -53,7 +54,7 @@ export function PageHeader({
   return (
     <header
       className={cn(
-        "surface-ink page-band flex flex-col gap-3 border-b bg-band px-6 py-5 text-foreground shadow-[inset_6px_0_0_var(--primary)] md:py-6",
+        "surface-ink page-band flex flex-col gap-3 border-b-2 border-rule bg-band px-6 py-5 text-foreground md:py-6",
         className,
       )}
     >
@@ -109,7 +110,7 @@ export function PageHeader({
 /** The band's placeholder for route `loading.tsx` files. */
 export function PageHeaderSkeleton() {
   return (
-    <div className="surface-ink page-band flex flex-col gap-3 border-b bg-band px-6 py-5 shadow-[inset_6px_0_0_var(--primary)] md:py-6">
+    <div className="surface-ink page-band flex flex-col gap-3 border-b-2 border-rule bg-band px-6 py-5 text-foreground md:py-6">
       <Skeleton className="h-11 w-56 max-w-full md:h-16" />
       <Skeleton className="h-4 w-96 max-w-full" />
     </div>

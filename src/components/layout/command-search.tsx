@@ -116,7 +116,7 @@ export function CommandSearch() {
         <kbd className="hidden shrink-0 font-sans text-xs sm:inline">Ctrl K</kbd>
       </Dialog.Trigger>
       <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 z-50 bg-band/60 transition-opacity duration-150 data-ending-style:opacity-0 data-starting-style:opacity-0 supports-backdrop-filter:backdrop-blur-xs" />
+        <Dialog.Backdrop className="fixed inset-0 z-50 bg-bar/60 transition-opacity duration-150 data-ending-style:opacity-0 data-starting-style:opacity-0 supports-backdrop-filter:backdrop-blur-xs" />
         <Dialog.Popup className="fixed top-[12vh] left-1/2 z-50 flex max-h-[70vh] w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 flex-col overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-[0_18px_48px_-12px_rgb(3_9_22/0.55)] transition duration-150 ease-out data-ending-style:opacity-0 data-starting-style:-translate-y-1 data-starting-style:opacity-0">
           <Dialog.Title className="sr-only">Search</Dialog.Title>
           <div className="flex items-center gap-2.5 border-b-2 border-rule px-4">

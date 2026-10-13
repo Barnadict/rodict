@@ -3,7 +3,7 @@
 @import "shadcn/tailwind.css";
 
 /* `.surface-ink` is a dark surface that stays dark in the light theme (the top
-   bar and the page band), so `dark:` styles apply inside it too. */
+   bar and the page title band), so `dark:` styles apply inside it too. */
 @custom-variant dark (&:is(.dark *, .surface-ink, .surface-ink *));
 
 @theme inline {
@@ -56,7 +56,7 @@
    Navy ground, white type; blue only for actions, the active tab and small
    accents; amber for thin or stale data; soft red for dead or falling; green
    for rising. The light theme is the same chart printed on cool paper: the
-   ground and type flip, while the top bar and the page band stay ink
+   ground and type flip, while the top bar and the page title band stay ink
    (`.surface-ink`), so both themes carry the same navy. */
 :root {
   color-scheme: light;
@@ -125,9 +125,10 @@
   --chart-3: oklch(0.52 0.07 258);
   --chart-4: oklch(0.4 0.08 258);
   --chart-5: oklch(0.28 0.06 258);
-  /* Ink surfaces, the same in both themes. */
-  --bar: #06102a;
-  --band: #030916;
+  /* The top bar and the band behind the page title: ink surfaces, the same in
+     both themes. Bar darkest, band a step up, both below the navy ground. */
+  --bar: #030916;
+  --band: #060f25;
   --radius: 0.375rem;
 }
 

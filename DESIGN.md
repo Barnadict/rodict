@@ -6,7 +6,8 @@ colors:
   ink: "#f5f8ff"
   muted-ink: "#8ea0c8"
   bar: "#06102a"
-  band: "#030916"
+  band: "#060f25"
+  paper-band: "#e3eaf8"
   card: "#0e1e3f"
   muted-surface: "#11224a"
   hairline: "#1b2c58"
@@ -138,7 +139,7 @@ components:
 
 **Creative North Star: "Chart Rundown in the Departure Board colours"**
 
-rodict reads like a printed chart rundown: a heavy condensed title on a near-black band, then ranked rows with large position numerals, a figure, a movement arrow and a small line. The colours come from a departure board: navy ground, white type, and colour used only as a signal. Blue means an action or the selected control, green means rising, soft red means falling or dead, amber means thin or stale data. Twenty genre hues exist, and each always travels beside its genre's name.
+rodict reads like a printed chart rundown: a heavy condensed title on a tinted band, then ranked rows with large position numerals, a figure, a movement arrow and a small line. The colours come from a departure board: navy ground, white type, and colour used only as a signal. Blue means an action or the selected control, green means rising, soft red means falling or dead, amber means thin or stale data. Twenty genre hues exist, and each always travels beside its genre's name.
 
 The layout is rules, not boxes. A section starts with its title over a heavy rule; tables, lists and stat tiles sit on hairlines under it. Nothing floats on a card, and nothing glows. Each page has one lead: a single large figure (`LeadFigure`) or the ranked chart itself. Every other number is a `StatTile`.
 
@@ -146,12 +147,12 @@ The board's honesty is kept and its motion is not: nothing ticks, flips or pulse
 
 **Key Characteristics:**
 
-- Near-black page band with the title in Archivo at its condensed, heaviest end, upper-case.
+- The page title in Archivo at its condensed, heaviest end, upper-case, on a tinted band one step off the ground, over a heavy rule.
 - Position numerals in the figure face; names in bold; figures right-aligned and tabular.
 - Heavy rule (2px) under section titles and table heads, hairlines between rows, no boxed cards.
 - One lead figure or chart per page.
 - Colour is a signal: blue acts, green rises, soft red falls, amber warns.
-- Both themes share the same ink top bar and band; only the ground and type flip.
+- Both themes share the same ink top bar, the only dark surface in the light theme; the ground and type flip.
 
 ## Colors
 
@@ -159,7 +160,7 @@ A navy-first palette where almost everything is ink or ground, and each hue has 
 
 ### Primary
 
-- **Action Blue** (`#155dfc`, `--primary`): fills only: the selected preset pill, primary buttons, the 6px edge of the page band, the text selection. As text it is too dark on navy, so links use **Link Blue** (`#8fb4ff` dark, `#0f4fe0` light, `--link`), and single-series chart lines and sparklines use **Chart Blue** (`#6f9bff` dark, `#155dfc` light, `--chart-line`).
+- **Action Blue** (`#155dfc`, `--primary`): fills only: the selected preset pill, primary buttons, the text selection. As text it is too dark on navy, so links use **Link Blue** (`#8fb4ff` dark, `#0f4fe0` light, `--link`), and single-series chart lines and sparklines use **Chart Blue** (`#6f9bff` dark, `#155dfc` light, `--chart-line`).
 
 ### Secondary
 
@@ -176,7 +177,7 @@ A navy-first palette where almost everything is ink or ground, and each hue has 
 ### Neutral
 
 - **Navy Ground** (`#0a1730`, `--background`) and **Board Ink** (`#f5f8ff`, `--foreground`): the page and its type in the dark theme. The light theme flips them to **Cool Paper** (`#f6f8fc`) and navy ink.
-- **Bar** (`#06102a`, `--bar`) and **Band** (`#030916`, `--band`): the top bar and the page band. The same in both themes (`.surface-ink`).
+- **Bar** (`#030916`, `--bar`): the top bar. **Band** (`#060f25`, `--band`): the band behind the page title, a shade between the top bar and the navy ground. Both are ink surfaces (`.surface-ink`), the same in both themes, so the light theme keeps a navy bar and title band over its cool-paper ground.
 - **Muted Ink** (`#8ea0c8` dark, `#51607f` light, `--muted-foreground`): labels, notes, table heads. Tinted from the navy, never grey.
 - **Hairline** (`#1b2c58` dark, `#d5dcec` light, `--border`) between rows; **Rule** (`#33488a` dark, `#0a1730` light, `--rule`) under headings and table heads.
 - **Muted Surface** (`#11224a` dark, `#edf1f9` light, `--muted`): row hover, bar tracks, skeletons.
@@ -224,7 +225,7 @@ The top bar is 56px, sticky, with grouped menus that move into a sheet below `lg
 
 ## Elevation & Depth
 
-Flat. Depth is tonal: band darker than bar, bar darker than ground, hover one step lighter than ground. The only shadows are on things that really float above the page: popovers, menus, chart tooltips and the search dialog. The sticky table head repeats its rule as a 2px shadow (`0 2px 0 var(--rule)`) because collapsed borders do not travel with a sticky head.
+Flat. Depth is tonal: bar darkest, the band between bar and ground, hover one step lighter than ground. The only shadows are on things that really float above the page: popovers, menus, chart tooltips and the search dialog. The sticky table head repeats its rule as a 2px shadow (`0 2px 0 var(--rule)`) because collapsed borders do not travel with a sticky head.
 
 ### Named Rules
 
@@ -238,7 +239,7 @@ Rules come in two weights: 1px hairlines between rows and a 2px rule under a hea
 
 ## Components
 
-- **PageHeader** (`components/page-header.tsx`): the near-black band with an optional breadcrumb trail, the display title, a description beside it (below it for long titles) and actions on the right. Must be the first child of the page wrapper. `PageHeaderSkeleton` for loading files.
+- **PageHeader** (`components/page-header.tsx`): an optional breadcrumb trail, the display title, a description beside it (below it for long titles) and actions on the right, on the tinted band over the heavy rule. Must be the first child of the page wrapper. `PageHeaderSkeleton` for loading files.
 - **SectionHeading** (`components/section-heading.tsx`): display title over the heavy rule, with an `aside` on the right for a link, an export, a badge or presets. Followed by an optional lede: `max-w-[75ch] text-sm text-muted-foreground`.
 - **LeadFigure / LeadRow** (`components/lead-figure.tsx`): the page's one large number with what it counts above and its limits below; `LeadRow` puts the supporting tiles beside it.
 - **StatTile** (`components/data-table/stat-tile.tsx`): label, value in the figure face, optional "Est." badge, hint and glossary "?". Sits under a 2px rule.
@@ -262,7 +263,7 @@ Rules come in two weights: 1px hairlines between rows and a 2px rule under a hea
 - Put the trust information next to the number: an "Est." badge, the sample size, the date collected.
 - Say what is missing and when it fills in, with `EmptyState`.
 - Use the shared pieces above before writing new markup.
-- Check both themes; the band and top bar stay ink in light.
+- Check both themes; the top bar stays ink in light.
 
 **Don't**
 
